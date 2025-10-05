@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #000000;
+    --foreground: #ffffff;
+  }
+}
+
+/* Asegura altura completa */
+html, body, #__next {
+  height: 100%;
+}
+
+/* Fondo global */
+body {
+  background-image: url('/fondo.jpeg');
+  background-size: cover;          /* cubre toda la pantalla */
+  background-repeat: no-repeat;    /* no repetir */
+  background-position: center;     /* centrado */
+  background-attachment: fixed;    /* efecto "parallax" suave */
+}
+
+
+/* Capa sutil encima del fondo */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15); /* ajusta la opacidad a gusto */
+  pointer-events: none;         /* no bloquea clics */
+  z-index: 0;
+}
+
+/* Asegura que tu contenido quede por encima */
+#__next, body > div, main, header, footer {
+  position: relative;
+  z-index: 1;
+}
