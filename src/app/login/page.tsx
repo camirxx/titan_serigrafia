@@ -39,6 +39,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Lee ?next=/ruta (si no hay, usa "/")
   const next = useMemo(() => {
@@ -92,7 +93,7 @@ export default function LoginPage() {
     <div className="min-h-screen grid place-items-center p-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 p-6 rounded-2xl shadow"
+        className="w-full max-w-sm space-y-4 p-6 rounded-2xl shadow bg-white"
       >
         <h1 className="text-2xl font-semibold">Iniciar sesión</h1>
 
@@ -121,18 +122,30 @@ export default function LoginPage() {
         </div>
 
         <div className="space-y-2">
-          <label className="block text-sm">Contraseña</label>
-          <input
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border p-2 rounded outline-none focus:ring"
-            autoComplete="current-password"
-            disabled={submitting}
-            required
-          />
+          <label className="block text-sm font-medium text-gray-700">
+            Contraseña
+          </label>
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              autoComplete="current-password"
+              disabled={submitting}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 focus:outline-none"
+            >
+              {showPassword ? "🙈" : "👁️"}
+            </button>
+          </div>
         </div>
+
 
         <ErrorBanner message={errorMsg} />
 
