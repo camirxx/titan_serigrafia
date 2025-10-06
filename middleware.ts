@@ -1,44 +1,83 @@
 // middleware.ts
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
-
-
-
-// Wrapper compatible con varias versiones de @supabase/ssr
-function makeCookieMethods(req: NextRequest, res: NextResponse) {
-  return {
-    get(name: string) {
-      return req.cookies.get(name)?.value;
-    },
-    set(name: string, value: string, options: CookieOptions) {
-      res.cookies.set({ name, value, ...options });
-    },
-    remove(name: string, options: CookieOptions) {
-      res.cookies.set({ name, value: "", ...options, maxAge: 0 });
-    },
-  } as unknown as Parameters<typeof createServerClient>[2]["cookies"];
-}
+import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(req: NextRequest) {
-  // Usamos 'res' para permitir a Supabase actualizar cookies
-  const res = NextResponse.next({ request: { headers: req.headers } });
+  let res = NextResponse.next({
+    request: {
+      headers: req.headers,
+    },
+  });
 
-  // 👇 evita el error de tipos usando el wrapper/cast compatible
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      cookies: makeCookieMethods(req, res),
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
+          res = NextResponse.next({
+            request: req,
+          });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            res.cookies.set(name, value, options)
+          );
+        },
+      },
     }
   );
 
+  // Intentar obtener sesión y manejar errores de refresh token
   const {
     data: { session },
+    error,
   } = await supabase.auth.getSession();
+
+  // Si hay error de refresh token, limpiar cookies y redirigir
+  if (error?.code === "refresh_token_not_found" || 
+      error?.message?.includes("refresh_token_not_found") ||
+      error?.message?.includes("Invalid Refresh Token")) {
+    
+    // Limpiar todas las cookies de Supabase
+    const allCookies = req.cookies.getAll();
+    allCookies.forEach(cookie => {
+      if (cookie.name.startsWith("sb-")) {
+        res.cookies.delete(cookie.name);
+      }
+    });
+
+    // Redirigir a acceso restringido si no está en ruta pública
+    const url = req.nextUrl;
+    const publicRoutes = [
+      "/login",
+      "/auth/callback",
+      "/api/auth",
+      "/acceso-restringido",
+      "/acceso-denegado",
+      "/favicon.ico",
+      "/robots.txt",
+      "/sitemap.xml",
+      "/images",
+      "/public",
+      "/_next",
+    ];
+    const isPublic = publicRoutes.some((p) => url.pathname.startsWith(p));
+
+    if (!isPublic) {
+      const redirectUrl = new URL("/acceso-restringido", url);
+      redirectUrl.searchParams.set("next", url.pathname);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    return res;
+  }
 
   const url = req.nextUrl;
 
-  // Rutas públicas (incluye API de auth y las pantallas de error)
+  // Rutas públicas
   const publicRoutes = [
     "/login",
     "/auth/callback",
@@ -68,19 +107,18 @@ export async function middleware(req: NextRequest) {
 
   // Gate de rol para /trabajadores (solo admin) → 403 (acceso denegado)
   if (session && url.pathname.startsWith("/trabajadores")) {
-    const { data, error } = await supabase
+    const { data, error: roleError } = await supabase
       .from("usuarios")
       .select("rol")
       .eq("id", session.user.id)
       .single();
 
     const rol = data?.rol ?? null;
-    if (error || rol !== "admin") {
+    if (roleError || rol !== "admin") {
       return NextResponse.redirect(new URL("/acceso-denegado", url));
     }
   }
 
-  // Importante: devuelve 'res' para aplicar set/remove de cookies
   return res;
 }
 
