@@ -93,7 +93,7 @@ export default async function TrabajadoresPage() {
         <p className="text-sm text-gray-500">Gestión de usuarios y roles</p>
       </header>
 
-      <div className="overflow-x-auto rounded-2xl border">
+      <div className="overflow-x-auto rounded-2xl border bg-white">
         <table className="min-w-[800px] w-full text-sm">
           <thead className="bg-gray-50 text-left">
             <tr>
