@@ -4,8 +4,16 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabaseBrowser } from '@/lib/supabaseClient'
 import { ChevronLeft, Check } from 'lucide-react'
 
-const getErrorMessage = (err: unknown, fallback: string) =>
-  err instanceof Error ? err.message : fallback
+const getErrorMessage = (err: unknown, fallback: string) => {
+  if (err instanceof Error) return err.message
+  // Supabase suele devolver objetos con { message, details, hint }
+  if (err && typeof err === 'object' && 'message' in err) {
+    const anyErr = err as { message?: string; details?: string; hint?: string }
+    const parts = [anyErr.message, anyErr.details, anyErr.hint].filter(Boolean)
+    return parts.join(' · ') || fallback
+  }
+  return fallback
+}
 
 type Venta = {
   id: number
@@ -35,6 +43,7 @@ export default function POSModerno() {
   const [disenos, setDisenos] = useState<string[]>([])
   const [colores, setColores] = useState<string[]>([])
   const [tallas, setTallas] = useState<Array<{talla: string, variante_id: number, stock: number}>>([])
+  const [busquedaDiseno, setBusquedaDiseno] = useState('')
   
   const [tipoSel, setTipoSel] = useState('')
   const [disenoSel, setDisenoSel] = useState('')
@@ -113,8 +122,7 @@ export default function POSModerno() {
       const { data } = await supabase
         .from('variantes_admin_view')
         .select('tipo_prenda')
-        .eq('producto_activo', true)
-        .gt('stock_actual', 0)
+        // No filtramos por stock aquí para mostrar todas las categorías disponibles
 
       const tiposUnicos = [...new Set(data?.map(d => d.tipo_prenda).filter(Boolean))]
       setTipos(tiposUnicos)
@@ -129,12 +137,12 @@ export default function POSModerno() {
       const { data } = await supabase
         .from('variantes_admin_view')
         .select('diseno')
-        .eq('producto_activo', true)
         .eq('tipo_prenda', tipo)
-        .gt('stock_actual', 0)
+        // No filtramos por stock para que aparezcan todos los diseños
 
       const disenosUnicos = [...new Set(data?.map(d => d.diseno).filter(Boolean))]
       setDisenos(disenosUnicos)
+      setBusquedaDiseno('')
       setPaso(2)
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error al cargar diseños disponibles'))
@@ -148,10 +156,9 @@ export default function POSModerno() {
       const { data } = await supabase
         .from('variantes_admin_view')
         .select('color')
-        .eq('producto_activo', true)
         .eq('tipo_prenda', tipoSel)
         .eq('diseno', diseno)
-        .gt('stock_actual', 0)
+        // No filtramos por stock para no ocultar colores existentes
 
       const coloresUnicos = [...new Set(data?.map(d => d.color).filter(Boolean))]
       
@@ -160,12 +167,9 @@ export default function POSModerno() {
         return
       }
       
-      if (coloresUnicos.length === 1) {
-        await seleccionarColor(coloresUnicos[0])
-      } else {
-        setColores(coloresUnicos)
-        setPaso(3)
-      }
+      // Siempre mostrar la etapa de color (no auto-saltar a talla)
+      setColores(coloresUnicos)
+      setPaso(3)
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error al cargar colores disponibles'))
     }
@@ -177,7 +181,6 @@ export default function POSModerno() {
       const { data } = await supabase
         .from('variantes_admin_view')
         .select('talla, variante_id, stock_actual')
-        .eq('producto_activo', true)
         .eq('tipo_prenda', tipoSel)
         .eq('diseno', disenoSel)
         .eq('color', color)
@@ -327,8 +330,20 @@ export default function POSModerno() {
             <h2 className="text-2xl font-bold text-gray-900">Selecciona el DISEÑO</h2>
           </div>
 
+          <div className="mb-4">
+            <input
+              type="text"
+              value={busquedaDiseno}
+              onChange={(e) => setBusquedaDiseno(e.target.value)}
+              placeholder="Buscar diseño..."
+              className="w-full px-4 py-3 text-base border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            />
+          </div>
+
           <div className="max-h-[500px] overflow-y-auto border-2 border-purple-300 rounded-xl">
-            {disenos.map((diseno, idx) => (
+            {disenos
+              .filter(d => d.toLowerCase().includes(busquedaDiseno.toLowerCase()))
+              .map((diseno, idx) => (
               <button
                 key={idx}
                 onClick={() => seleccionarDiseno(diseno)}
