@@ -38,6 +38,8 @@ export default function POSModerno() {
   const [ventas, setVentas] = useState<Venta[]>([])
   const [totalDia, setTotalDia] = useState(0)
   const [totalEfectivo, setTotalEfectivo] = useState(0)
+  const [sesionCajaId, setSesionCajaId] = useState<number | null>(null)
+  const [tiendaId, setTiendaId] = useState<number | null>(null)
   
   const [tipos, setTipos] = useState<string[]>([])
   const [disenos, setDisenos] = useState<string[]>([])
@@ -57,7 +59,13 @@ export default function POSModerno() {
   })
 
   useEffect(() => {
-    cargarVentasDelDia()
+    void cargarVentasDelDia()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    void cargarSesionCaja()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const cargarVentasDelDia = async () => {
@@ -115,18 +123,88 @@ export default function POSModerno() {
     }
   }
 
+  const cargarSesionCaja = async () => {
+    try {
+      const { data: u } = await supabase.auth.getUser()
+      const uid = u.user?.id
+      if (!uid) return
+      const { data: usr, error: eUsr } = await supabase
+        .from('usuarios')
+        .select('tienda_id')
+        .eq('id', uid)
+        .maybeSingle()
+      if (eUsr) throw eUsr
+      const tId = usr?.tienda_id as number | null
+      setTiendaId(tId ?? null)
+      if (!tId) return
+      const { data: ses, error: eSes } = await supabase
+        .from('v_caja_sesion_abierta')
+        .select('id')
+        .eq('tienda_id', tId)
+        .maybeSingle()
+      if (eSes) throw eSes
+      setSesionCajaId(ses?.id ?? null)
+    } catch (err) {
+      console.warn('No se pudo cargar sesión de caja', err)
+      setSesionCajaId(null)
+    }
+  }
+
+  const registrarIngresoCaja = async (monto: number, concepto: string) => {
+    if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
+    setError(null); setLoading(true)
+    try {
+      const { error } = await supabase.rpc('caja_ingreso', {
+        p_sesion_id: sesionCajaId,
+        p_monto: Number(monto),
+        p_concepto: concepto || 'ingreso manual',
+      })
+      if (error) throw error
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error registrando ingreso en caja'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const registrarEgresoCaja = async (monto: number, concepto: string) => {
+    if (!sesionCajaId) { setError('Abre la caja antes de registrar egresos'); return }
+    setError(null); setLoading(true)
+    try {
+      const { error } = await supabase.rpc('caja_retiro', {
+        p_sesion_id: sesionCajaId,
+        p_monto: Number(monto),
+        p_concepto: concepto || 'retiro',
+      })
+      if (error) throw error
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error registrando egreso en caja'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  //
+
   const iniciarVenta = async () => {
     setPaso(1)
     setError(null)
     try {
-      const { data } = await supabase
+      console.log('Tienda ID:', tiendaId)
+      const { data, error } = await supabase
         .from('variantes_admin_view')
         .select('tipo_prenda')
-        // No filtramos por stock aquí para mostrar todas las categorías disponibles
+        // Temporalmente sin filtro de tienda para diagnosticar
+        .limit(100)
+
+      console.log('Datos de tipos:', data, 'Error:', error)
+      if (error) throw error
 
       const tiposUnicos = [...new Set(data?.map(d => d.tipo_prenda).filter(Boolean))]
+      console.log('Tipos únicos:', tiposUnicos)
       setTipos(tiposUnicos)
     } catch (err: unknown) {
+      console.error('Error en iniciarVenta:', err)
       setError(getErrorMessage(err, 'Error al iniciar la venta'))
     }
   }
@@ -134,13 +212,18 @@ export default function POSModerno() {
   const seleccionarTipo = async (tipo: string) => {
     setTipoSel(tipo)
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('variantes_admin_view')
         .select('diseno')
         .eq('tipo_prenda', tipo)
-        // No filtramos por stock para que aparezcan todos los diseños
+        // Temporalmente sin filtro de tienda
+        .limit(100)
+
+      console.log('Datos de diseños para tipo', tipo, ':', data, 'Error:', error)
+      if (error) throw error
 
       const disenosUnicos = [...new Set(data?.map(d => d.diseno).filter(Boolean))]
+      console.log('Diseños únicos:', disenosUnicos)
       setDisenos(disenosUnicos)
       setBusquedaDiseno('')
       setPaso(2)
@@ -153,14 +236,19 @@ export default function POSModerno() {
     setDisenoSel(diseno)
     setError(null)
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('variantes_admin_view')
         .select('color')
         .eq('tipo_prenda', tipoSel)
         .eq('diseno', diseno)
-        // No filtramos por stock para no ocultar colores existentes
+        // Temporalmente sin filtro de tienda
+        .limit(100)
+
+      console.log('Datos de colores para diseño', diseno, ':', data, 'Error:', error)
+      if (error) throw error
 
       const coloresUnicos = [...new Set(data?.map(d => d.color).filter(Boolean))]
+      console.log('Colores únicos:', coloresUnicos)
       
       if (coloresUnicos.length === 0) {
         setError('No hay colores disponibles para este diseño')
@@ -178,14 +266,18 @@ export default function POSModerno() {
   const seleccionarColor = async (color: string) => {
     setColorSel(color)
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('variantes_admin_view')
         .select('talla, variante_id, stock_actual')
         .eq('tipo_prenda', tipoSel)
         .eq('diseno', disenoSel)
         .eq('color', color)
+        // Temporalmente sin filtro de tienda
         .gt('stock_actual', 0)
         .order('talla')
+
+      console.log('Datos de tallas para color', color, ':', data, 'Error:', error)
+      if (error) throw error
 
       const tallasData = data?.map(d => ({
         talla: d.talla || '',
@@ -193,6 +285,7 @@ export default function POSModerno() {
         stock: d.stock_actual || 0
       })) || []
 
+      console.log('Tallas procesadas:', tallasData)
       setTallas(tallasData)
       setPaso(4)
     } catch (err: unknown) {
@@ -224,6 +317,21 @@ export default function POSModerno() {
     setError(null)
 
     try {
+      // Verificación de stock en tiempo real para evitar vender sin stock
+      const { data: varCheck, error: eVar } = await supabase
+        .from('variantes_admin_view')
+        .select('stock_actual')
+        .eq('variante_id', tallaSel.variante_id)
+        .eq('tienda_id', tiendaId as number)
+        .maybeSingle()
+      if (eVar) throw eVar
+      const stockNow = Number(varCheck?.stock_actual ?? 0)
+      if (stockNow <= 0) {
+        setError('Sin stock disponible para esta talla. Actualiza la página.')
+        setLoading(false)
+        return
+      }
+
       const { data: userData } = await supabase.auth.getUser()
       
       const payload = {
@@ -310,7 +418,14 @@ export default function POSModerno() {
             </div>
           </div>
 
-          <PanelCaja totalEfectivo={totalEfectivo} totalDia={totalDia} ventas={ventas.length} />
+          <PanelCaja
+            totalEfectivo={totalEfectivo}
+            totalDia={totalDia}
+            ventas={ventas.length}
+            sesionAbierta={Boolean(sesionCajaId)}
+            onIngresar={registrarIngresoCaja}
+            onRetirar={registrarEgresoCaja}
+          />
         </div>
       </div>
     )
@@ -567,7 +682,11 @@ function Header() {
   )
 }
 
-function PanelCaja({ totalEfectivo, totalDia, ventas }: { totalEfectivo: number, totalDia: number, ventas: number }) {
+function PanelCaja({ totalEfectivo, totalDia, ventas, sesionAbierta, onIngresar, onRetirar }: { totalEfectivo: number, totalDia: number, ventas: number, sesionAbierta?: boolean, onIngresar?: (monto: number, concepto: string) => void, onRetirar?: (monto: number, concepto: string) => void }) {
+  const [ingresoMonto, setIngresoMonto] = useState<string>('')
+  const [ingresoConcepto, setIngresoConcepto] = useState<string>('ingreso manual')
+  const [egresoMonto, setEgresoMonto] = useState<string>('')
+  const [egresoConcepto, setEgresoConcepto] = useState<string>('retiro')
   const calcularDenominaciones = () => {
     const denoms = [20000, 10000, 5000, 2000, 1000, 500, 100]
     const resultado: Record<number, number> = {}
@@ -587,6 +706,9 @@ function PanelCaja({ totalEfectivo, totalDia, ventas }: { totalEfectivo: number,
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-2xl p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Dinero en caja (efectivo)</h3>
+        {!sesionAbierta && (
+          <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">No hay sesión de caja abierta.</div>
+        )}
         <div className="space-y-2">
           {Object.entries(denominaciones).reverse().map(([denom, cant]) => (
             <div key={denom} className="flex justify-between items-center py-2 border-b">
@@ -598,6 +720,24 @@ function PanelCaja({ totalEfectivo, totalDia, ventas }: { totalEfectivo: number,
         <div className="mt-6 pt-6 border-t-2 border-purple-200">
           <div className="text-sm text-gray-600 mb-1">Total efectivo</div>
           <div className="text-4xl font-bold text-purple-900">${totalEfectivo.toLocaleString()}</div>
+        </div>
+        <div className="mt-6 grid grid-cols-1 gap-3">
+          <div className="border rounded-xl p-3">
+            <div className="font-medium mb-2">Ingreso manual</div>
+            <div className="flex items-center gap-2">
+              <input type="number" placeholder="Monto" className="border rounded p-2 w-28" value={ingresoMonto} onChange={(e)=>setIngresoMonto(e.target.value)} />
+              <input placeholder="Concepto" className="border rounded p-2 flex-1" value={ingresoConcepto} onChange={(e)=>setIngresoConcepto(e.target.value)} />
+              <button disabled={!sesionAbierta} className="px-3 py-2 rounded bg-green-600 text-white disabled:opacity-50" onClick={()=> onIngresar && onIngresar(Number(ingresoMonto||0), ingresoConcepto)}>Ingresar</button>
+            </div>
+          </div>
+          <div className="border rounded-xl p-3">
+            <div className="font-medium mb-2">Egreso manual</div>
+            <div className="flex items-center gap-2">
+              <input type="number" placeholder="Monto" className="border rounded p-2 w-28" value={egresoMonto} onChange={(e)=>setEgresoMonto(e.target.value)} />
+              <input placeholder="Concepto" className="border rounded p-2 flex-1" value={egresoConcepto} onChange={(e)=>setEgresoConcepto(e.target.value)} />
+              <button disabled={!sesionAbierta} className="px-3 py-2 rounded bg-red-600 text-white disabled:opacity-50" onClick={()=> onRetirar && onRetirar(Number(egresoMonto||0), egresoConcepto)}>Retirar</button>
+            </div>
+          </div>
         </div>
       </div>
 
