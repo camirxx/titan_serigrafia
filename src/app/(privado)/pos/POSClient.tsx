@@ -60,6 +60,10 @@ export default function POSModerno() {
     '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
   })
 
+  // Función para formatear números de forma consistente
+  const formatNumber = (num: number) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  }
   useEffect(() => {
     void cargarVentasDelDia()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,62 +74,80 @@ export default function POSModerno() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const cargarVentasDelDia = async () => {
-    try {
-      const hoy = new Date().toISOString().split('T')[0]
-      const { data, error: err } = await supabase
-        .from('ventas')
-        .select(`id, fecha, total, metodo_pago, numero_boleta, detalle_ventas!inner(variante_id)`)
-        .gte('fecha', `${hoy}T00:00:00`)
-        .lte('fecha', `${hoy}T23:59:59`)
-        .order('fecha', { ascending: false })
+const cargarVentasDelDia = async () => {
+  try {
+    const hoy = new Date().toISOString().split('T')[0]
+    const { data, error: err } = await supabase
+      .from('ventas')
+      .select(`id, fecha, total, metodo_pago, numero_boleta, detalle_ventas!inner(variante_id)`)
+      .gte('fecha', `${hoy}T00:00:00`)
+      .lte('fecha', `${hoy}T23:59:59`)
+      .order('fecha', { ascending: false })
 
-      if (err) throw err
+    if (err) throw err
 
-      const ventasProcesadas: Venta[] = []
-      let total = 0
-      let totalEf = 0
+    const ventasProcesadas: Venta[] = []
+    let total = 0
+    let totalEf = 0
 
-      for (const v of data || []) {
-        const detalles = Array.isArray(v.detalle_ventas) ? v.detalle_ventas : [v.detalle_ventas]
-        const varianteId = detalles[0]?.variante_id
+    for (const v of data || []) {
+      const detalles = Array.isArray(v.detalle_ventas) ? v.detalle_ventas : [v.detalle_ventas]
+      const varianteId = detalles[0]?.variante_id
 
-        if (varianteId) {
-          const { data: varData } = await supabase
-            .from('variantes_admin_view')
-            .select('diseno, tipo_prenda, color, talla')
-            .eq('variante_id', varianteId)
-            .single()
+      if (varianteId) {
+        const { data: varData } = await supabase
+          .from('variantes_admin_view')
+          .select('diseno, tipo_prenda, color, talla')
+          .eq('variante_id', varianteId)
+          .single()
 
-          if (varData) {
-            ventasProcesadas.push({
-              id: v.id,
-              fecha: v.fecha,
-              total: v.total,
-              metodo_pago: v.metodo_pago,
-              diseno: varData.diseno || '',
-              tipo_prenda: varData.tipo_prenda || '',
-              color: varData.color || '',
-              talla: varData.talla || '',
-              numero_boleta: v.numero_boleta || null
-            })
-            total += Number(v.total)
-            if (v.metodo_pago === 'efectivo') {
-              totalEf += Number(v.total)
-            }
+        if (varData) {
+          ventasProcesadas.push({
+            id: v.id,
+            fecha: v.fecha,
+            total: v.total,
+            metodo_pago: v.metodo_pago,
+            diseno: varData.diseno || '',
+            tipo_prenda: varData.tipo_prenda || '',
+            color: varData.color || '',
+            talla: varData.talla || '',
+            numero_boleta: v.numero_boleta || null
+          })
+          total += Number(v.total)
+          if (v.metodo_pago === 'efectivo') {
+            totalEf += Number(v.total)
           }
         }
       }
-
-      setVentas(ventasProcesadas)
-      setTotalDia(total)
-      setTotalEfectivo(totalEf)
-    } catch (err: unknown) {
-      console.error(err)
-      setError(getErrorMessage(err, 'Error al cargar ventas del día'))
     }
-  }
 
+    // Cargar movimientos de caja del día (ingresos/egresos)
+    if (sesionCajaId) {
+      const { data: movimientos } = await supabase
+        .from('caja_movimientos')
+        .select('tipo, monto')
+        .eq('sesion_id', sesionCajaId)
+        .gte('fecha', `${hoy}T00:00:00`)
+        .lte('fecha', `${hoy}T23:59:59`)
+
+      // Sumar ingresos y restar egresos del efectivo
+      movimientos?.forEach(mov => {
+        if (mov.tipo === 'ingreso') {
+          totalEf += Number(mov.monto)
+        } else if (mov.tipo === 'egreso') {
+          totalEf -= Number(mov.monto)
+        }
+      })
+    }
+
+    setVentas(ventasProcesadas)
+    setTotalDia(total)
+    setTotalEfectivo(totalEf)
+  } catch (err: unknown) {
+    console.error(err)
+    setError(getErrorMessage(err, 'Error al cargar ventas del día'))
+  }
+}
   const cargarSesionCaja = async () => {
     try {
       const { data: u } = await supabase.auth.getUser()
@@ -161,81 +183,89 @@ export default function POSModerno() {
     }
   }
 
-  const registrarIngresoCaja = async (monto: number, concepto: string) => {
-    if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
-    setError(null); setLoading(true)
-    try {
-      const { error } = await supabase.rpc('caja_ingreso', {
-        p_sesion_id: sesionCajaId,
-        p_monto: Number(monto),
-        p_concepto: concepto || 'ingreso manual',
-      })
-      if (error) throw error
-      await cargarVentasDelDia()
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Error registrando ingreso en caja'))
-    } finally {
-      setLoading(false)
-    }
+const registrarIngresoCaja = async (monto: number, concepto: string) => {
+  if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
+  setError(null); setLoading(true)
+  try {
+    const { error } = await supabase.rpc('caja_ingreso', {
+      p_sesion_id: sesionCajaId,
+      p_monto: Number(monto),
+      p_concepto: concepto || 'ingreso manual',
+    })
+    if (error) throw error
+    
+    await cargarVentasDelDia()
+    await cargarSesionCaja()
+  } catch (err: unknown) {
+    setError(getErrorMessage(err, 'Error registrando ingreso en caja'))
+  } finally {
+    setLoading(false)
   }
+}
 
-  const registrarEgresoCaja = async (monto: number, concepto: string) => {
-    if (!sesionCajaId) { setError('Abre la caja antes de registrar egresos'); return }
-    setError(null); setLoading(true)
-    try {
-      const { error } = await supabase.rpc('caja_retiro', {
-        p_sesion_id: sesionCajaId,
-        p_monto: Number(monto),
-        p_concepto: concepto || 'retiro',
-      })
-      if (error) throw error
-      await cargarVentasDelDia()
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Error registrando egreso en caja'))
-    } finally {
-      setLoading(false)
-    }
+const registrarEgresoCaja = async (monto: number, concepto: string) => {
+  if (!sesionCajaId) { setError('Abre la caja antes de registrar egresos'); return }
+  setError(null); setLoading(true)
+  try {
+    const { error } = await supabase.rpc('caja_retiro', {
+      p_sesion_id: sesionCajaId,
+      p_monto: Number(monto),
+      p_concepto: concepto || 'retiro',
+    })
+    if (error) throw error
+    
+    await cargarVentasDelDia()
+    await cargarSesionCaja()
+  } catch (err: unknown) {
+    setError(getErrorMessage(err, 'Error registrando egreso en caja'))
+  } finally {
+    setLoading(false)
   }
+}
 
   const iniciarVenta = async () => {
-  if (!tiendaId) {
-    setError('No se pudo determinar tu tienda. Verifica tu usuario.')
-    return
-  }
-  
-  setPaso(1)
-  setError(null)
-  
-  try {
-    const { data, error } = await supabase
-      .from('variantes_admin_view')
-      .select('tipo_prenda')
-      .eq('tienda_id', tiendaId)
-      .eq('producto_activo', true)
-      .gt('stock_actual', 0)
-
-    if (error) {
-      console.error('Error en query variantes:', error)
-      throw error
-    }
-
-    console.log('Data recibida:', data) // 👈 Para debug
-
-    const tiposUnicos = [...new Set(data?.map(d => d.tipo_prenda).filter(Boolean))]
-    
-    if (tiposUnicos.length === 0) {
-      setError('No hay productos disponibles con stock en tu tienda')
-      setPaso(0)
+    if (!tiendaId) {
+      setError('No se pudo determinar tu tienda. Verifica tu usuario.')
       return
     }
     
-    setTipos(tiposUnicos)
-  } catch (err: unknown) {
-    console.error('Error completo en iniciarVenta:', err)
-    setError(getErrorMessage(err, 'Error al iniciar la venta'))
-    setPaso(0)
+    setPaso(1)
+    setError(null)
+    
+    try {
+      console.log('🔍 Consultando variantes para tienda:', tiendaId)
+      
+      const { data, error } = await supabase
+        .from('variantes_admin_view')
+        .select('tipo_prenda')
+        .eq('tienda_id', tiendaId)
+        .eq('producto_activo', true)
+        .gt('stock_actual', 0)
+
+      console.log('📊 Respuesta Supabase:', { data, error })
+
+      if (error) {
+        console.error('❌ Error de Supabase:', JSON.stringify(error, null, 2))
+        throw error
+      }
+
+      const tiposUnicos = [...new Set(data?.map(d => d.tipo_prenda).filter(Boolean))]
+      console.log('✅ Tipos únicos encontrados:', tiposUnicos)
+      
+      if (tiposUnicos.length === 0) {
+        setError('No hay productos disponibles con stock en tu tienda')
+        setPaso(0)
+        return
+      }
+      
+      setTipos(tiposUnicos)
+    } catch (err: unknown) {
+      console.error('💥 Error completo en iniciarVenta:', err)
+      console.error('💥 Error stringificado:', JSON.stringify(err, null, 2))
+      setError(getErrorMessage(err, 'Error al iniciar la venta. Verifica que existe la vista variantes_admin_view'))
+      setPaso(0)
+    }
   }
-}
 
   const seleccionarTipo = async (tipo: string) => {
     setTipoSel(tipo)
@@ -454,7 +484,7 @@ export default function POSModerno() {
                       <td className="p-4 font-semibold">{venta.diseno}</td>
                       <td className="p-4">{venta.color}</td>
                       <td className="p-4 font-bold">{venta.talla}</td>
-                      <td className="p-4 font-bold text-green-600">${venta.total.toLocaleString()}</td>
+                      <td className="p-4 font-bold text-green-600">${formatNumber(venta.total)}</td>
                       <td className="p-4 uppercase text-sm">{venta.metodo_pago}</td>
                       <td className="p-4 text-sm text-gray-600">
                         {venta.numero_boleta || (venta.metodo_pago === 'efectivo' ? 'Efectivo' : '-')}
@@ -811,10 +841,13 @@ function PanelCaja({
   onIngresar?: (monto: number, concepto: string) => void
   onRetirar?: (monto: number, concepto: string) => void 
 }) {
-  const [ingresoMonto, setIngresoMonto] = useState<string>('')
-  const [ingresoConcepto, setIngresoConcepto] = useState<string>('ingreso manual')
-  const [egresoMonto, setEgresoMonto] = useState<string>('')
-  const [egresoConcepto, setEgresoConcepto] = useState<string>('retiro')
+  const [modalIngreso, setModalIngreso] = useState(false)
+  const [modalRetiro, setModalRetiro] = useState(false)
+  
+  // Función para formatear números de forma consistente
+  const formatNumber = (num: number) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  }
   
   // Suma el saldo inicial + ventas en efectivo
   const efectivoTotal = saldoInicial + totalEfectivo
@@ -835,101 +868,328 @@ function PanelCaja({
   const denominaciones = calcularDenominaciones()
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl shadow-2xl p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">Dinero en caja (efectivo)</h3>
-        {!sesionAbierta && (
-          <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
-            ⚠️ No hay sesión de caja abierta.
-          </div>
-        )}
-        
-        {/* Mostrar saldo inicial */}
-        {sesionAbierta && saldoInicial > 0 && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="text-sm text-blue-700 font-medium">Saldo inicial de caja</div>
-            <div className="text-2xl font-bold text-blue-900">${saldoInicial.toLocaleString()}</div>
-          </div>
-        )}
-        
-        <div className="space-y-2">
-          {Object.entries(denominaciones).reverse().map(([denom, cant]) => (
-            <div key={denom} className="flex justify-between items-center py-2 border-b">
-              <span className="font-semibold text-gray-700">${parseInt(denom).toLocaleString()}</span>
-              <span className="text-2xl font-bold text-purple-900">{cant}</span>
-            </div>
-          ))}
-        </div>
-        
-        <div className="mt-6 pt-6 border-t-2 border-purple-200">
-          <div className="text-sm text-gray-600 mb-1">Total efectivo en caja</div>
-          <div className="text-4xl font-bold text-purple-900">${efectivoTotal.toLocaleString()}</div>
-          {saldoInicial > 0 && (
-            <div className="text-xs text-gray-500 mt-1">
-              (Inicial: ${saldoInicial.toLocaleString()} + Ventas: ${totalEfectivo.toLocaleString()})
+    <>
+      <div className="space-y-6">
+        <div className="bg-white rounded-2xl shadow-2xl p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Dinero en caja (efectivo)</h3>
+          {!sesionAbierta && (
+            <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
+              ⚠️ No hay sesión de caja abierta.
             </div>
           )}
-        </div>
-        
-        <div className="mt-6 grid grid-cols-1 gap-3">
-          <div className="border rounded-xl p-3">
-            <div className="font-medium mb-2">Ingreso manual</div>
-            <div className="flex items-center gap-2">
-              <input 
-                type="number" 
-                placeholder="Monto" 
-                className="border rounded p-2 w-28" 
-                value={ingresoMonto} 
-                onChange={(e)=>setIngresoMonto(e.target.value)} 
-              />
-              <input 
-                placeholder="Concepto" 
-                className="border rounded p-2 flex-1" 
-                value={ingresoConcepto} 
-                onChange={(e)=>setIngresoConcepto(e.target.value)} 
-              />
-              <button 
-                disabled={!sesionAbierta} 
-                className="px-3 py-2 rounded bg-green-600 text-white disabled:opacity-50" 
-                onClick={()=> onIngresar && onIngresar(Number(ingresoMonto||0), ingresoConcepto)}
-              >
-                Ingresar
-              </button>
+          
+          {/* Mostrar saldo inicial */}
+          {sesionAbierta && saldoInicial > 0 && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm text-blue-700 font-medium">Saldo inicial de caja</div>
+              <div className="text-2xl font-bold text-blue-900">${formatNumber(saldoInicial)}</div>
             </div>
+          )}
+          
+          <div className="space-y-2">
+            {Object.entries(denominaciones).reverse().map(([denom, cant]) => (
+              <div key={denom} className="flex justify-between items-center py-2 border-b">
+                <span className="font-semibold text-gray-700">${formatNumber(parseInt(denom))}</span>
+                <span className="text-2xl font-bold text-purple-900">{cant}</span>
+              </div>
+            ))}
           </div>
           
-          <div className="border rounded-xl p-3">
-            <div className="font-medium mb-2">Egreso manual</div>
-            <div className="flex items-center gap-2">
-              <input 
-                type="number" 
-                placeholder="Monto" 
-                className="border rounded p-2 w-28" 
-                value={egresoMonto} 
-                onChange={(e)=>setEgresoMonto(e.target.value)} 
-              />
-              <input 
-                placeholder="Concepto" 
-                className="border rounded p-2 flex-1" 
-                value={egresoConcepto} 
-                onChange={(e)=>setEgresoConcepto(e.target.value)} 
-              />
-              <button 
-                disabled={!sesionAbierta} 
-                className="px-3 py-2 rounded bg-red-600 text-white disabled:opacity-50" 
-                onClick={()=> onRetirar && onRetirar(Number(egresoMonto||0), egresoConcepto)}
-              >
-                Retirar
-              </button>
-            </div>
+          <div className="mt-6 pt-6 border-t-2 border-purple-200">
+            <div className="text-sm text-gray-600 mb-1">Total efectivo en caja</div>
+            <div className="text-4xl font-bold text-purple-900">${formatNumber(efectivoTotal)}</div>
+            {saldoInicial > 0 && (
+              <div className="text-xs text-gray-500 mt-1">
+                (Inicial: ${formatNumber(saldoInicial)} + Ventas: ${formatNumber(totalEfectivo)})
+              </div>
+            )}
           </div>
+          
+          {/* Botones para abrir modales */}
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button 
+              disabled={!sesionAbierta}
+              onClick={() => setModalIngreso(true)}
+              className="px-4 py-3 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white font-bold disabled:opacity-50 hover:shadow-lg transition flex items-center justify-center gap-2"
+            >
+              <span className="text-2xl">💰</span>
+              <span>Ingresar</span>
+            </button>
+            <button 
+              disabled={!sesionAbierta}
+              onClick={() => setModalRetiro(true)}
+              className="px-4 py-3 rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white font-bold disabled:opacity-50 hover:shadow-lg transition flex items-center justify-center gap-2"
+            >
+              <span className="text-2xl">💸</span>
+              <span>Retirar</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-2xl p-8 text-white">
+          <h3 className="text-2xl font-bold mb-2">Total del día</h3>
+          <div className="text-6xl font-bold mb-4">${formatNumber(totalDia)}</div>
+          <div className="text-lg opacity-90">{ventas} ventas realizadas</div>
         </div>
       </div>
 
-      <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-2xl p-8 text-white">
-        <h3 className="text-2xl font-bold mb-2">Total del día</h3>
-        <div className="text-6xl font-bold mb-4">${totalDia.toLocaleString()}</div>
-        <div className="text-lg opacity-90">{ventas} ventas realizadas</div>
+      {/* Modal Ingreso */}
+      {modalIngreso && (
+        <ModalMovimientoCaja
+          tipo="ingreso"
+          onClose={() => setModalIngreso(false)}
+          onConfirmar={(monto, concepto) => {
+            onIngresar && onIngresar(monto, concepto)
+            setModalIngreso(false)
+          }}
+        />
+      )}
+
+      {/* Modal Retiro */}
+      {modalRetiro && (
+        <ModalMovimientoCaja
+          tipo="retiro"
+          onClose={() => setModalRetiro(false)}
+          onConfirmar={(monto, concepto) => {
+            onRetirar && onRetirar(monto, concepto)
+            setModalRetiro(false)
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+// Componente Modal para Movimientos de Caja
+function ModalMovimientoCaja({
+  tipo,
+  onClose,
+  onConfirmar
+}: {
+  tipo: 'ingreso' | 'retiro'
+  onClose: () => void
+  onConfirmar: (monto: number, concepto: string) => void
+}) {
+  const [concepto, setConcepto] = useState(tipo === 'ingreso' ? 'Ingreso manual' : 'Retiro de caja')
+  const [montoDirecto, setMontoDirecto] = useState('') // Para retiros
+  const [billetes, setBilletes] = useState({
+    '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+  })
+
+  const formatNumber = (num: number) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  }
+
+  const calcularTotal = () => {
+    if (tipo === 'retiro') {
+      return parseFloat(montoDirecto) || 0
+    }
+    return Object.entries(billetes).reduce((sum, [denom, cant]) => 
+      sum + (parseInt(denom) * cant), 0
+    )
+  }
+
+  const total = calcularTotal()
+
+  const handleConfirmar = () => {
+    if (total <= 0) {
+      alert('Debe ingresar un monto mayor a 0')
+      return
+    }
+    if (!concepto.trim()) {
+      alert('Debe ingresar un concepto')
+      return
+    }
+    onConfirmar(total, concepto)
+  }
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className={`p-6 ${tipo === 'ingreso' ? 'bg-gradient-to-r from-green-600 to-green-700' : 'bg-gradient-to-r from-red-600 to-red-700'} text-white rounded-t-2xl`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-4xl">
+                {tipo === 'ingreso' ? '💰' : '💸'}
+              </span>
+              <div>
+                <h2 className="text-2xl font-bold">
+                  {tipo === 'ingreso' ? 'Ingresar Dinero' : 'Retirar Dinero'}
+                </h2>
+                <p className="text-white/80 text-sm">
+                  {tipo === 'ingreso' ? 'Agregar efectivo a la caja' : 'Sacar efectivo de la caja'}
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-full transition"
+              title="Cerrar"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Concepto */}
+          <div>
+            <label className="block text-base font-bold text-gray-800 mb-2">
+              Concepto del movimiento *
+            </label>
+            <input
+              type="text"
+              value={concepto}
+              onChange={(e) => setConcepto(e.target.value)}
+              placeholder={tipo === 'ingreso' ? 'Ej: Fondo de caja inicial' : 'Ej: Pago a proveedor'}
+              className="w-full px-4 py-3 text-base border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            />
+          </div>
+
+          {tipo === 'ingreso' ? (
+            // INGRESO: Desglose de billetes
+            <div>
+              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span>💵</span>
+                <span>Desglose de billetes y monedas</span>
+              </h3>
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3 border-2 border-gray-200">
+                {Object.keys(billetes).reverse().map((denom) => {
+                  const cantidad = billetes[denom as keyof typeof billetes]
+                  const subtotal = parseInt(denom) * cantidad
+                  
+                  return (
+                    <div key={denom} className="flex items-center gap-4 bg-white p-3 rounded-lg shadow-sm">
+                      <span className="font-bold text-lg text-gray-700 w-24">
+                        ${formatNumber(parseInt(denom))}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBilletes(prev => ({ 
+                            ...prev, 
+                            [denom]: Math.max(0, prev[denom as keyof typeof billetes] - 1) 
+                          }))}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-lg font-bold transition"
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min="0"
+                          value={cantidad}
+                          onChange={(e) => setBilletes(prev => ({ 
+                            ...prev, 
+                            [denom]: Math.max(0, parseInt(e.target.value) || 0) 
+                          }))}
+                          className="w-20 px-3 py-2 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setBilletes(prev => ({ 
+                            ...prev, 
+                            [denom]: prev[denom as keyof typeof billetes] + 1 
+                          }))}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-lg font-bold transition"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <div className="flex-1 text-right">
+                        <span className={`text-lg font-semibold ${subtotal > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
+                          = ${formatNumber(subtotal)}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            // RETIRO: Solo monto directo
+            <div>
+              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span>💵</span>
+                <span>Monto a retirar</span>
+              </h3>
+              <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ingresa el monto total que vas a sacar de la caja física
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-600">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={montoDirecto}
+                    onChange={(e) => setMontoDirecto(e.target.value)}
+                    placeholder="15000"
+                    className="w-full pl-12 pr-4 py-4 text-2xl font-bold border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none text-right"
+                  />
+                </div>
+                <p className="text-sm text-gray-600 mt-3">
+                  💡 Cuenta el efectivo que sacas de la caja e ingresa el total aquí
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Total */}
+          <div className={`p-6 rounded-xl border-2 ${
+            tipo === 'ingreso' 
+              ? 'bg-green-50 border-green-300' 
+              : 'bg-red-50 border-red-300'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-600 mb-1">
+                  Total a {tipo === 'ingreso' ? 'ingresar' : 'retirar'}
+                </div>
+                <div className={`text-5xl font-bold ${
+                  tipo === 'ingreso' ? 'text-green-700' : 'text-red-700'
+                }`}>
+                  ${formatNumber(total)}
+                </div>
+              </div>
+              {total > 0 && (
+                <div className="text-6xl">
+                  {tipo === 'ingreso' ? '💰' : '💸'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Botones */}
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={onClose}
+              className="flex-1 py-4 px-4 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition text-lg"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmar}
+              disabled={total <= 0}
+              className={`flex-1 py-4 px-4 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed text-lg ${
+                tipo === 'ingreso' 
+                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:shadow-xl' 
+                  : 'bg-gradient-to-r from-red-600 to-red-700 hover:shadow-xl'
+              }`}
+            >
+              {total > 0 
+                ? `Confirmar ${tipo === 'ingreso' ? 'Ingreso' : 'Retiro'}`
+                : 'Ingresa un monto'
+              }
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
