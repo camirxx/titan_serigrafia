@@ -280,6 +280,22 @@ export default function InventarioAgrupado() {
         >
           Actualizar
         </button>
+
+        {/* Botones de acción */}
+        <div className="p-6 bg-gradient-to-r from-purple-50 to-purple-100 flex gap-4 justify-center border-t border-purple-200">
+        <button 
+          onClick={() => setModalDisenoAbierto(true)}
+          className="px-8 py-3 bg-white text-purple-900 font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition border-2 border-purple-300">
+          AGREGAR NUEVO DISEÑO
+        </button>
+          <button 
+            onClick={() => setModalStockAbierto(true)}
+            className="px-8 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition">
+            AGREGAR PRODUCTOS
+          </button>
+        </div>
+
+
       </div>
 
       {/* Barra de búsqueda y filtros */}
@@ -494,19 +510,7 @@ export default function InventarioAgrupado() {
           </table>
         </div>
 
-        {/* Botones de acción */}
-        <div className="p-6 bg-gradient-to-r from-purple-50 to-purple-100 flex gap-4 justify-center border-t border-purple-200">
-        <button 
-          onClick={() => setModalDisenoAbierto(true)}
-          className="px-8 py-3 bg-white text-purple-900 font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition border-2 border-purple-300">
-          AGREGAR NUEVO DISEÑO
-        </button>
-          <button 
-            onClick={() => setModalStockAbierto(true)}
-            className="px-8 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition">
-            AGREGAR PRODUCTOS
-          </button>
-        </div>
+  
         
         
       </div>
