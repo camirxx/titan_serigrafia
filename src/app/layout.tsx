@@ -57,11 +57,8 @@ export default async function RootLayout({
 
               {rol === "admin" && (
                 <>
-                  <Link href="/reportes/kardex" className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10">
+                    <Link href="/reportes" className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10">
                     Reportes
-                  </Link>
-                  <Link href="/reportes/ventas-diarias" className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10">
-                    Ventas diarias
                   </Link>
                   <Link href="/trabajadores" className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10">
                     Trabajadores
