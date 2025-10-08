@@ -99,6 +99,7 @@ export default function TrabajadoresUI({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 relative overflow-hidden">
+      
       {/* Franjas decorativas */}
       <div className="absolute inset-0 opacity-20 pointer-events-none">
         <div className="absolute top-0 left-1/4 w-32 h-full bg-gradient-to-b from-green-400 to-transparent transform -skew-x-12"></div>
@@ -385,6 +386,8 @@ export default function TrabajadoresUI({
             ))}
           </div>
 
+          
+
           {/* Estado Vacío */}
           {filteredUsuarios.length === 0 && (
             <div className="py-16 text-center">
@@ -400,6 +403,14 @@ export default function TrabajadoresUI({
             </div>
           )}
         </div>
+
+         {/* Debug Info - TEMPORAL 
+    <div className="fixed top-20 left-4 bg-yellow-200 p-4 rounded z-50">
+      <p>Total usuarios: {usuarios.length}</p>
+      <p>ShowModal: {showModal ? 'true' : 'false'}</p>
+    </div>
+*/}
+
       </main>
     </div>
   );

@@ -30,7 +30,7 @@ type UsuarioRow = {
   activo: boolean | null;
   tienda_id: number | null;
   created_at: string | null;
-  tiendas: { nombre: string } | { nombre: string }[] | null;
+  tiendas: { nombre: string | null } | { nombre: string | null }[] | null;
 };
 
 // ---- Server Actions ----

@@ -74,6 +74,31 @@ export default function POSModerno() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+
+const [denominacionesReales, setDenominacionesReales] = useState<Record<number, number>>({})
+
+const cargarDenominacionesCaja = async () => {
+  if (!sesionCajaId) return
+  
+  try {
+    const { data, error } = await supabase.rpc('caja_obtener_denominaciones', {
+      p_sesion_id: sesionCajaId
+    })
+    
+    if (error) throw error
+    
+    const denoms: Record<number, number> = {}
+    data?.forEach((d: { denominacion: number; cantidad: number }) => {
+      denoms[d.denominacion] = d.cantidad
+    })
+    
+    setDenominacionesReales(denoms)
+  } catch (err) {
+    console.error('Error cargando denominaciones:', err)
+  }
+}
+  
+
 const cargarVentasDelDia = async () => {
   try {
     const hoy = new Date().toISOString().split('T')[0]
@@ -121,25 +146,6 @@ const cargarVentasDelDia = async () => {
       }
     }
 
-    // Cargar movimientos de caja del día (ingresos/egresos)
-    if (sesionCajaId) {
-      const { data: movimientos } = await supabase
-        .from('caja_movimientos')
-        .select('tipo, monto')
-        .eq('sesion_id', sesionCajaId)
-        .gte('fecha', `${hoy}T00:00:00`)
-        .lte('fecha', `${hoy}T23:59:59`)
-
-      // Sumar ingresos y restar egresos del efectivo
-      movimientos?.forEach(mov => {
-        if (mov.tipo === 'ingreso') {
-          totalEf += Number(mov.monto)
-        } else if (mov.tipo === 'egreso') {
-          totalEf -= Number(mov.monto)
-        }
-      })
-    }
-
     setVentas(ventasProcesadas)
     setTotalDia(total)
     setTotalEfectivo(totalEf)
@@ -183,19 +189,19 @@ const cargarVentasDelDia = async () => {
     }
   }
 
-const registrarIngresoCaja = async (monto: number, concepto: string) => {
+const registrarIngresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
   if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
   setError(null); setLoading(true)
   try {
-    const { error } = await supabase.rpc('caja_ingreso', {
+    const { error } = await supabase.rpc('caja_agregar_denominaciones', {
       p_sesion_id: sesionCajaId,
-      p_monto: Number(monto),
-      p_concepto: concepto || 'ingreso manual',
+      p_denominaciones: denominaciones,
+      p_concepto: concepto || 'Ingreso manual',
     })
     if (error) throw error
     
     await cargarVentasDelDia()
-    await cargarSesionCaja()
+    await cargarDenominacionesCaja()
   } catch (err: unknown) {
     setError(getErrorMessage(err, 'Error registrando ingreso en caja'))
   } finally {
@@ -207,7 +213,7 @@ const registrarEgresoCaja = async (monto: number, concepto: string) => {
   if (!sesionCajaId) { setError('Abre la caja antes de registrar egresos'); return }
   setError(null); setLoading(true)
   try {
-    const { error } = await supabase.rpc('caja_retiro', {
+    const { error } = await supabase.rpc('caja_retirar_denominaciones', {
       p_sesion_id: sesionCajaId,
       p_monto: Number(monto),
       p_concepto: concepto || 'retiro',
@@ -215,14 +221,13 @@ const registrarEgresoCaja = async (monto: number, concepto: string) => {
     if (error) throw error
     
     await cargarVentasDelDia()
-    await cargarSesionCaja()
+    await cargarDenominacionesCaja()
   } catch (err: unknown) {
     setError(getErrorMessage(err, 'Error registrando egreso en caja'))
   } finally {
     setLoading(false)
   }
 }
-
   const iniciarVenta = async () => {
     if (!tiendaId) {
       setError('No se pudo determinar tu tienda. Verifica tu usuario.')
@@ -838,7 +843,7 @@ function PanelCaja({
   totalDia: number
   ventas: number
   sesionAbierta?: boolean
-  onIngresar?: (monto: number, concepto: string) => void
+  onIngresar?: (denominaciones: Record<string, number>, concepto: string) => void
   onRetirar?: (monto: number, concepto: string) => void 
 }) {
   const [modalIngreso, setModalIngreso] = useState(false)
@@ -938,8 +943,8 @@ function PanelCaja({
         <ModalMovimientoCaja
           tipo="ingreso"
           onClose={() => setModalIngreso(false)}
-          onConfirmar={(monto, concepto) => {
-            onIngresar && onIngresar(monto, concepto)
+          onConfirmarIngreso={(denominaciones, concepto) => {
+            onIngresar?.(denominaciones, concepto)
             setModalIngreso(false)
           }}
         />
@@ -950,8 +955,8 @@ function PanelCaja({
         <ModalMovimientoCaja
           tipo="retiro"
           onClose={() => setModalRetiro(false)}
-          onConfirmar={(monto, concepto) => {
-            onRetirar && onRetirar(monto, concepto)
+          onConfirmarRetiro={(monto, concepto) => {
+            onRetirar?.(monto, concepto)
             setModalRetiro(false)
           }}
         />
@@ -964,11 +969,13 @@ function PanelCaja({
 function ModalMovimientoCaja({
   tipo,
   onClose,
-  onConfirmar
+  onConfirmarIngreso,
+  onConfirmarRetiro
 }: {
   tipo: 'ingreso' | 'retiro'
   onClose: () => void
-  onConfirmar: (monto: number, concepto: string) => void
+  onConfirmarIngreso?: (denominaciones: Record<string, number>, concepto: string) => void
+  onConfirmarRetiro?: (monto: number, concepto: string) => void
 }) {
   const [concepto, setConcepto] = useState(tipo === 'ingreso' ? 'Ingreso manual' : 'Retiro de caja')
   const [montoDirecto, setMontoDirecto] = useState('') // Para retiros
@@ -1000,7 +1007,11 @@ function ModalMovimientoCaja({
       alert('Debe ingresar un concepto')
       return
     }
-    onConfirmar(total, concepto)
+    if (tipo === 'ingreso') {
+      onConfirmarIngreso?.(billetes, concepto)
+    } else {
+      onConfirmarRetiro?.(total, concepto)
+    }
   }
 
   return (
