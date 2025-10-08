@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 type Row = {
-  producto: string;
-  talla: string;
+  variante_id: number;
+  diseno: string;
+  tipo_prenda: string;
   color: string;
+  talla: string;
   stock_actual: number;
 };
 
@@ -26,7 +28,7 @@ export default function EstadoStockPage() {
     try {
       const { data, error } = await supabase
         .from('variantes_admin_view')
-        .select('producto,talla,color,stock_actual') // sin genéricos ni .returns()
+        .select('variante_id,diseno,tipo_prenda,color,talla,stock_actual')
         .order('stock_actual', { ascending: true })
         .limit(500);
 
@@ -36,9 +38,11 @@ export default function EstadoStockPage() {
       const cleaned: Row[] = list.map((r) => {
         const rec = r as Record<string, unknown>;
         return {
-          producto: String(rec.producto ?? ''),
+          variante_id: Number(rec.variante_id ?? 0),
+          diseno: String(rec.diseno ?? ''),
+          tipo_prenda: String(rec.tipo_prenda ?? ''),
+          color: String(rec.color ?? 'Sin color'),
           talla: String(rec.talla ?? ''),
-          color: String(rec.color ?? ''),
           stock_actual: Number(rec.stock_actual ?? 0),
         };
       });
@@ -57,21 +61,23 @@ export default function EstadoStockPage() {
   }, []);
 
   const low = useMemo(
-    () => rows.filter((r) => (r.stock_actual ?? 0) <= critico),
+    () => rows.filter((r) => r.stock_actual <= critico),
     [rows, critico]
   );
 
   const exportCSV = () => {
-    const header = ['producto', 'talla', 'color', 'stock'];
+    const header = ['diseño', 'tipo_prenda', 'color', 'talla', 'stock'];
     const lines = rows.map((r) =>
-      [r.producto, r.talla, r.color, r.stock_actual].join(',')
+      [r.diseno, r.tipo_prenda, r.color, r.talla, r.stock_actual].join(',')
     );
     const blob = new Blob([header.join(',') + '\n' + lines.join('\n')], {
       type: 'text/csv;charset=utf-8;',
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'stock.csv'; a.click();
+    a.href = url;
+    a.download = `stock_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -93,14 +99,14 @@ export default function EstadoStockPage() {
 
         <button
           onClick={cargar}
-          className="ml-auto h-10 px-3 rounded border"
+          className="ml-auto h-10 px-3 rounded border hover:bg-gray-50"
           disabled={loading}
         >
           {loading ? 'Actualizando…' : 'Recargar'}
         </button>
         <button
           onClick={exportCSV}
-          className="h-10 px-3 rounded border"
+          className="h-10 px-3 rounded border hover:bg-gray-50"
           disabled={!rows.length}
         >
           Exportar CSV
@@ -117,27 +123,29 @@ export default function EstadoStockPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left p-2">Producto</th>
-              <th className="text-left p-2">Talla</th>
+              <th className="text-left p-2">Diseño</th>
+              <th className="text-left p-2">Tipo</th>
               <th className="text-left p-2">Color</th>
+              <th className="text-left p-2">Talla</th>
               <th className="text-right p-2">Stock</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
+            {rows.map((r) => (
               <tr
-                key={`${r.producto}-${r.talla}-${r.color}-${i}`}
+                key={r.variante_id}
                 className={`border-t ${r.stock_actual <= critico ? 'bg-red-50' : ''}`}
               >
-                <td className="p-2">{r.producto}</td>
-                <td className="p-2">{r.talla}</td>
+                <td className="p-2">{r.diseno}</td>
+                <td className="p-2">{r.tipo_prenda}</td>
                 <td className="p-2">{r.color}</td>
-                <td className="p-2 text-right">{r.stock_actual}</td>
+                <td className="p-2">{r.talla}</td>
+                <td className="p-2 text-right font-medium">{r.stock_actual}</td>
               </tr>
             ))}
             {!rows.length && !loading && (
               <tr>
-                <td colSpan={4} className="p-3 text-center text-gray-500">
+                <td colSpan={5} className="p-3 text-center text-gray-500">
                   Sin datos
                 </td>
               </tr>
