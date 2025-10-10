@@ -78,9 +78,7 @@ export default async function RootLayout({
             </nav>
           ) : (
             <nav>
-              <Link href="/login" className="px-4 py-2 rounded-lg bg-white text-purple-900 font-bold hover:bg-purple-100 transition shadow-lg">
-                Ingresar
-              </Link>
+              
             </nav>
           )}
         </header>

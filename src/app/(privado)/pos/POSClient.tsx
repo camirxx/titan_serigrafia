@@ -962,11 +962,14 @@ function PanelCaja({
           tipo="ingreso"
           onClose={() => setModalIngreso(false)}
           onConfirmar={(denominaciones, concepto) => {
-            onIngresar && onIngresar(denominaciones, concepto)
-            setModalIngreso(false)
+            if (onIngresar) {
+              onIngresar(denominaciones, concepto);
+            }
+            setModalIngreso(false);
           }}
         />
       )}
+
 
       {modalRetiro && (
         <ModalMovimientoCaja
@@ -974,8 +977,8 @@ function PanelCaja({
           denominacionesActuales={denominacionesReales}
           onClose={() => setModalRetiro(false)}
           onConfirmar={(denominaciones, concepto) => {
-            onRetirar && onRetirar(denominaciones, concepto)
-            setModalRetiro(false)
+            onRetirar?.(denominaciones, concepto);
+            setModalRetiro(false);
           }}
         />
       )}
