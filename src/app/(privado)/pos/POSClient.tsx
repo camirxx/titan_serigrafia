@@ -74,6 +74,12 @@ export default function POSModerno() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    if (sesionCajaId) {
+      void cargarDenominacionesCaja()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesionCajaId])
 
 const [denominacionesReales, setDenominacionesReales] = useState<Record<number, number>>({})
 
@@ -189,45 +195,69 @@ const cargarVentasDelDia = async () => {
     }
   }
 
-const registrarIngresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
-  if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
-  setError(null); setLoading(true)
-  try {
-    const { error } = await supabase.rpc('caja_agregar_denominaciones', {
-      p_sesion_id: sesionCajaId,
-      p_denominaciones: denominaciones,
-      p_concepto: concepto || 'Ingreso manual',
-    })
-    if (error) throw error
-    
-    await cargarVentasDelDia()
-    await cargarDenominacionesCaja()
-  } catch (err: unknown) {
-    setError(getErrorMessage(err, 'Error registrando ingreso en caja'))
-  } finally {
-    setLoading(false)
+  const registrarIngresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
+    if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
+    setError(null); setLoading(true)
+    try {
+      // Convertir las claves de string a number para el JSON
+      const denomsJSON: Record<number, number> = {}
+      Object.entries(denominaciones).forEach(([key, value]) => {
+        if (value > 0) {
+          denomsJSON[parseInt(key)] = value
+        }
+      })
+      
+      const { error } = await supabase.rpc('caja_agregar_denominaciones', {
+        p_sesion_id: sesionCajaId,
+        p_denominaciones: denomsJSON,
+        p_concepto: concepto || 'Ingreso manual',
+      })
+      if (error) {
+        console.error('Error RPC:', error)
+        throw error
+      }
+      
+      await cargarVentasDelDia()
+      await cargarDenominacionesCaja()
+    } catch (err: unknown) {
+      console.error('Error completo:', err)
+      setError(getErrorMessage(err, 'Error registrando ingreso en caja'))
+    } finally {
+      setLoading(false)
+    }
   }
-}
-
-const registrarEgresoCaja = async (monto: number, concepto: string) => {
-  if (!sesionCajaId) { setError('Abre la caja antes de registrar egresos'); return }
-  setError(null); setLoading(true)
-  try {
-    const { error } = await supabase.rpc('caja_retirar_denominaciones', {
-      p_sesion_id: sesionCajaId,
-      p_monto: Number(monto),
-      p_concepto: concepto || 'retiro',
-    })
-    if (error) throw error
-    
-    await cargarVentasDelDia()
-    await cargarDenominacionesCaja()
-  } catch (err: unknown) {
-    setError(getErrorMessage(err, 'Error registrando egreso en caja'))
-  } finally {
-    setLoading(false)
+  
+  const registrarEgresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
+    if (!sesionCajaId) { setError('Abre la caja antes de registrar egresos'); return }
+    setError(null); setLoading(true)
+    try {
+      // Convertir las claves de string a number para el JSON
+      const denomsJSON: Record<number, number> = {}
+      Object.entries(denominaciones).forEach(([key, value]) => {
+        if (value > 0) {
+          denomsJSON[parseInt(key)] = value
+        }
+      })
+      
+      const { error } = await supabase.rpc('caja_retirar_denominaciones', {
+        p_sesion_id: sesionCajaId,
+        p_denominaciones: denomsJSON,
+        p_concepto: concepto || 'retiro',
+      })
+      if (error) {
+        console.error('Error RPC:', error)
+        throw error
+      }
+      
+      await cargarVentasDelDia()
+      await cargarDenominacionesCaja()
+    } catch (err: unknown) {
+      console.error('Error completo:', err)
+      setError(getErrorMessage(err, 'Error registrando egreso en caja'))
+    } finally {
+      setLoading(false)
+    }
   }
-}
   const iniciarVenta = async () => {
     if (!tiendaId) {
       setError('No se pudo determinar tu tienda. Verifica tu usuario.')
@@ -515,14 +545,15 @@ const registrarEgresoCaja = async (monto: number, concepto: string) => {
           </div>
 
           <PanelCaja
-            totalEfectivo={totalEfectivo}
-            saldoInicial={saldoInicialCaja}
-            totalDia={totalDia}
-            ventas={ventas.length}
-            sesionAbierta={Boolean(sesionCajaId)}
-            onIngresar={registrarIngresoCaja}
-            onRetirar={registrarEgresoCaja}
-          />
+          totalEfectivo={totalEfectivo}
+          saldoInicial={saldoInicialCaja}
+          totalDia={totalDia}
+          ventas={ventas.length}
+          sesionAbierta={Boolean(sesionCajaId)}
+          denominacionesReales={denominacionesReales}
+          onIngresar={registrarIngresoCaja}
+          onRetirar={registrarEgresoCaja}
+        />
         </div>
       </div>
     )
@@ -828,13 +859,13 @@ function Header() {
     </div>
   )
 }
-
 function PanelCaja({ 
   totalEfectivo, 
   saldoInicial,
   totalDia, 
   ventas, 
   sesionAbierta, 
+  denominacionesReales,
   onIngresar, 
   onRetirar 
 }: { 
@@ -843,34 +874,25 @@ function PanelCaja({
   totalDia: number
   ventas: number
   sesionAbierta?: boolean
+  denominacionesReales: Record<number, number>
   onIngresar?: (denominaciones: Record<string, number>, concepto: string) => void
-  onRetirar?: (monto: number, concepto: string) => void 
+  onRetirar?: (denominaciones: Record<string, number>, concepto: string) => void 
 }) {
   const [modalIngreso, setModalIngreso] = useState(false)
   const [modalRetiro, setModalRetiro] = useState(false)
   
-  // Función para formatear números de forma consistente
   const formatNumber = (num: number) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
   }
   
-  // Suma el saldo inicial + ventas en efectivo
-  const efectivoTotal = saldoInicial + totalEfectivo
-  
-  const calcularDenominaciones = () => {
-    const denoms = [20000, 10000, 5000, 2000, 1000, 500, 100]
-    const resultado: Record<number, number> = {}
-    
-    let restante = efectivoTotal
-    for (const denom of denoms) {
-      resultado[denom] = Math.floor(restante / denom)
-      restante = restante % denom
-    }
-    
-    return resultado
+  // Calcular total desde las denominaciones REALES
+  const calcularTotalReal = () => {
+    return Object.entries(denominacionesReales).reduce((sum, [denom, cant]) => {
+      return sum + (parseInt(denom) * cant)
+    }, 0)
   }
-
-  const denominaciones = calcularDenominaciones()
+  
+  const efectivoTotal = calcularTotalReal() + saldoInicial + totalEfectivo
 
   return (
     <>
@@ -883,7 +905,6 @@ function PanelCaja({
             </div>
           )}
           
-          {/* Mostrar saldo inicial */}
           {sesionAbierta && saldoInicial > 0 && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="text-sm text-blue-700 font-medium">Saldo inicial de caja</div>
@@ -891,26 +912,24 @@ function PanelCaja({
             </div>
           )}
           
+          {/* Mostrar DENOMINACIONES REALES */}
           <div className="space-y-2">
-            {Object.entries(denominaciones).reverse().map(([denom, cant]) => (
-              <div key={denom} className="flex justify-between items-center py-2 border-b">
-                <span className="font-semibold text-gray-700">${formatNumber(parseInt(denom))}</span>
-                <span className="text-2xl font-bold text-purple-900">{cant}</span>
-              </div>
-            ))}
+            {[20000, 10000, 5000, 2000, 1000, 500, 100].map(denom => {
+              const cantidad = denominacionesReales[denom] || 0
+              return (
+                <div key={denom} className="flex justify-between items-center py-2 border-b">
+                  <span className="font-semibold text-gray-700">${formatNumber(denom)}</span>
+                  <span className="text-2xl font-bold text-purple-900">{cantidad}</span>
+                </div>
+              )
+            })}
           </div>
           
           <div className="mt-6 pt-6 border-t-2 border-purple-200">
             <div className="text-sm text-gray-600 mb-1">Total efectivo en caja</div>
             <div className="text-4xl font-bold text-purple-900">${formatNumber(efectivoTotal)}</div>
-            {saldoInicial > 0 && (
-              <div className="text-xs text-gray-500 mt-1">
-                (Inicial: ${formatNumber(saldoInicial)} + Ventas: ${formatNumber(totalEfectivo)})
-              </div>
-            )}
           </div>
           
-          {/* Botones para abrir modales */}
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button 
               disabled={!sesionAbierta}
@@ -938,25 +957,24 @@ function PanelCaja({
         </div>
       </div>
 
-      {/* Modal Ingreso */}
       {modalIngreso && (
         <ModalMovimientoCaja
           tipo="ingreso"
           onClose={() => setModalIngreso(false)}
-          onConfirmarIngreso={(denominaciones, concepto) => {
-            onIngresar?.(denominaciones, concepto)
+          onConfirmar={(denominaciones, concepto) => {
+            onIngresar && onIngresar(denominaciones, concepto)
             setModalIngreso(false)
           }}
         />
       )}
 
-      {/* Modal Retiro */}
       {modalRetiro && (
         <ModalMovimientoCaja
           tipo="retiro"
+          denominacionesActuales={denominacionesReales}
           onClose={() => setModalRetiro(false)}
-          onConfirmarRetiro={(monto, concepto) => {
-            onRetirar?.(monto, concepto)
+          onConfirmar={(denominaciones, concepto) => {
+            onRetirar && onRetirar(denominaciones, concepto)
             setModalRetiro(false)
           }}
         />
@@ -965,20 +983,19 @@ function PanelCaja({
   )
 }
 
-// Componente Modal para Movimientos de Caja
+// Modal UNIFICADO para ingreso Y retiro
 function ModalMovimientoCaja({
   tipo,
+  denominacionesActuales = {},
   onClose,
-  onConfirmarIngreso,
-  onConfirmarRetiro
+  onConfirmar
 }: {
   tipo: 'ingreso' | 'retiro'
+  denominacionesActuales?: Record<number, number>
   onClose: () => void
-  onConfirmarIngreso?: (denominaciones: Record<string, number>, concepto: string) => void
-  onConfirmarRetiro?: (monto: number, concepto: string) => void
+  onConfirmar: (denominaciones: Record<string, number>, concepto: string) => void
 }) {
   const [concepto, setConcepto] = useState(tipo === 'ingreso' ? 'Ingreso manual' : 'Retiro de caja')
-  const [montoDirecto, setMontoDirecto] = useState('') // Para retiros
   const [billetes, setBilletes] = useState({
     '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
   })
@@ -988,9 +1005,6 @@ function ModalMovimientoCaja({
   }
 
   const calcularTotal = () => {
-    if (tipo === 'retiro') {
-      return parseFloat(montoDirecto) || 0
-    }
     return Object.entries(billetes).reduce((sum, [denom, cant]) => 
       sum + (parseInt(denom) * cant), 0
     )
@@ -1007,11 +1021,19 @@ function ModalMovimientoCaja({
       alert('Debe ingresar un concepto')
       return
     }
-    if (tipo === 'ingreso') {
-      onConfirmarIngreso?.(billetes, concepto)
-    } else {
-      onConfirmarRetiro?.(total, concepto)
+    
+    // Para RETIRO: validar que no saque más de lo que hay
+    if (tipo === 'retiro') {
+      for (const [denom, cantRetiro] of Object.entries(billetes)) {
+        const cantDisponible = denominacionesActuales[parseInt(denom)] || 0
+        if (cantRetiro > cantDisponible) {
+          alert(`No puedes retirar ${cantRetiro} billetes de $${formatNumber(parseInt(denom))}. Solo hay ${cantDisponible} disponibles.`)
+          return
+        }
+      }
     }
+    
+    onConfirmar(billetes, concepto)
   }
 
   return (
@@ -1023,34 +1045,24 @@ function ModalMovimientoCaja({
         className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className={`p-6 ${tipo === 'ingreso' ? 'bg-gradient-to-r from-green-600 to-green-700' : 'bg-gradient-to-r from-red-600 to-red-700'} text-white rounded-t-2xl`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-4xl">
-                {tipo === 'ingreso' ? '💰' : '💸'}
-              </span>
+              <span className="text-4xl">{tipo === 'ingreso' ? '💰' : '💸'}</span>
               <div>
                 <h2 className="text-2xl font-bold">
                   {tipo === 'ingreso' ? 'Ingresar Dinero' : 'Retirar Dinero'}
                 </h2>
                 <p className="text-white/80 text-sm">
-                  {tipo === 'ingreso' ? 'Agregar efectivo a la caja' : 'Sacar efectivo de la caja'}
+                  {tipo === 'ingreso' ? 'Especifica qué billetes agregas' : 'Especifica qué billetes sacas'}
                 </p>
               </div>
             </div>
-            <button 
-              onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-full transition"
-              title="Cerrar"
-            >
-              ✕
-            </button>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition">✕</button>
           </div>
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Concepto */}
           <div>
             <label className="block text-base font-bold text-gray-800 mb-2">
               Concepto del movimiento *
@@ -1059,125 +1071,100 @@ function ModalMovimientoCaja({
               type="text"
               value={concepto}
               onChange={(e) => setConcepto(e.target.value)}
-              placeholder={tipo === 'ingreso' ? 'Ej: Fondo de caja inicial' : 'Ej: Pago a proveedor'}
+              placeholder={tipo === 'ingreso' ? 'Ej: Fondo de caja inicial' : 'Ej: Compra de insumos'}
               className="w-full px-4 py-3 text-base border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
             />
           </div>
 
-          {tipo === 'ingreso' ? (
-            // INGRESO: Desglose de billetes
-            <div>
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <span>💵</span>
-                <span>Desglose de billetes y monedas</span>
-              </h3>
-              <div className="bg-gray-50 rounded-xl p-4 space-y-3 border-2 border-gray-200">
-                {Object.keys(billetes).reverse().map((denom) => {
-                  const cantidad = billetes[denom as keyof typeof billetes]
-                  const subtotal = parseInt(denom) * cantidad
-                  
-                  return (
-                    <div key={denom} className="flex items-center gap-4 bg-white p-3 rounded-lg shadow-sm">
-                      <span className="font-bold text-lg text-gray-700 w-24">
-                        ${formatNumber(parseInt(denom))}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setBilletes(prev => ({ 
-                            ...prev, 
-                            [denom]: Math.max(0, prev[denom as keyof typeof billetes] - 1) 
-                          }))}
-                          className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-lg font-bold transition"
-                        >
-                          −
-                        </button>
-                        <input
-                          type="number"
-                          min="0"
-                          value={cantidad}
-                          onChange={(e) => setBilletes(prev => ({ 
-                            ...prev, 
-                            [denom]: Math.max(0, parseInt(e.target.value) || 0) 
-                          }))}
-                          className="w-20 px-3 py-2 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setBilletes(prev => ({ 
-                            ...prev, 
-                            [denom]: prev[denom as keyof typeof billetes] + 1 
-                          }))}
-                          className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-lg font-bold transition"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <div className="flex-1 text-right">
-                        <span className={`text-lg font-semibold ${subtotal > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
-                          = ${formatNumber(subtotal)}
-                        </span>
-                      </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <span>💵</span>
+              <span>Desglose de billetes y monedas</span>
+            </h3>
+            <div className="bg-gray-50 rounded-xl p-4 space-y-3 border-2 border-gray-200">
+              {Object.keys(billetes).reverse().map((denom) => {
+                const cantidad = billetes[denom as keyof typeof billetes]
+                const disponible = denominacionesActuales[parseInt(denom)] || 0
+                const subtotal = parseInt(denom) * cantidad
+                
+                return (
+                  <div key={denom} className="flex items-center gap-4 bg-white p-3 rounded-lg shadow-sm">
+                    <div className="w-32">
+                      <div className="font-bold text-lg text-gray-700">${formatNumber(parseInt(denom))}</div>
+                      {tipo === 'retiro' && (
+                        <div className="text-xs text-gray-500">Disponible: {disponible}</div>
+                      )}
                     </div>
-                  )
-                })}
-              </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBilletes(prev => ({ 
+                          ...prev, 
+                          [denom]: Math.max(0, prev[denom as keyof typeof billetes] - 1) 
+                        }))}
+                        className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-lg font-bold transition"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min="0"
+                        max={tipo === 'retiro' ? disponible : undefined}
+                        value={cantidad}
+                        onChange={(e) => {
+                          const valor = parseInt(e.target.value) || 0
+                          const maximo = tipo === 'retiro' ? disponible : 9999
+                          setBilletes(prev => ({ 
+                            ...prev, 
+                            [denom]: Math.max(0, Math.min(valor, maximo))
+                          }))
+                        }}
+                        className="w-20 px-3 py-2 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const maximo = tipo === 'retiro' ? disponible : 9999
+                          setBilletes(prev => ({ 
+                            ...prev, 
+                            [denom]: Math.min(prev[denom as keyof typeof billetes] + 1, maximo)
+                          }))
+                        }}
+                        disabled={tipo === 'retiro' && cantidad >= disponible}
+                        className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-lg font-bold transition disabled:opacity-50"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="flex-1 text-right">
+                      <span className={`text-lg font-semibold ${subtotal > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
+                        = ${formatNumber(subtotal)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          ) : (
-            // RETIRO: Solo monto directo
-            <div>
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <span>💵</span>
-                <span>Monto a retirar</span>
-              </h3>
-              <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Ingresa el monto total que vas a sacar de la caja física
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-600">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={montoDirecto}
-                    onChange={(e) => setMontoDirecto(e.target.value)}
-                    placeholder="15000"
-                    className="w-full pl-12 pr-4 py-4 text-2xl font-bold border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none text-right"
-                  />
-                </div>
-                <p className="text-sm text-gray-600 mt-3">
-                  💡 Cuenta el efectivo que sacas de la caja e ingresa el total aquí
-                </p>
-              </div>
-            </div>
-          )}
+          </div>
 
-          {/* Total */}
           <div className={`p-6 rounded-xl border-2 ${
-            tipo === 'ingreso' 
-              ? 'bg-green-50 border-green-300' 
-              : 'bg-red-50 border-red-300'
+            tipo === 'ingreso' ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'
           }`}>
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-medium text-gray-600 mb-1">
                   Total a {tipo === 'ingreso' ? 'ingresar' : 'retirar'}
                 </div>
-                <div className={`text-5xl font-bold ${
-                  tipo === 'ingreso' ? 'text-green-700' : 'text-red-700'
-                }`}>
+                <div className={`text-5xl font-bold ${tipo === 'ingreso' ? 'text-green-700' : 'text-red-700'}`}>
                   ${formatNumber(total)}
                 </div>
               </div>
               {total > 0 && (
-                <div className="text-6xl">
-                  {tipo === 'ingreso' ? '💰' : '💸'}
-                </div>
+                <div className="text-6xl">{tipo === 'ingreso' ? '💰' : '💸'}</div>
               )}
             </div>
           </div>
 
-          {/* Botones */}
           <div className="flex gap-3 pt-4">
             <button
               onClick={onClose}
@@ -1196,7 +1183,7 @@ function ModalMovimientoCaja({
             >
               {total > 0 
                 ? `Confirmar ${tipo === 'ingreso' ? 'Ingreso' : 'Retiro'}`
-                : 'Ingresa un monto'
+                : 'Selecciona billetes'
               }
             </button>
           </div>
