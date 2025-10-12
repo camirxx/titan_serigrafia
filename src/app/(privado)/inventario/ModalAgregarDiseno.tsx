@@ -1,176 +1,242 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from 'react'
-import { supabaseBrowser } from '@/lib/supabaseClient'
-import { X } from 'lucide-react'
+import { useState, useEffect, useCallback } from "react";
+import { supabaseBrowser } from "@/lib/supabaseClient";
+import { X } from "lucide-react";
 
-type Color = { id: number; nombre: string }
-type TipoPrenda = { id: number; nombre: string }
+type Color = { id: number; nombre: string };
+type TipoPrenda = { id: number; nombre: string };
 
 type ModalAgregarDisenoProps = {
-  isOpen: boolean
-  onClose: () => void
-  onSuccess: () => void
-}
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+};
 
-export default function ModalAgregarDiseno({ isOpen, onClose, onSuccess }: ModalAgregarDisenoProps) {
-  const supabase = supabaseBrowser()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [ok, setOk] = useState<string | null>(null)
+export default function ModalAgregarDiseno({
+  isOpen,
+  onClose,
+  onSuccess,
+}: ModalAgregarDisenoProps) {
+  const supabase = supabaseBrowser();
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
 
   // form
-  const [nombreDiseno, setNombreDiseno] = useState('')
-  const [coloresSeleccionados, setColoresSeleccionados] = useState<number[]>([])
-  const [tiposSeleccionados, setTiposSeleccionados] = useState<number[]>([])
+  const [nombreDiseno, setNombreDiseno] = useState("");
+  const [coloresSeleccionados, setColoresSeleccionados] = useState<number[]>(
+    []
+  );
+  const [tiposSeleccionados, setTiposSeleccionados] = useState<number[]>([]);
 
   // catálogos
-  const [coloresDisponibles, setColoresDisponibles] = useState<Color[]>([])
-  const [tiposDisponibles, setTiposDisponibles] = useState<TipoPrenda[]>([])
+  const [coloresDisponibles, setColoresDisponibles] = useState<Color[]>([]);
+  const [tiposDisponibles, setTiposDisponibles] = useState<TipoPrenda[]>([]);
 
-  useEffect(() => {
-    if (isOpen) {
-      void cargarCatalogos()
-      setOk(null); setError(null)
-    }
-  }, [isOpen])
-
-  const cargarCatalogos = async () => {
+  // --- Declarar cargarCatalogos ANTES y memorizado ---
+  const cargarCatalogos = useCallback(async () => {
     try {
       const { data: colores, error: e1 } = await supabase
-        .from('colores').select('id, nombre').order('nombre')
-      if (e1) throw e1
-      setColoresDisponibles(colores ?? [])
+        .from("colores")
+        .select("id, nombre")
+        .order("nombre");
+      if (e1) throw e1;
+      setColoresDisponibles((colores ?? []) as Color[]);
 
       const { data: tipos, error: e2 } = await supabase
-        .from('tipos_prenda').select('id, nombre').order('nombre')
-      if (e2) throw e2
-      setTiposDisponibles(tipos ?? [])
+        .from("tipos_prenda")
+        .select("id, nombre")
+        .order("nombre");
+      if (e2) throw e2;
+      setTiposDisponibles((tipos ?? []) as TipoPrenda[]);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error cargando catálogos'
-      setError(message)
+      const message =
+        err instanceof Error ? err.message : "Error cargando catálogos";
+      setError(message);
     }
-  }
+  }, [supabase]);
+
+  // --- Effect que reacciona a apertura del modal ---
+  useEffect(() => {
+    if (!isOpen) return;
+    setOk(null);
+    setError(null);
+    cargarCatalogos();
+  }, [isOpen, cargarCatalogos]);
 
   const toggleColor = (id: number) =>
-    setColoresSeleccionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    setColoresSeleccionados((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
 
   const toggleTipo = (id: number) =>
-    setTiposSeleccionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    setTiposSeleccionados((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
 
   // 👉 helper: obtiene tienda del usuario autenticado
   const getTiendaIdActual = async (): Promise<number | null> => {
-    const { data: u } = await supabase.auth.getUser()
-    const uid = u.user?.id
-    if (!uid) return null
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id;
+    if (!uid) return null;
     const { data, error } = await supabase
-      .from('usuarios')
-      .select('tienda_id')
-      .eq('id', uid)
-      .maybeSingle()
-    if (error) throw error
-    return data?.tienda_id ?? null
-  }
+      .from("usuarios")
+      .select("tienda_id")
+      .eq("id", uid)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.tienda_id ?? null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null); setOk(null)
+    e.preventDefault();
+    setError(null);
+    setOk(null);
 
-    if (!nombreDiseno.trim()) { setError('Debes ingresar un nombre para el diseño'); return }
-    if (tiposSeleccionados.length === 0) { setError('Selecciona al menos un tipo de prenda'); return }
-    if (coloresSeleccionados.length === 0) { setError('Selecciona al menos un color'); return }
+    if (!nombreDiseno.trim()) {
+      setError("Debes ingresar un nombre para el diseño");
+      return;
+    }
+    if (tiposSeleccionados.length === 0) {
+      setError("Selecciona al menos un tipo de prenda");
+      return;
+    }
+    if (coloresSeleccionados.length === 0) {
+      setError("Selecciona al menos un color");
+      return;
+    }
 
-    setLoading(true)
+    setLoading(true);
     try {
-      // 0) tienda actual (clave para pasar RLS y que la vista lo vea)
-      const tiendaId = await getTiendaIdActual()
-      if (!tiendaId) throw new Error('No se pudo determinar tu tienda. Verifica tu usuario.tienda_id.')
+      // 0) tienda actual
+      const tiendaId = await getTiendaIdActual();
+      if (!tiendaId)
+        throw new Error(
+          "No se pudo determinar tu tienda. Verifica tu usuario.tienda_id."
+        );
 
-      // 1) UPSERT diseño por nombre (evita error si ya existe y RLS bloquea el select)
+      // 1) UPSERT diseño por nombre
       const { data: disenoRow, error: eUpsert } = await supabase
-        .from('disenos')
-        .upsert({ nombre: nombreDiseno.trim() }, { onConflict: 'nombre' })
-        .select('id')
-        .single()
-      if (eUpsert) throw eUpsert
-      const disenoId = disenoRow.id as number
+        .from("disenos")
+        .upsert({ nombre: nombreDiseno.trim() }, { onConflict: "nombre" })
+        .select("id")
+        .single();
+      if (eUpsert) throw eUpsert;
+      const disenoId = disenoRow.id as number;
 
-      // 2) Crear productos con tienda_id (¡esto faltaba!)
-      const productosACrear = []
+      // 2) Crear productos con tienda_id
+      const productosACrear: Array<{
+        diseno_id: number;
+        tipo_prenda_id: number;
+        color_polera_id: number;
+        tienda_id: number;
+        activo: boolean;
+      }> = [];
+
       for (const tipoId of tiposSeleccionados) {
         for (const colorId of coloresSeleccionados) {
           productosACrear.push({
             diseno_id: disenoId,
             tipo_prenda_id: tipoId,
             color_polera_id: colorId,
-            tienda_id: tiendaId,          // 👈 clave para que tus vistas/RLS lo vean
+            tienda_id: tiendaId,
             activo: true,
-          })
+          });
         }
       }
 
       const { data: productosNew, error: eInsProd } = await supabase
-        .from('productos')
+        .from("productos")
         .insert(productosACrear)
-        .select('id')
-      if (eInsProd) throw eInsProd
+        .select("id");
+      if (eInsProd) throw eInsProd;
 
-      const productoIds = (productosNew ?? []).map(p => p.id as number)
+      const productoIds = (productosNew ?? []).map((p) => p.id as number);
       if (productoIds.length === 0) {
-        throw new Error('No se obtuvieron IDs de productos (revisa RLS de SELECT en productos).')
+        throw new Error(
+          "No se obtuvieron IDs de productos (revisa RLS de SELECT en productos)."
+        );
       }
 
-      // 3) Crear variantes para cada producto (incluye talla S)
-      const tallas = ['S','M','L','XL','XXL','XXXL']
-      const variantesACrear: { producto_id: number; talla: string; stock_actual: number; costo_unitario: number }[] = []
+      // 3) Crear variantes para cada producto
+      const tallas = ["S", "M", "L", "XL", "XXL", "XXXL"];
+      const variantesACrear: {
+        producto_id: number;
+        talla: string;
+        stock_actual: number;
+        costo_unitario: number;
+      }[] = [];
+
       for (const pid of productoIds) {
         for (const talla of tallas) {
-          variantesACrear.push({ producto_id: pid, talla, stock_actual: 0, costo_unitario: 0 })
+          variantesACrear.push({
+            producto_id: pid,
+            talla,
+            stock_actual: 0,
+            costo_unitario: 0,
+          });
         }
       }
 
       const { error: eInsVar } = await supabase
-        .from('variantes')
-        .insert(variantesACrear)
-      if (eInsVar) throw eInsVar
+        .from("variantes")
+        .insert(variantesACrear);
+      if (eInsVar) throw eInsVar;
 
-      setOk('✅ Diseño y variantes creadas correctamente')
-      onSuccess()          // recarga inventario en el padre
-      limpiarFormulario()
-      onClose()
+      setOk("✅ Diseño y variantes creadas correctamente");
+      onSuccess(); // recarga inventario en el padre
+      limpiarFormulario();
+      onClose();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al crear el diseño'
-      setError(message)
+      const message =
+        err instanceof Error ? err.message : "Error al crear el diseño";
+      setError(message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const limpiarFormulario = () => {
-    setNombreDiseno('')
-    setColoresSeleccionados([])
-    setTiposSeleccionados([])
-    setError(null); setOk(null)
-  }
+    setNombreDiseno("");
+    setColoresSeleccionados([]);
+    setTiposSeleccionados([]);
+    setError(null);
+    setOk(null);
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-t-2xl flex items-center justify-between">
           <h2 className="text-2xl font-bold">Agregar Nuevo Diseño</h2>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/20 rounded-full transition"
+          >
             <X className="w-6 h-6" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {error && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded">{error}</div>}
-          {ok && <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-3 rounded">{ok}</div>}
+          {error && (
+            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded">
+              {error}
+            </div>
+          )}
+          {ok && (
+            <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-3 rounded">
+              {ok}
+            </div>
+          )}
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Diseño *</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Nombre del Diseño *
+            </label>
             <input
               type="text"
               value={nombreDiseno}
@@ -182,12 +248,26 @@ export default function ModalAgregarDiseno({ isOpen, onClose, onSuccess }: Modal
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">Tipos de Prenda *</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-3">
+              Tipos de Prenda *
+            </label>
             <div className="grid grid-cols-2 gap-3">
-              {tiposDisponibles.map(t => (
-                <label key={t.id}
-                  className={`flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer transition ${tiposSeleccionados.includes(t.id) ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-purple-300'}`}>
-                  <input type="checkbox" checked={tiposSeleccionados.includes(t.id)} onChange={() => toggleTipo(t.id)} className="w-5 h-5" disabled={loading}/>
+              {tiposDisponibles.map((t) => (
+                <label
+                  key={t.id}
+                  className={`flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer transition ${
+                    tiposSeleccionados.includes(t.id)
+                      ? "border-purple-500 bg-purple-50"
+                      : "border-gray-200 hover:border-purple-300"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={tiposSeleccionados.includes(t.id)}
+                    onChange={() => toggleTipo(t.id)}
+                    className="w-5 h-5"
+                    disabled={loading}
+                  />
                   <span className="font-medium text-gray-700">{t.nombre}</span>
                 </label>
               ))}
@@ -195,32 +275,66 @@ export default function ModalAgregarDiseno({ isOpen, onClose, onSuccess }: Modal
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">Colores *</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-3">
+              Colores *
+            </label>
             <div className="grid grid-cols-3 gap-3">
-              {coloresDisponibles.map(c => (
-                <label key={c.id}
-                  className={`flex items-center gap-2 p-3 border-2 rounded-lg cursor-pointer transition ${coloresSeleccionados.includes(c.id) ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-purple-300'}`}>
-                  <input type="checkbox" checked={coloresSeleccionados.includes(c.id)} onChange={() => toggleColor(c.id)} className="w-5 h-5" disabled={loading}/>
-                  <span className="text-sm font-medium text-gray-700">{c.nombre}</span>
+              {coloresDisponibles.map((c) => (
+                <label
+                  key={c.id}
+                  className={`flex items-center gap-2 p-3 border-2 rounded-lg cursor-pointer transition ${
+                    coloresSeleccionados.includes(c.id)
+                      ? "border-purple-500 bg-purple-50"
+                      : "border-gray-200 hover:border-purple-300"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={coloresSeleccionados.includes(c.id)}
+                    onChange={() => toggleColor(c.id)}
+                    className="w-5 h-5"
+                    disabled={loading}
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    {c.nombre}
+                  </span>
                 </label>
               ))}
             </div>
           </div>
 
-          {tiposSeleccionados.length > 0 && coloresSeleccionados.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-              Se crearán: <b>{tiposSeleccionados.length}</b> × <b>{coloresSeleccionados.length}</b> = <b>{tiposSeleccionados.length * coloresSeleccionados.length} productos</b> (cada uno con 6 tallas)
-            </div>
-          )}
+          {tiposSeleccionados.length > 0 &&
+            coloresSeleccionados.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                Se crearán: <b>{tiposSeleccionados.length}</b> ×{" "}
+                <b>{coloresSeleccionados.length}</b> ={" "}
+                <b>
+                  {tiposSeleccionados.length * coloresSeleccionados.length}{" "}
+                  productos
+                </b>{" "}
+                (cada uno con 6 tallas)
+              </div>
+            )}
 
           <div className="flex gap-3 pt-4">
-            <button type="button" onClick={onClose} disabled={loading} className="flex-1 px-6 py-3 border-2 rounded-lg">Cancelar</button>
-            <button type="submit" disabled={loading} className="flex-1 px-6 py-3 bg-purple-600 text-white font-bold rounded-lg disabled:opacity-50">
-              {loading ? 'Creando…' : 'Crear Diseño'}
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="flex-1 px-6 py-3 border-2 rounded-lg"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-6 py-3 bg-purple-600 text-white font-bold rounded-lg disabled:opacity-50"
+            >
+              {loading ? "Creando…" : "Crear Diseño"}
             </button>
           </div>
         </form>
       </div>
     </div>
-  )
+  );
 }
