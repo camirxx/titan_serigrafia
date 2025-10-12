@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(req: NextRequest) {
-  let res = NextResponse.next({
+  const res = NextResponse.next({
     request: {
       headers: req.headers,
     },
@@ -18,13 +18,11 @@ export async function middleware(req: NextRequest) {
           return req.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
-          res = NextResponse.next({
-            request: req,
+          // NO modificar req.cookies directamente
+          // Solo establecer en la respuesta
+          cookiesToSet.forEach(({ name, value, options }) => {
+            res.cookies.set(name, value, options);
           });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            res.cookies.set(name, value, options)
-          );
         },
       },
     }
@@ -35,45 +33,6 @@ export async function middleware(req: NextRequest) {
     data: { session },
     error,
   } = await supabase.auth.getSession();
-
-  // Si hay error de refresh token, limpiar cookies y redirigir
-  if (error?.code === "refresh_token_not_found" || 
-      error?.message?.includes("refresh_token_not_found") ||
-      error?.message?.includes("Invalid Refresh Token")) {
-    
-    // Limpiar todas las cookies de Supabase
-    const allCookies = req.cookies.getAll();
-    allCookies.forEach(cookie => {
-      if (cookie.name.startsWith("sb-")) {
-        res.cookies.delete(cookie.name);
-      }
-    });
-
-    // Redirigir a acceso restringido si no está en ruta pública
-    const url = req.nextUrl;
-    const publicRoutes = [
-      "/login",
-      "/auth/callback",
-      "/api/auth",
-      "/acceso-restringido",
-      "/acceso-denegado",
-      "/favicon.ico",
-      "/robots.txt",
-      "/sitemap.xml",
-      "/images",
-      "/public",
-      "/_next",
-    ];
-    const isPublic = publicRoutes.some((p) => url.pathname.startsWith(p));
-
-    if (!isPublic) {
-      const redirectUrl = new URL("/acceso-restringido", url);
-      redirectUrl.searchParams.set("next", url.pathname);
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    return res;
-  }
 
   const url = req.nextUrl;
 
@@ -92,6 +51,35 @@ export async function middleware(req: NextRequest) {
     "/_next",
   ];
   const isPublic = publicRoutes.some((p) => url.pathname.startsWith(p));
+
+  // Si hay error de refresh token, limpiar cookies y redirigir
+  if (
+    error?.code === "refresh_token_not_found" ||
+    error?.message?.includes("refresh_token_not_found") ||
+    error?.message?.includes("Invalid Refresh Token")
+  ) {
+    // Crear nueva respuesta para limpiar cookies
+    const cleanResponse = isPublic
+      ? NextResponse.next({ request: req })
+      : NextResponse.redirect(new URL("/acceso-restringido", url));
+
+    // Limpiar todas las cookies de Supabase
+    const allCookies = req.cookies.getAll();
+    allCookies.forEach((cookie) => {
+      if (cookie.name.startsWith("sb-")) {
+        cleanResponse.cookies.delete(cookie.name);
+      }
+    });
+
+    if (!isPublic) {
+      cleanResponse.headers.set(
+        "Location",
+        `/acceso-restringido?next=${encodeURIComponent(url.pathname)}`
+      );
+    }
+
+    return cleanResponse;
+  }
 
   // Sin sesión → 401 (acceso restringido)
   if (!session && !isPublic) {
