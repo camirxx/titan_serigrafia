@@ -40,13 +40,14 @@ export default function TrabajadoresUI({
   const [searchTerm, setSearchTerm] = useState('');
   const [isPending, startTransition] = useTransition();
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [newUser, setNewUser] = useState({
-    email: '',
-    nombre: '',
-    rol: 'vendedor' as Rol,
-    tienda_id: ''
-  });
+ 
+ // const [showModal, setShowModal] = useState(false);
+  //const [newUser, setNewUser] = useState({
+    //email: '',
+    //nombre: '',
+    //rol: 'vendedor' as Rol,
+    //tienda_id: ''
+ // });
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });

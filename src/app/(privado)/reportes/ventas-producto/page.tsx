@@ -164,7 +164,7 @@ export default function VentasPorProductoPage() {
               <h3 className="text-red-800 font-medium">Error al cargar datos</h3>
               <p className="text-red-700 text-sm mt-1">{errorMsg}</p>
               <p className="text-red-600 text-xs mt-2">
-                Asegúrate de que la vista 'ventas_por_producto_view' existe en Supabase
+                Asegúrate de que la vista <code>ventas_por_producto_view</code> existe en Supabase
               </p>
             </div>
           </div>
