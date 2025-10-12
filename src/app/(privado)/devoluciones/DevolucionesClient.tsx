@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 
 // --- Tipos base ---
@@ -58,6 +59,8 @@ type PayloadDevolucion = {
 
 export default function DevolucionesClient() {
   const supabase = useMemo(() => supabaseBrowser(), []);
+  const router = useRouter();
+
   const [ventaIdInput, setVentaIdInput] = useState<string>('');
   const [venta, setVenta] = useState<Venta | null>(null);
   const [lineas, setLineas] = useState<LineaDetalle[]>([]);
@@ -69,6 +72,20 @@ export default function DevolucionesClient() {
   const [loading, setLoading] = useState<boolean>(false);
   const [ok, setOk] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Header fecha/hora (estilo Inventario)
+  const [fecha, setFecha] = useState('');
+  const [hora, setHora] = useState('');
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setFecha(now.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' }));
+      setHora(now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const totalSeleccionado = useMemo(() => {
     return lineas.reduce((acc, l) => {
@@ -187,17 +204,15 @@ export default function DevolucionesClient() {
         monto_reintegro: metodo === 'cambio_producto' ? 0 : Number(montoReintegro || 0),
         observacion: observacion?.trim() || null,
         items: itemsSeleccionados,
-        // cambio_items_entregados: [], // si lo usas, tipado arriba
       };
 
-      // La RPC devuelve el id (bigint) -> lo tipamos como number
-     const { data, error: e } = await supabase
-        .rpc('crear_devolucion_json', { p: payload }) as { data: number | null, error: Error | null };
-            if (e) throw e;
-            if (!data) {
-            throw new Error('La RPC no devolvió un ID');
-            }
-        setOk(`✅ ${tipo === 'devolucion' ? 'Devolución' : 'Cambio'} creado correctamente. ID: ${data}`);
+      const { data, error: e } = (await supabase
+        .rpc('crear_devolucion_json', { p: payload })) as { data: number | null; error: Error | null };
+
+      if (e) throw e;
+      if (!data) throw new Error('La RPC no devolvió un ID');
+
+      setOk(`✅ ${tipo === 'devolucion' ? 'Devolución' : 'Cambio'} creado correctamente. ID: ${data}`);
 
       setCantSel((prev) => {
         const copy: CantidadesSeleccion = { ...prev };
@@ -214,174 +229,221 @@ export default function DevolucionesClient() {
   };
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-lg font-semibold">Devoluciones / Cambios</h1>
-
-      {error && (
-        <div className="border border-red-300 bg-red-50 text-red-700 text-sm p-2 rounded">
-          {error}
-        </div>
-      )}
-      {ok && (
-        <div className="border border-green-300 bg-green-50 text-green-700 text-sm p-2 rounded">
-          {ok}
-        </div>
-      )}
-
-      {/* Buscar venta */}
-      <div className="bg-white p-3 rounded-xl shadow flex items-center gap-2">
-        <input
-          className="border rounded p-2 w-48"
-          placeholder="ID de venta"
-          value={ventaIdInput}
-          onChange={(e) => setVentaIdInput(e.target.value)}
-        />
-        <button className="border rounded px-3 py-2" onClick={buscarVenta} disabled={loading}>
-          {loading ? 'Buscando…' : 'Buscar venta'}
-        </button>
-
-        {venta && (
-          <div className="ml-auto text-sm">
-            Venta <b>#{venta.id}</b> — {new Date(venta.fecha).toLocaleString()} — Total:{' '}
-            <b>${Number(venta.total || 0).toFixed(0)}</b>
-          </div>
-        )}
-      </div>
-
-      {/* Configuración */}
-      <div className="bg-white p-3 rounded-xl shadow flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-sm">Tipo:</label>
-          <select
-            className="border rounded p-2"
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value as TipoOperacion)}
-          >
-            <option value="devolucion">Devolución</option>
-            <option value="cambio">Cambio</option>
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-sm">Método:</label>
-          <select
-            className="border rounded p-2"
-            value={metodo}
-            onChange={(e) => setMetodo(e.target.value as MetodoResolucion)}
-          >
-            <option value="reintegro_efectivo">Reintegro efectivo</option>
-            <option value="nota_credito">Nota de crédito</option>
-            <option value="cambio_producto">Cambio de producto</option>
-          </select>
-        </div>
-
-        {(metodo === 'reintegro_efectivo' || metodo === 'nota_credito') && (
-          <div className="flex items-center gap-2">
-            <label className="text-sm">Monto reintegro:</label>
-            <input
-              type="number"
-              min={0}
-              className="border rounded p-2 w-40"
-              value={montoReintegro}
-              onChange={(e) => setMontoReintegro(Math.max(0, Number(e.target.value || 0)))}
-            />
-            <span className="text-xs text-neutral-500">Máx: ${totalSeleccionado.toFixed(0)}</span>
-          </div>
-        )}
-
-        <input
-          className="border rounded p-2 w-full md:flex-1"
-          placeholder="Observación (opcional)"
-          value={observacion}
-          onChange={(e) => setObservacion(e.target.value)}
-        />
-
-        <div className="ml-auto text-sm">
-          Total seleccionado: <b>${totalSeleccionado.toFixed(0)}</b>
+    <div className="">
+      {/* Bandas diagonales (decoración) */}
+      <div className="pointer-events-none absolute inset-0 opacity-20">
+        <div className="absolute inset-0">
+          <div className="absolute left-1/5 top-0 h-full w-32 -skew-x-12 transform bg-gradient-to-b from-green-400 to-transparent" />
+          <div className="absolute left-1/3 top-0 h-full w-24 -skew-x-12 transform bg-gradient-to-b from-green-500 to-transparent" />
+          <div className="absolute right-1/4 top-0 h-full w-32 -skew-x-12 transform bg-gradient-to-b from-green-400 to-transparent" />
         </div>
       </div>
 
-      {/* Líneas */}
-      <div className="bg-white p-3 rounded-xl shadow overflow-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left border-b">
-              <th className="py-2 pr-3">Detalle</th>
-              <th className="py-2 pr-3">Variante</th>
-              <th className="py-2 pr-3">Producto</th>
-              <th className="py-2 pr-3">Vendida</th>
-              <th className="py-2 pr-3">Precio</th>
-              <th className="py-2 pr-3">Devolver/Cambiar</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lineas.map((l) => {
-              const sel = Number(cantSel[l.id] ?? 0);
-              const maxQ = Number(l.cantidad ?? 0);
-              return (
-                <tr key={l.id} className="border-b last:border-0">
-                  <td className="py-2 pr-3">#{l.id}</td>
-                  <td className="py-2 pr-3">
-                    #{l.variante_id}
-                    {l.talla ? <span className="text-xs opacity-70"> · {l.talla}</span> : null}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <div className="text-sm">
-                      {l.diseno ?? '—'} <span className="opacity-60">/ {l.tipo_prenda ?? '—'}</span>
-                      {l.color ? <span className="opacity-60"> / {l.color}</span> : null}
-                    </div>
-                  </td>
-                  <td className="py-2 pr-3">{maxQ}</td>
-                  <td className="py-2 pr-3">${Number(l.precio_unitario || 0).toFixed(0)}</td>
-                  <td className="py-2 pr-3">
-                    <input
-                      type="number"
-                      min={0}
-                      max={maxQ}
-                      className="border rounded p-1 w-24"
-                      value={sel}
-                      onChange={(e) => {
-                        const next = Math.max(0, Math.min(maxQ, Number(e.target.value || 0)));
-                        setCantSel((prev) => ({ ...prev, [l.id]: next }));
-                      }}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-            {lineas.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-4 text-center text-neutral-500">
-                  Busca una venta para ver sus ítems.
-                </td>
-              </tr>
+      <div className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* Header estilo Inventario */}
+        <div className="mb-6 sm:mb-10">
+          <div className="flex items-center justify-between rounded-[28px] bg-gradient-to-r from-indigo-700 via-purple-700 to-violet-700 p-4 text-white shadow-2xl sm:p-6">
+            {/* Volver */}
+            <button
+              onClick={() => router.back()}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25 sm:h-14 sm:w-14"
+              aria-label="Volver"
+              title="Volver"
+            >
+              <span className="text-xl">‹</span>
+            </button>
+
+            {/* Título centrado */}
+            <div className="text-center">
+              <h1 className="text-3xl font-bold drop-shadow-lg">Devoluciones / Cambios</h1>
+              <p className="mt-1 text-sm text-white/80">
+                {fecha} · {hora}
+              </p>
+            </div>
+
+            {/* Círculo decorativo */}
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-lg sm:h-16 sm:w-16">
+              <div className="h-8 w-8 rounded-full bg-purple-900 sm:h-12 sm:w-12" />
+            </div>
+          </div>
+        </div>
+
+        {/* Contenido principal en card blanca */}
+        <div className="rounded-3xl bg-white/95 p-4 shadow-2xl backdrop-blur sm:p-6">
+          {error && (
+            <div className="mb-4 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+          {ok && (
+            <div className="mb-4 rounded border border-green-300 bg-green-50 p-2 text-sm text-green-700">
+              {ok}
+            </div>
+          )}
+
+          {/* Buscar venta */}
+          <div className="mb-4 flex flex-col gap-3 rounded-xl bg-white p-3 shadow sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
+              <input
+                className="w-48 rounded border-2 border-purple-200 p-2 focus:border-purple-400 focus:outline-none"
+                placeholder="ID de venta"
+                value={ventaIdInput}
+                onChange={(e) => setVentaIdInput(e.target.value)}
+              />
+              <button
+                className="rounded-lg bg-purple-600 px-3 py-2 text-white transition hover:bg-purple-700 disabled:opacity-50"
+                onClick={buscarVenta}
+                disabled={loading}
+              >
+                {loading ? 'Buscando…' : 'Buscar venta'}
+              </button>
+            </div>
+
+            {venta && (
+              <div className="sm:ml-auto text-sm">
+                Venta <b>#{venta.id}</b> — {new Date(venta.fecha).toLocaleString()} — Total:{' '}
+                <b>${Number(venta.total || 0).toFixed(0)}</b>
+              </div>
             )}
-          </tbody>
-        </table>
-      </div>
+          </div>
 
-      {/* Acciones */}
-      <div className="flex items-center gap-3">
-        <button
-          className="bg-black text-white rounded px-4 py-2 disabled:opacity-50"
-          onClick={confirmar}
-          disabled={loading || !venta || lineas.length === 0}
-        >
-          {loading ? 'Guardando…' : (tipo === 'devolucion' ? 'Confirmar devolución' : 'Confirmar cambio')}
-        </button>
-        <button
-          className="border rounded px-4 py-2"
-          onClick={() => {
-            setCantSel({});
-            setMontoReintegro(0);
-            setObservacion('');
-            setOk(null);
-            setError(null);
-          }}
-          disabled={loading}
-        >
-          Limpiar selección
-        </button>
+          {/* Configuración */}
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl bg-white p-3 shadow">
+            <div className="flex items-center gap-2">
+              <label className="text-sm">Tipo:</label>
+              <select
+                className="rounded border-2 border-purple-200 p-2 focus:border-purple-400 focus:outline-none"
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value as TipoOperacion)}
+              >
+                <option value="devolucion">Devolución</option>
+                <option value="cambio">Cambio</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm">Método:</label>
+              <select
+                className="rounded border-2 border-purple-200 p-2 focus:border-purple-400 focus:outline-none"
+                value={metodo}
+                onChange={(e) => setMetodo(e.target.value as MetodoResolucion)}
+              >
+                <option value="reintegro_efectivo">Reintegro efectivo</option>
+                <option value="nota_credito">Nota de crédito</option>
+                <option value="cambio_producto">Cambio de producto</option>
+              </select>
+            </div>
+
+            {(metodo === 'reintegro_efectivo' || metodo === 'nota_credito') && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm">Monto reintegro:</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-40 rounded border-2 border-purple-200 p-2 focus:border-purple-400 focus:outline-none"
+                  value={montoReintegro}
+                  onChange={(e) => setMontoReintegro(Math.max(0, Number(e.target.value || 0)))}
+                />
+                <span className="text-xs text-neutral-500">Máx: ${totalSeleccionado.toFixed(0)}</span>
+              </div>
+            )}
+
+            <input
+              className="w-full rounded border-2 border-purple-200 p-2 focus:border-purple-400 focus:outline-none md:flex-1"
+              placeholder="Observación (opcional)"
+              value={observacion}
+              onChange={(e) => setObservacion(e.target.value)}
+            />
+
+            <div className="ml-auto text-sm">
+              Total seleccionado: <b>${totalSeleccionado.toFixed(0)}</b>
+            </div>
+          </div>
+
+          {/* Líneas */}
+          <div className="overflow-auto rounded-xl bg-white p-3 shadow">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2 pr-3">Detalle</th>
+                  <th className="py-2 pr-3">Variante</th>
+                  <th className="py-2 pr-3">Producto</th>
+                  <th className="py-2 pr-3">Vendida</th>
+                  <th className="py-2 pr-3">Precio</th>
+                  <th className="py-2 pr-3">Devolver/Cambiar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lineas.map((l) => {
+                  const sel = Number(cantSel[l.id] ?? 0);
+                  const maxQ = Number(l.cantidad ?? 0);
+                  return (
+                    <tr key={l.id} className="border-b last:border-0">
+                      <td className="py-2 pr-3">#{l.id}</td>
+                      <td className="py-2 pr-3">
+                        #{l.variante_id}
+                        {l.talla ? <span className="text-xs opacity-70"> · {l.talla}</span> : null}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <div className="text-sm">
+                          {l.diseno ?? '—'}{' '}
+                          <span className="opacity-60">/ {l.tipo_prenda ?? '—'}</span>
+                          {l.color ? <span className="opacity-60"> / {l.color}</span> : null}
+                        </div>
+                      </td>
+                      <td className="py-2 pr-3">{maxQ}</td>
+                      <td className="py-2 pr-3">${Number(l.precio_unitario || 0).toFixed(0)}</td>
+                      <td className="py-2 pr-3">
+                        <input
+                          type="number"
+                          min={0}
+                          max={maxQ}
+                          className="w-24 rounded border-2 border-purple-200 p-1 text-center focus:border-purple-400 focus:outline-none"
+                          value={sel}
+                          onChange={(e) => {
+                            const next = Math.max(0, Math.min(maxQ, Number(e.target.value || 0)));
+                            setCantSel((prev) => ({ ...prev, [l.id]: next }));
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+                {lineas.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-4 text-center text-neutral-500">
+                      Busca una venta para ver sus ítems.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Acciones */}
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              className="rounded bg-black px-4 py-2 text-white transition hover:bg-gray-900 disabled:opacity-50"
+              onClick={confirmar}
+              disabled={loading || !venta || lineas.length === 0}
+            >
+              {loading ? 'Guardando…' : tipo === 'devolucion' ? 'Confirmar devolución' : 'Confirmar cambio'}
+            </button>
+            <button
+              className="rounded border px-4 py-2"
+              onClick={() => {
+                setCantSel({});
+                setMontoReintegro(0);
+                setObservacion('');
+                setOk(null);
+                setError(null);
+              }}
+              disabled={loading}
+            >
+              Limpiar selección
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
