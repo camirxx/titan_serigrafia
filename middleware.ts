@@ -1,9 +1,9 @@
 // middleware.ts
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next({
+  let res = NextResponse.next({
     request: {
       headers: req.headers,
     },
@@ -14,25 +14,52 @@ export async function middleware(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return req.cookies.getAll();
+        get(name: string) {
+          return req.cookies.get(name)?.value;
         },
-        setAll(cookiesToSet) {
-          // NO modificar req.cookies directamente
-          // Solo establecer en la respuesta
-          cookiesToSet.forEach(({ name, value, options }) => {
-            res.cookies.set(name, value, options);
+        set(name: string, value: string, options: CookieOptions) {
+          // Actualizar tanto request como response
+          req.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+          res = NextResponse.next({
+            request: {
+              headers: req.headers,
+            },
+          });
+          res.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+        },
+        remove(name: string, options: CookieOptions) {
+          req.cookies.set({
+            name,
+            value: "",
+            ...options,
+          });
+          res = NextResponse.next({
+            request: {
+              headers: req.headers,
+            },
+          });
+          res.cookies.set({
+            name,
+            value: "",
+            ...options,
           });
         },
       },
     }
   );
 
-  // Intentar obtener sesión y manejar errores de refresh token
+  // Refrescar sesión si es necesario
   const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const url = req.nextUrl;
 
@@ -46,59 +73,33 @@ export async function middleware(req: NextRequest) {
     "/favicon.ico",
     "/robots.txt",
     "/sitemap.xml",
-    "/images",
-    "/public",
-    "/_next",
   ];
-  const isPublic = publicRoutes.some((p) => url.pathname.startsWith(p));
 
-  // Si hay error de refresh token, limpiar cookies y redirigir
-  if (
-    error?.code === "refresh_token_not_found" ||
-    error?.message?.includes("refresh_token_not_found") ||
-    error?.message?.includes("Invalid Refresh Token")
-  ) {
-    // Crear nueva respuesta para limpiar cookies
-    const cleanResponse = isPublic
-      ? NextResponse.next({ request: req })
-      : NextResponse.redirect(new URL("/acceso-restringido", url));
+  // Verificar si la ruta es pública
+  const isPublic =
+    publicRoutes.some((p) => url.pathname.startsWith(p)) ||
+    url.pathname.startsWith("/_next") ||
+    url.pathname.startsWith("/images") ||
+    url.pathname.startsWith("/public");
 
-    // Limpiar todas las cookies de Supabase
-    const allCookies = req.cookies.getAll();
-    allCookies.forEach((cookie) => {
-      if (cookie.name.startsWith("sb-")) {
-        cleanResponse.cookies.delete(cookie.name);
-      }
-    });
-
-    if (!isPublic) {
-      cleanResponse.headers.set(
-        "Location",
-        `/acceso-restringido?next=${encodeURIComponent(url.pathname)}`
-      );
-    }
-
-    return cleanResponse;
-  }
-
-  // Sin sesión → 401 (acceso restringido)
-  if (!session && !isPublic) {
+  // Sin usuario → redirigir a acceso restringido
+  if (!user && !isPublic) {
     const redirectUrl = new URL("/acceso-restringido", url);
     redirectUrl.searchParams.set("next", url.pathname);
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Con sesión y entrando a /login → home
-  if (session && url.pathname.startsWith("/login")) {
+  // Con usuario y entrando a /login → home
+  if (user && url.pathname.startsWith("/login")) {
     return NextResponse.redirect(new URL("/", url));
   }
 
-  // Gate de rol para /trabajadores (solo admin) → 403 (acceso denegado)
-  if (session && url.pathname.startsWith("/trabajadores")) {
+  // Gate de rol para /trabajadores (solo admin)
+  if (user && url.pathname.startsWith("/trabajadores")) {
     const { data, error: roleError } = await supabase
       .from("usuarios")
       .select("rol")
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .single();
 
     const rol = data?.rol ?? null;
@@ -111,5 +112,13 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+  ],
 };
