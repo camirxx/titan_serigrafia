@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-export const runtime = "edge";
 
-export async function GET() {
-  return NextResponse.redirect(new URL("/", "http://localhost:3000"));
+export async function GET(request: Request) {
+  // Obtener la URL base del request
+  const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
+  
+  return NextResponse.redirect(new URL("/", baseUrl));
 }
