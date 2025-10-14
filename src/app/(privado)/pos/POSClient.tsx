@@ -81,6 +81,18 @@ export default function POSModerno() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sesionCajaId])
 
+  // Recargar tallas cuando se vuelve al paso 4 (para actualizar stock después de ventas)
+  useEffect(() => {
+    if (paso === 4 && colorSel && tipoSel && disenoSel) {
+      void cargarTallasDisponibles(colorSel).then(tallasData => {
+        if (tallasData.length > 0) {
+          setTallas(tallasData)
+        }
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso])
+
 const [denominacionesReales, setDenominacionesReales] = useState<Record<number, number>>({})
 
 const cargarDenominacionesCaja = async () => {
@@ -362,8 +374,7 @@ const cargarVentasDelDia = async () => {
     }
   }
 
-  const seleccionarColor = async (color: string) => {
-    setColorSel(color)
+  const cargarTallasDisponibles = async (color: string) => {
     try {
       const { data, error } = await supabase
         .from('variantes_admin_view')
@@ -387,13 +398,22 @@ const cargarVentasDelDia = async () => {
 
       if (tallasData.length === 0) {
         setError('No hay tallas disponibles con stock para este color')
-        return
+        return []
       }
 
-      setTallas(tallasData)
-      setPaso(4)
+      return tallasData
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error al cargar tallas disponibles'))
+      return []
+    }
+  }
+
+  const seleccionarColor = async (color: string) => {
+    setColorSel(color)
+    const tallasData = await cargarTallasDisponibles(color)
+    if (tallasData.length > 0) {
+      setTallas(tallasData)
+      setPaso(4)
     }
   }
 
