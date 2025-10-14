@@ -15,14 +15,22 @@ export default async function RootLayout({
   const email = session?.user?.email ?? null;
 
   let rol: "admin" | "vendedor" | "desarrollador" | null = null;
-  if (logged) {
-    const supabase = await supabaseServer();
-    const { data } = await supabase
-      .from("usuarios")
-      .select("rol")
-      .eq("id", session!.user!.id)
-      .single();
-    rol = (data?.rol as typeof rol) ?? null;
+  
+  if (logged && session?.user?.id) {
+    try {
+      const supabase = await supabaseServer();
+      const { data, error } = await supabase
+        .from("usuarios")
+        .select("rol")
+        .eq("id", session.user.id)
+        .single();
+      
+      if (!error && data) {
+        rol = (data.rol as typeof rol) ?? null;
+      }
+    } catch (err) {
+      console.error("Error obteniendo rol del usuario:", err);
+    }
   }
 
   return (
@@ -35,7 +43,10 @@ export default async function RootLayout({
 
         {/* Navbar mejorado con contraste */}
         <header className="border-b border-white/20 p-4 flex items-center justify-between bg-gradient-to-r from-purple-900/95 to-purple-800/95 backdrop-blur-md shadow-xl">
-          <Link href="/" className="font-bold text-2xl text-white hover:text-purple-200 transition flex items-center gap-2">
+          <Link 
+            href="/" 
+            className="font-bold text-2xl text-white hover:text-purple-200 transition flex items-center gap-2"
+          >
             <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
               <div className="w-7 h-7 bg-purple-900 rounded-full"></div>
             </div>
@@ -44,23 +55,53 @@ export default async function RootLayout({
 
           {logged ? (
             <nav className="flex items-center gap-5">
-              <Link href="/pos" className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10">
+              <Link 
+                href="/pos" 
+                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
+              >
                 POS
               </Link>
-              <Link href="/inventario" className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10">
+              
+              <Link 
+                href="/inventario" 
+                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
+              >
                 Inventario
               </Link>
 
-              <Link href="/devoluciones" className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10">
+              <Link 
+                href="/devoluciones" 
+                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
+              >
                 Devoluciones
+              </Link>
+
+              <Link 
+                href="/caja" 
+                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
+              >
+                Caja
+              </Link>
+
+              <Link 
+                href="/dashboard" 
+                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
+              >
+                Dashboard
               </Link>
 
               {rol === "admin" && (
                 <>
-                    <Link href="/reportes" className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10">
+                  <Link 
+                    href="/reportes" 
+                    className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
+                  >
                     Reportes
                   </Link>
-                  <Link href="/trabajadores" className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10">
+                  <Link 
+                    href="/trabajadores" 
+                    className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
+                  >
                     Trabajadores
                   </Link>
                 </>
@@ -77,8 +118,13 @@ export default async function RootLayout({
               </form>
             </nav>
           ) : (
-            <nav>
-              
+            <nav className="flex items-center gap-3">
+              <Link 
+                href="/login"
+                className="px-4 py-2 rounded-lg bg-white text-purple-900 font-bold hover:bg-purple-100 transition shadow-lg"
+              >
+                Iniciar Sesión
+              </Link>
             </nav>
           )}
         </header>

@@ -4,23 +4,69 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const tiles = [
-  { slug: 'ventas-producto',    title: '📈 Ventas por Producto',    desc: 'Ranking de productos más vendidos. Filtra por semana/mes/año.', cta: 'Ver ranking' },
-  { slug: 'ventas-talla-color', title: '🛒 Ventas por Talla y Color', desc: 'Estadísticas por talla (S–XXXL) y color para ajustar producción.', cta: 'Ver tallas/colores' },
-  { slug: 'stock',              title: '📦 Estado del Stock',         desc: 'Stock en tiempo real con alertas de stock crítico.', cta: 'Ver stock' },
-  { slug: 'ingresos',           title: '💰 Ingresos y Tendencias',    desc: 'Evolución de ingresos y comparación por períodos.', cta: 'Ver tendencias' },
-  { slug: 'exportes',           title: '📊 Reportes y Exportación',   desc: 'Descarga CSV/Excel con ventas, stock y tendencias.', cta: 'Generar reportes' },
+  { 
+    slug: 'ventas-producto', 
+    title: '📈 Ventas por Producto', 
+    desc: 'Ranking de productos más vendidos. Filtra por semana/mes/año.', 
+    cta: 'Ver ranking',
+    color: 'purple'
+  },
+  { 
+    slug: 'ventas-talla-color', 
+    title: '🛒 Ventas por Talla y Color', 
+    desc: 'Estadísticas por talla (S–XXXL) y color para ajustar producción.', 
+    cta: 'Ver tallas/colores',
+    color: 'pink'
+  },
+  { 
+    slug: 'devoluciones', 
+    title: '↩️ Devoluciones y Cambios', 
+    desc: 'Análisis completo de devoluciones, cambios y productos más devueltos.', 
+    cta: 'Ver devoluciones',
+    color: 'red'
+  },
+  { 
+    slug: 'stock', 
+    title: '📦 Estado del Stock', 
+    desc: 'Stock en tiempo real con alertas de stock crítico.', 
+    cta: 'Ver stock',
+    color: 'blue'
+  },
+  { 
+    slug: 'ingresos', 
+    title: '💰 Ingresos y Tendencias', 
+    desc: 'Evolución de ingresos y comparación por períodos.', 
+    cta: 'Ver tendencias',
+    color: 'green'
+  },
+  { 
+    slug: 'exportes', 
+    title: '📊 Reportes y Exportación', 
+    desc: 'Descarga CSV/Excel con ventas, stock y tendencias.', 
+    cta: 'Generar reportes',
+    color: 'indigo'
+  },
 ];
+
+const colorClasses = {
+  purple: 'hover:border-purple-300 focus:ring-purple-400/40 group-hover:text-purple-700 text-purple-700',
+  pink: 'hover:border-pink-300 focus:ring-pink-400/40 group-hover:text-pink-700 text-pink-700',
+  red: 'hover:border-red-300 focus:ring-red-400/40 group-hover:text-red-700 text-red-700',
+  blue: 'hover:border-blue-300 focus:ring-blue-400/40 group-hover:text-blue-700 text-blue-700',
+  green: 'hover:border-green-300 focus:ring-green-400/40 group-hover:text-green-700 text-green-700',
+  indigo: 'hover:border-indigo-300 focus:ring-indigo-400/40 group-hover:text-indigo-700 text-indigo-700',
+};
 
 export default function ReportesHubPage() {
   const router = useRouter();
   const [fecha, setFecha] = useState('');
-  const [hora, setHora]   = useState('');
+  const [hora, setHora] = useState('');
 
   useEffect(() => {
     const tick = () => {
       const now = new Date();
-      setFecha(now.toLocaleDateString('es-CL', { year:'numeric', month:'long', day:'numeric' }));
-      setHora (now.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit' }));
+      setFecha(now.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' }));
+      setHora(now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }));
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -62,24 +108,60 @@ export default function ReportesHubPage() {
           </div>
         </div>
 
+        {/* Grid de reportes */}
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {tiles.map((t) => (
             <button
               key={t.slug}
               onClick={() => router.push(`/reportes/${t.slug}`)}
-              className="group rounded-2xl border-2 border-white/20 bg-white/90 p-5 text-left shadow-xl
-                         backdrop-blur transition-all hover:-translate-y-0.5 hover:border-purple-300
-                         focus:outline-none focus:ring-2 focus:ring-purple-400/40"
+              className={`group rounded-2xl border-2 border-white/20 bg-white/90 p-5 text-left shadow-xl
+                         backdrop-blur transition-all hover:-translate-y-0.5
+                         focus:outline-none focus:ring-2 ${colorClasses[t.color as keyof typeof colorClasses]}`}
             >
-              <div className="mb-1 text-lg font-semibold text-gray-900 group-hover:text-purple-700">
+              <div className="mb-1 text-lg font-semibold text-gray-900 group-hover:opacity-90">
                 {t.title}
               </div>
               <div className="mb-4 text-sm text-gray-600">{t.desc}</div>
-              <span className="inline-flex items-center gap-2 text-sm font-semibold text-purple-700 group-hover:underline">
+              <span className={`inline-flex items-center gap-2 text-sm font-semibold group-hover:underline ${
+                t.color === 'purple' ? 'text-purple-700' :
+                t.color === 'pink' ? 'text-pink-700' :
+                t.color === 'red' ? 'text-red-700' :
+                t.color === 'blue' ? 'text-blue-700' :
+                t.color === 'green' ? 'text-green-700' :
+                'text-indigo-700'
+              }`}>
                 {t.cta} →
               </span>
             </button>
           ))}
+        </div>
+
+        {/* Información adicional */}
+        <div className="mt-8 rounded-2xl bg-white/10 backdrop-blur p-6 text-white border border-white/20">
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <span>ℹ️</span>
+            Sobre los Reportes
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-white/90">
+            <div>
+              <h3 className="font-medium text-white mb-2">📊 Reportes Disponibles</h3>
+              <ul className="space-y-1 text-white/80">
+                <li>• Análisis de ventas por producto y categorías</li>
+                <li>• Preferencias de tallas y colores</li>
+                <li>• Seguimiento de devoluciones y cambios</li>
+                <li>• Control de inventario y alertas</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-medium text-white mb-2">💡 Características</h3>
+              <ul className="space-y-1 text-white/80">
+                <li>• Filtros por fecha y categorías</li>
+                <li>• Gráficos interactivos en tiempo real</li>
+                <li>• Exportación a CSV y Excel</li>
+                <li>• Comparativas y tendencias</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>
