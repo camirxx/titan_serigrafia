@@ -149,22 +149,13 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
                 <div className="flex h-full flex-col items-center justify-center gap-4">
                   <div className="text-7xl sm:text-8xl">📊</div>
                   <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
-                    DASHBOARD
+                    REPORTES
                   </h3>
                 </div>
               </button>
             )}
           </div>
 
-          {/* Configuraciones Button */}
-          <div className="mb-6 flex justify-center sm:mb-8">
-            <button
-              onClick={() => handleNavigation('/caja')}
-              className="w-full rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-8 py-3 text-base font-bold text-white transition-all duration-300 hover:scale-105 hover:from-purple-700 hover:to-pink-700 hover:shadow-xl sm:w-auto sm:px-12 sm:py-4 sm:text-lg"
-            >
-              CONFIGURACIONES
-            </button>
-          </div>
         </div>
       </main>
 
