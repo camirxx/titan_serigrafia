@@ -94,6 +94,7 @@ export default function DevolucionesClient() {
     obtenerUsuario();
     cargarCatalogos();
     cargarDineroCaja();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const obtenerUsuario = async () => {
@@ -216,6 +217,7 @@ export default function DevolucionesClient() {
       }
 
       // Transformar los datos
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const productosConInfo: ProductoVendido[] = detalles.map((detalle: any) => ({
         detalle_venta_id: detalle.id,
         venta_id: detalle.venta_id,
@@ -228,7 +230,7 @@ export default function DevolucionesClient() {
         cantidad_vendida: detalle.cantidad,
         precio_unitario: detalle.precio_unitario,
         fecha_venta: detalle.ventas.fecha,
-        metodo_pago: detalle.ventas.metodo_pago,
+        metodo_pago: detalle.ventas.metodo_pago as MetodoPago,
         numero_boleta: detalle.ventas.numero_boleta,
       }));
 
@@ -267,145 +269,145 @@ export default function DevolucionesClient() {
     return true;
   };
 
- const confirmar = async () => {
-  setError(null);
-  setOk(null);
+  const confirmar = async () => {
+    setError(null);
+    setOk(null);
 
-  if (!usuarioId) {
-    setError('No se pudo identificar al usuario. Por favor, recarga la página e intenta nuevamente.');
-    return;
-  }
-
-  const itemsSeleccionados = productosVendidos
-    .map((p) => {
-      const q = Number(cantSel[p.detalle_venta_id] ?? 0);
-      if (q > 0) {
-        return {
-          detalle_venta_id: p.detalle_venta_id,
-          variante_id: p.variante_id,
-          cantidad: q,
-          venta_id: p.venta_id,
-        };
-      }
-      return null;
-    })
-    .filter(Boolean);
-
-  if (itemsSeleccionados.length === 0) {
-    setError('Selecciona al menos un producto para devolver/cambiar.');
-    return;
-  }
-
-  for (const item of itemsSeleccionados) {
-    if (!item) continue;
-    const producto = productosVendidos.find((p) => p.detalle_venta_id === item.detalle_venta_id);
-    if (!producto) continue;
-    if (item.cantidad > producto.cantidad_vendida) {
-      setError(`La cantidad seleccionada excede la vendida (${producto.diseno} - ${producto.talla}).`);
-      return;
-    }
-  }
-
-  if (metodo === 'reintegro_efectivo') {
-    if (montoReintegro <= 0) {
-      setError('Ingresa un monto de reintegro mayor a 0.');
-      return;
-    }
-    if (montoReintegro > totalSeleccionado) {
-      setError('El reintegro no puede superar el total seleccionado.');
+    if (!usuarioId) {
+      setError('No se pudo identificar al usuario. Por favor, recarga la página e intenta nuevamente.');
       return;
     }
 
-    if (metodoPagoReintegro === 'transferencia') {
-      if (!datosTransferencia.rut || !datosTransferencia.nombre || !datosTransferencia.banco || 
-          !datosTransferencia.numeroCuenta) {
-        setError('Completa todos los datos bancarios obligatorios para la transferencia.');
+    const itemsSeleccionados = productosVendidos
+      .map((p) => {
+        const q = Number(cantSel[p.detalle_venta_id] ?? 0);
+        if (q > 0) {
+          return {
+            detalle_venta_id: p.detalle_venta_id,
+            variante_id: p.variante_id,
+            cantidad: q,
+            venta_id: p.venta_id,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    if (itemsSeleccionados.length === 0) {
+      setError('Selecciona al menos un producto para devolver/cambiar.');
+      return;
+    }
+
+    for (const item of itemsSeleccionados) {
+      if (!item) continue;
+      const producto = productosVendidos.find((p) => p.detalle_venta_id === item.detalle_venta_id);
+      if (!producto) continue;
+      if (item.cantidad > producto.cantidad_vendida) {
+        setError(`La cantidad seleccionada excede la vendida (${producto.diseno} - ${producto.talla}).`);
         return;
       }
     }
-  }
 
-  if (metodo === 'cambio_producto' && tipoDiferencia !== 'sin_diferencia') {
-    if (montoDiferencia <= 0) {
-      setError('Ingresa un monto de diferencia mayor a 0.');
-      return;
-    }
-
-    if (tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia') {
-      if (!datosTransferencia.rut || !datosTransferencia.nombre || !datosTransferencia.banco || 
-          !datosTransferencia.numeroCuenta) {
-        setError('Completa todos los datos bancarios obligatorios para la transferencia.');
+    if (metodo === 'reintegro_efectivo') {
+      if (montoReintegro <= 0) {
+        setError('Ingresa un monto de reintegro mayor a 0.');
         return;
       }
-    }
-  }
-
-  if (!validarEfectivoDisponible()) {
-    setError('No hay suficiente efectivo en caja para realizar esta operación.');
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const porVenta = new Map<number, typeof itemsSeleccionados>();
-    itemsSeleccionados.forEach((item) => {
-      if (!item) return;
-      if (!porVenta.has(item.venta_id)) {
-        porVenta.set(item.venta_id, []);
-      }
-      porVenta.get(item.venta_id)?.push(item);
-    });
-
-    const resultados: number[] = [];
-    for (const [ventaId, items] of porVenta) {
-      // Payload base
-      const payload: any = {
-        p_venta_id: ventaId,
-        p_tipo: tipo,
-        p_metodo_resolucion: metodo,
-        p_monto_reintegro: metodo === 'cambio_producto' ? 0 : Number(montoReintegro || 0),
-        p_observacion: observacion?.trim() || null,
-        p_usuario_id: usuarioId,
-        p_items: items.map((it) => ({
-          detalle_venta_id: it!.detalle_venta_id,
-          variante_id: it!.variante_id,
-          cantidad: it!.cantidad,
-          motivo_id: null,
-          observacion: null
-        })),
-      };
-
-      // Agregar datos de transferencia como parámetros individuales
-      if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'transferencia') {
-        payload.p_metodo_pago_reintegro = 'transferencia';
-        payload.p_transferencia_rut = datosTransferencia.rut;
-        payload.p_transferencia_nombre = datosTransferencia.nombre;
-        payload.p_transferencia_banco = datosTransferencia.banco;
-        payload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
-        payload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
-        payload.p_transferencia_email = datosTransferencia.email || null;
-      } else if (metodo === 'reintegro_efectivo') {
-        payload.p_metodo_pago_reintegro = 'efectivo';
+      if (montoReintegro > totalSeleccionado) {
+        setError('El reintegro no puede superar el total seleccionado.');
+        return;
       }
 
-      // Manejo de diferencia en cambios
-      if (metodo === 'cambio_producto') {
-        payload.p_tipo_diferencia = tipoDiferencia;
-        payload.p_monto_diferencia = montoDiferencia;
-        
-        if (tipoDiferencia !== 'sin_diferencia') {
-          payload.p_metodo_pago_diferencia = metodoPagoDiferencia;
-          
-          if (tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia') {
-            payload.p_transferencia_rut = datosTransferencia.rut;
-            payload.p_transferencia_nombre = datosTransferencia.nombre;
-            payload.p_transferencia_banco = datosTransferencia.banco;
-            payload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
-            payload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
-            payload.p_transferencia_email = datosTransferencia.email || null;
-          }
+      if (metodoPagoReintegro === 'transferencia') {
+        if (!datosTransferencia.rut || !datosTransferencia.nombre || !datosTransferencia.banco || 
+            !datosTransferencia.numeroCuenta) {
+          setError('Completa todos los datos bancarios obligatorios para la transferencia.');
+          return;
         }
       }
+    }
+
+    if (metodo === 'cambio_producto' && tipoDiferencia !== 'sin_diferencia') {
+      if (montoDiferencia <= 0) {
+        setError('Ingresa un monto de diferencia mayor a 0.');
+        return;
+      }
+
+      if (tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia') {
+        if (!datosTransferencia.rut || !datosTransferencia.nombre || !datosTransferencia.banco || 
+            !datosTransferencia.numeroCuenta) {
+          setError('Completa todos los datos bancarios obligatorios para la transferencia.');
+          return;
+        }
+      }
+    }
+
+    if (!validarEfectivoDisponible()) {
+      setError('No hay suficiente efectivo en caja para realizar esta operación.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const porVenta = new Map<number, typeof itemsSeleccionados>();
+      itemsSeleccionados.forEach((item) => {
+        if (!item) return;
+        if (!porVenta.has(item.venta_id)) {
+          porVenta.set(item.venta_id, []);
+        }
+        porVenta.get(item.venta_id)?.push(item);
+      });
+
+      const resultados: number[] = [];
+      for (const [ventaId, items] of porVenta) {
+        // Payload base
+        const payload: Record<string, unknown> = {
+          p_venta_id: ventaId,
+          p_tipo: tipo,
+          p_metodo_resolucion: metodo,
+          p_monto_reintegro: metodo === 'cambio_producto' ? 0 : Number(montoReintegro || 0),
+          p_observacion: observacion?.trim() || null,
+          p_usuario_id: usuarioId,
+          p_items: items.map((it) => ({
+            detalle_venta_id: it!.detalle_venta_id,
+            variante_id: it!.variante_id,
+            cantidad: it!.cantidad,
+            motivo_id: null,
+            observacion: null
+          })),
+        };
+
+        // Agregar datos de transferencia como parámetros individuales
+        if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'transferencia') {
+          payload.p_metodo_pago_reintegro = 'transferencia';
+          payload.p_transferencia_rut = datosTransferencia.rut;
+          payload.p_transferencia_nombre = datosTransferencia.nombre;
+          payload.p_transferencia_banco = datosTransferencia.banco;
+          payload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
+          payload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
+          payload.p_transferencia_email = datosTransferencia.email || null;
+        } else if (metodo === 'reintegro_efectivo') {
+          payload.p_metodo_pago_reintegro = 'efectivo';
+        }
+
+        // Manejo de diferencia en cambios
+        if (metodo === 'cambio_producto') {
+          payload.p_tipo_diferencia = tipoDiferencia;
+          payload.p_monto_diferencia = montoDiferencia;
+        
+          if (tipoDiferencia !== 'sin_diferencia') {
+            payload.p_metodo_pago_diferencia = metodoPagoDiferencia;
+            
+            if (tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia') {
+              payload.p_transferencia_rut = datosTransferencia.rut;
+              payload.p_transferencia_nombre = datosTransferencia.nombre;
+              payload.p_transferencia_banco = datosTransferencia.banco;
+              payload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
+              payload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
+              payload.p_transferencia_email = datosTransferencia.email || null;
+            }
+          }
+        }
 
       console.log('Payload enviado a RPC:', payload);
 
@@ -833,7 +835,7 @@ export default function DevolucionesClient() {
                                 <select
                                   className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition"
                                   value={datosTransferencia.tipoCuenta}
-                                  onChange={(e) => setDatosTransferencia({ ...datosTransferencia, tipoCuenta: e.target.value as any })}
+                                  onChange={(e) => setDatosTransferencia({ ...datosTransferencia, tipoCuenta: e.target.value as 'corriente' | 'vista' | 'ahorro' })}
                                 >
                                   <option value="corriente">Cuenta Corriente</option>
                                   <option value="vista">Cuenta Vista</option>
@@ -1111,7 +1113,7 @@ export default function DevolucionesClient() {
                                     <select
                                       className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition"
                                       value={datosTransferencia.tipoCuenta}
-                                      onChange={(e) => setDatosTransferencia({ ...datosTransferencia, tipoCuenta: e.target.value as any })}
+                                      onChange={(e) => setDatosTransferencia({ ...datosTransferencia, tipoCuenta: e.target.value as 'corriente' | 'vista' | 'ahorro' })}
                                     >
                                       <option value="corriente">Cuenta Corriente</option>
                                       <option value="vista">Cuenta Vista</option>

@@ -7,16 +7,16 @@ import ModalAgregarDiseno from "./ModalAgregarDiseno";
 import ModalAgregarStock from "./ModalAgregarStock";
 import ModalEditarProducto from "./ModalEditarProducto";
 
-type VarianteData = {
-  variante_id: number;
-  talla: string | null;
-  stock_actual: number;
-  producto_id: number;
-  diseno: string | null;
-  tipo_prenda: string | null;
-  color: string | null;
-  producto_activo: boolean;
-};
+// type VarianteData = {
+//   variante_id: number;
+//   talla: string | null;
+//   stock_actual: number;
+//   producto_id: number;
+//   diseno: string | null;
+//   tipo_prenda: string | null;
+//   color: string | null;
+//   producto_activo: boolean;
+// };
 
 type ProductoAgrupado = {
   producto_id: number;
@@ -41,26 +41,26 @@ type MovimientoInventario = {
   fecha: string;
 };
 
-type ProductoSupabase = {
-  id: number;
-  disenos: { nombre: string }[];
-  tipos_prenda: { nombre: string }[];
-  colores: { nombre: string }[];
-};
+// type ProductoSupabase = {
+//   id: number;
+//   disenos: { nombre: string }[];
+//   tipos_prenda: { nombre: string }[];
+//   colores: { nombre: string }[];
+// };
 
-type VarianteSupabase = {
-  id: number;
-  producto_id: number;
-  talla: string | null;
-  stock_actual: number;
-  productos: {
-    id: number;
-    activo: boolean;
-    disenos: { nombre: string }[];
-    tipos_prenda: { nombre: string }[];
-    colores: { nombre: string }[];
-  }[];
-};
+// type VarianteSupabase = {
+//   id: number;
+//   producto_id: number;
+//   talla: string | null;
+//   stock_actual: number;
+//   productos: {
+//     id: number;
+//     activo: boolean;
+//     disenos: { nombre: string }[];
+//     tipos_prenda: { nombre: string }[];
+//     colores: { nombre: string }[];
+//   }[];
+// };
 
 const isMovimientoInventarioArray = (
   data: unknown
@@ -136,11 +136,12 @@ export default function InventarioAgrupado() {
 
       // Obtener productos únicos
       const productosUnicos = new Map<number, { diseno: string; tipo_prenda: string; color: string }>();
-      todosProductos?.forEach((p: ProductoSupabase) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      todosProductos?.forEach((p: any) => {
         productosUnicos.set(p.id, {
-          diseno: p.disenos?.[0]?.nombre || "Sin diseño",
-          tipo_prenda: p.tipos_prenda?.[0]?.nombre || "Sin tipo",
-          color: p.colores?.[0]?.nombre || "Sin color"
+          diseno: p.disenos?.nombre || "Sin diseño",
+          tipo_prenda: p.tipos_prenda?.nombre || "Sin tipo",
+          color: p.colores?.nombre || "Sin color"
         });
       });
 
@@ -155,8 +156,8 @@ export default function InventarioAgrupado() {
           productos!inner(
             id,
             activo,
-            disenos!inner(nombre),
-            tipos_prenda!inner(nombre),
+            disenos(nombre),
+            tipos_prenda(nombre),
             colores(nombre)
           )
         `)
@@ -168,15 +169,16 @@ export default function InventarioAgrupado() {
       }
       
       // Transformar al formato esperado
-      const variantesTransformadas = variantes?.map((v: VarianteSupabase) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const variantesTransformadas = variantes?.map((v: any) => ({
         variante_id: v.id,
         producto_id: v.producto_id,
         talla: v.talla,
         stock_actual: v.stock_actual,
-        diseno: v.productos?.[0]?.disenos?.[0]?.nombre || "Sin diseño",
-        tipo_prenda: v.productos?.[0]?.tipos_prenda?.[0]?.nombre || "Sin tipo",
-        color: v.productos?.[0]?.colores?.[0]?.nombre || "Sin color",
-        producto_activo: v.productos?.[0]?.activo || false
+        diseno: v.productos?.disenos?.nombre || "Sin diseño",
+        tipo_prenda: v.productos?.tipos_prenda?.nombre || "Sin tipo",
+        color: v.productos?.colores?.nombre || "Sin color",
+        producto_activo: v.productos?.activo || false
       })) || [];
       
 
@@ -216,7 +218,7 @@ export default function InventarioAgrupado() {
       }
     });
 
-      // 4. Primero crear entradas para TODOS los productos únicos
+      // 4. Primero agregar todos los productos únicos (con o sin variantes)
       const agrupados: { [key: string]: ProductoAgrupado } = {};
       
       productosUnicos.forEach((info, productoId) => {
@@ -229,7 +231,7 @@ export default function InventarioAgrupado() {
           tallas: {},
         };
       });
-
+      
       // 5. Luego agregar las variantes con stock
       variantesTransformadas.forEach((v) => {
         const key = `${v.producto_id}`;

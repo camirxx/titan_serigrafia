@@ -74,6 +74,7 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
           });
           
           // Guardar el mapa en el estado del componente
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (window as any).__variantesMap = variantesMap;
           
           setTallasStock(stockInicial);
@@ -116,6 +117,7 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
 
       // 2. Actualizar o crear variantes para cada talla
       const tallasEstandar = ["S", "M", "L", "XL", "XXL", "XXXL"];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const variantesMap = (window as any).__variantesMap || {};
       
       for (const talla of tallasEstandar) {
