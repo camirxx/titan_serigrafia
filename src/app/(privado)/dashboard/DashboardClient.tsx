@@ -24,18 +24,6 @@ type TopDiseno = {
   venta_total: number
 }
 
-type CajaSesion = {
-  sesion_id: number
-  tienda_id: number
-  usuario_id: string
-  fecha_apertura: string
-  saldo_inicial: number
-  abierta: boolean
-  ingresos: number
-  egresos: number
-  saldo_actual_calculado: number
-}
-
 type Tienda = { id: number; nombre: string }
 
 export default function DashboardPage() {
@@ -51,7 +39,6 @@ export default function DashboardPage() {
   // ---------------- Estado de datasets ----------------
   const [semanas, setSemanas] = useState<VentasSemana[]>([])
   const [top, setTop] = useState<TopDiseno[]>([])
-  const [caja, setCaja] = useState<CajaSesion[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
 
@@ -90,15 +77,6 @@ export default function DashboardPage() {
         })
         if (r2.error) throw r2.error
         setTop((r2.data ?? []) as TopDiseno[])
-
-        // 3) Caja por sesión (filtra por tienda y por fecha de apertura)
-        let q3 = supabase.from('v_dash_caja_sesiones').select('*')
-        if (tiendaId !== '') q3 = q3.eq('tienda_id', tiendaId)
-        if (from) q3 = q3.gte('fecha_apertura', from)
-        if (to)   q3 = q3.lte('fecha_apertura', to)
-        const r3 = await q3
-        if (r3.error) throw r3.error
-        setCaja((r3.data ?? []) as CajaSesion[])
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Error cargando el dashboard')
       } finally {
@@ -117,130 +95,177 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-lg font-semibold">Dashboard</h1>
-
-      {/* Filtros */}
-      <div className="bg-white p-4 rounded-xl shadow flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs mb-1">Tienda</label>
-          <select
-            className="border rounded p-2 min-w-52"
-            value={tiendaId === '' ? '' : String(tiendaId)}
-            onChange={(e) => setTiendaId(e.target.value === '' ? '' : Number(e.target.value))}
-          >
-            <option value="">Todas</option>
-            {tiendas.map(t => <option key={t.id} value={t.id}>{t.id} · {t.nombre}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs mb-1">Desde</label>
-          <input
-            type="date"
-            className="border rounded p-2"
-            value={from}
-            onChange={(e)=>setFrom(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs mb-1">Hasta</label>
-          <input
-            type="date"
-            className="border rounded p-2"
-            value={to}
-            onChange={(e)=>setTo(e.target.value)}
-          />
-        </div>
-
-        <div className="text-xs text-neutral-500 ml-auto">
-          {loading ? 'Cargando…' : 'Listo'}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      {/* Header con gradiente */}
+      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white mb-8 transform hover:scale-[1.01] transition-transform duration-300">
+        <div className="flex items-center gap-4">
+          <div className="bg-white/20 backdrop-blur-sm p-4 rounded-xl">
+            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h1 className="text-4xl font-bold">Dashboard</h1>
+            <p className="text-white/80 text-sm mt-1">Análisis y métricas de rendimiento</p>
+          </div>
         </div>
       </div>
 
-      {error && <div className="bg-red-100 border border-red-300 text-red-700 p-2 rounded">{error}</div>}
+      {/* Filtros con diseño moderno */}
+      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-xl border border-white/20 mb-8 transform hover:shadow-2xl transition-all duration-300">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">🏪 Tienda</label>
+            <select
+              className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 bg-white"
+              value={tiendaId === '' ? '' : String(tiendaId)}
+              onChange={(e) => setTiendaId(e.target.value === '' ? '' : Number(e.target.value))}
+            >
+              <option value="">Todas</option>
+              {tiendas.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            </select>
+          </div>
+
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">📅 Desde</label>
+            <input
+              type="date"
+              className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
+              value={from}
+              onChange={(e)=>setFrom(e.target.value)}
+            />
+          </div>
+
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">📅 Hasta</label>
+            <input
+              type="date"
+              className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
+              value={to}
+              onChange={(e)=>setTo(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl">
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+                <span className="text-sm font-medium text-indigo-600">Cargando...</span>
+              </>
+            ) : (
+              <>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-gray-700">Actualizado</span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border-2 border-red-200 text-red-700 p-4 rounded-2xl mb-8 flex items-center gap-3 animate-pulse">
+          <svg className="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="font-medium">{error}</span>
+        </div>
+      )}
 
       {/* 1) Ventas/Ganancia por semana */}
-      <section className="bg-white p-4 rounded-xl shadow">
-        <h2 className="font-medium mb-3">Ventas y ganancia por semana</h2>
-        <div className="h-72">
+      <section className="bg-white/80 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/20 mb-8 transform hover:shadow-3xl hover:-translate-y-1 transition-all duration-300">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-3 rounded-xl shadow-lg">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Ventas y Ganancia</h2>
+            <p className="text-sm text-gray-500">Evolución semanal</p>
+          </div>
+        </div>
+        <div className="h-80 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={dataSemanas}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="semanaLabel" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Area type="monotone" dataKey="venta_total" name="Ventas" fillOpacity={0.3} />
-              <Area type="monotone" dataKey="ganancia"   name="Ganancia" fillOpacity={0.2} />
+              <defs>
+                <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0.1}/>
+                </linearGradient>
+                <linearGradient id="colorGanancia" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="semanaLabel" stroke="#6b7280" />
+              <YAxis stroke="#6b7280" />
+              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '2px solid #e5e7eb', borderRadius: '12px', padding: '12px' }} />
+              <Legend wrapperStyle={{ paddingTop: '20px' }} />
+              <Area type="monotone" dataKey="venta_total" name="Ventas" stroke="#6366f1" strokeWidth={3} fill="url(#colorVentas)" />
+              <Area type="monotone" dataKey="ganancia" name="Ganancia" stroke="#10b981" strokeWidth={3} fill="url(#colorGanancia)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       </section>
 
       {/* 2) Top 20 diseños por unidades */}
-      <section className="bg-white p-4 rounded-xl shadow">
-        <h2 className="font-medium mb-3">Top diseños por unidades</h2>
-        <div className="h-80">
+      <section className="bg-white/80 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/20 mb-8 transform hover:shadow-3xl hover:-translate-y-1 transition-all duration-300">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="bg-gradient-to-br from-pink-500 to-orange-600 p-3 rounded-xl shadow-lg">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10M12 3v18m0-18c-1.5 0-3 1-4 2.5M12 3c1.5 0 3 1 4 2.5M8 5.5C6 7 5 9 5 11c0 3 2 5 4 6m8-6c0-2-1-4-3-5.5M17 11c0 2-1 4-3 5.5" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Top Diseños</h2>
+            <p className="text-sm text-gray-500">Los más vendidos</p>
+          </div>
+        </div>
+        <div className="h-80 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 mb-4">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={top}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="diseno" hide /> {/* si hay muchos, ocultamos etiquetas */}
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="unidades" name="Unidades" />
-              {/* Otra barra opcional: <Bar dataKey="venta_total" name="Ventas" /> */}
+              <defs>
+                <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ec4899" stopOpacity={0.9}/>
+                  <stop offset="95%" stopColor="#f97316" stopOpacity={0.7}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="diseno" hide />
+              <YAxis stroke="#6b7280" />
+              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '2px solid #e5e7eb', borderRadius: '12px', padding: '12px' }} />
+              <Legend wrapperStyle={{ paddingTop: '20px' }} />
+              <Bar dataKey="unidades" name="Unidades" fill="url(#colorBar)" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-        {/* Etiquetas debajo, en 2 columnas, para lectura humana */}
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-3 text-sm">
+        {/* Etiquetas en grid con diseño mejorado */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {top.map((t, i) => (
-            <li key={i} className="truncate">• {t.diseno} — {t.unidades} u.</li>
+            <div key={i} className="bg-gradient-to-r from-pink-50 to-orange-50 p-3 rounded-xl border border-pink-100 hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center gap-2">
+                <span className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-pink-500 to-orange-500 text-white rounded-lg flex items-center justify-center font-bold text-sm">
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-800 truncate">{t.diseno}</p>
+                  <p className="text-sm text-gray-600">{t.unidades} unidades</p>
+                </div>
+              </div>
+            </div>
           ))}
-          {top.length === 0 && <li className="text-neutral-500">Sin datos.</li>}
-        </ul>
-      </section>
-
-      {/* 3) Caja por sesión */}
-      <section className="bg-white p-4 rounded-xl shadow">
-        <h2 className="font-medium mb-3">Caja por sesión</h2>
-        <div className="overflow-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left border-b">
-                <th className="py-2 pr-3">Sesión</th>
-                <th className="py-2 pr-3">Tienda</th>
-                <th className="py-2 pr-3">Fecha apertura</th>
-                <th className="py-2 pr-3">Saldo inicial</th>
-                <th className="py-2 pr-3">Ingresos</th>
-                <th className="py-2 pr-3">Egresos</th>
-                <th className="py-2 pr-3">Saldo calc.</th>
-                <th className="py-2 pr-3">Abierta</th>
-              </tr>
-            </thead>
-            <tbody>
-              {caja.map(row => (
-                <tr key={row.sesion_id} className="border-b last:border-0">
-                  <td className="py-2 pr-3">{row.sesion_id}</td>
-                  <td className="py-2 pr-3">{row.tienda_id}</td>
-                  <td className="py-2 pr-3">{new Date(row.fecha_apertura).toLocaleString()}</td>
-                  <td className="py-2 pr-3">${row.saldo_inicial}</td>
-                  <td className="py-2 pr-3 text-green-700">+${row.ingresos}</td>
-                  <td className="py-2 pr-3 text-red-700">-${row.egresos}</td>
-                  <td className="py-2 pr-3 font-medium">${row.saldo_actual_calculado}</td>
-                  <td className="py-2 pr-3">{row.abierta ? 'Sí' : 'No'}</td>
-                </tr>
-              ))}
-              {caja.length === 0 && (
-                <tr><td className="py-2 text-neutral-500" colSpan={8}>Sin sesiones.</td></tr>
-              )}
-            </tbody>
-          </table>
+          {top.length === 0 && (
+            <div className="col-span-full text-center py-8 text-gray-500">
+              <svg className="w-16 h-16 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+              </svg>
+              <p className="font-medium">Sin datos disponibles</p>
+            </div>
+          )}
         </div>
       </section>
+
     </div>
   )
 }

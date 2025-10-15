@@ -41,6 +41,27 @@ type MovimientoInventario = {
   fecha: string;
 };
 
+type ProductoSupabase = {
+  id: number;
+  disenos: { nombre: string }[];
+  tipos_prenda: { nombre: string }[];
+  colores: { nombre: string }[];
+};
+
+type VarianteSupabase = {
+  id: number;
+  producto_id: number;
+  talla: string | null;
+  stock_actual: number;
+  productos: {
+    id: number;
+    activo: boolean;
+    disenos: { nombre: string }[];
+    tipos_prenda: { nombre: string }[];
+    colores: { nombre: string }[];
+  }[];
+};
+
 const isMovimientoInventarioArray = (
   data: unknown
 ): data is MovimientoInventario[] => {
@@ -115,44 +136,49 @@ export default function InventarioAgrupado() {
 
       // Obtener productos únicos
       const productosUnicos = new Map<number, { diseno: string; tipo_prenda: string; color: string }>();
-      todosProductos?.forEach((p: any) => {
+      todosProductos?.forEach((p: ProductoSupabase) => {
         productosUnicos.set(p.id, {
-          diseno: p.disenos?.nombre || "Sin diseño",
-          tipo_prenda: p.tipos_prenda?.nombre || "Sin tipo",
-          color: p.colores?.nombre || "Sin color"
+          diseno: p.disenos?.[0]?.nombre || "Sin diseño",
+          tipo_prenda: p.tipos_prenda?.[0]?.nombre || "Sin tipo",
+          color: p.colores?.[0]?.nombre || "Sin color"
         });
       });
 
-      // 2. Cargar variantes con stock
+      // 2. Cargar variantes directamente de la tabla (no de la vista)
       const { data: variantes, error: errVariantes } = await supabase
-        .from("variantes_admin_view")
-        .select("*");
+        .from("variantes")
+        .select(`
+          id,
+          producto_id,
+          talla,
+          stock_actual,
+          productos!inner(
+            id,
+            activo,
+            disenos!inner(nombre),
+            tipos_prenda!inner(nombre),
+            colores(nombre)
+          )
+        `)
+        .eq("productos.activo", true);
       
       if (errVariantes) {
         console.error("Error cargando variantes:", errVariantes);
         throw errVariantes;
       }
       
-      console.log(`🔍 Productos únicos: ${productosUnicos.size}`);
-      console.log(`🔍 Variantes obtenidas: ${variantes?.length || 0}`);
+      // Transformar al formato esperado
+      const variantesTransformadas = variantes?.map((v: VarianteSupabase) => ({
+        variante_id: v.id,
+        producto_id: v.producto_id,
+        talla: v.talla,
+        stock_actual: v.stock_actual,
+        diseno: v.productos?.[0]?.disenos?.[0]?.nombre || "Sin diseño",
+        tipo_prenda: v.productos?.[0]?.tipos_prenda?.[0]?.nombre || "Sin tipo",
+        color: v.productos?.[0]?.colores?.[0]?.nombre || "Sin color",
+        producto_activo: v.productos?.[0]?.activo || false
+      })) || [];
       
-      // Debug GOJO
-      const gojosUnicos = Array.from(productosUnicos.entries())
-        .filter(([_, info]) => info.diseno.toLowerCase().includes('gojo'));
-      console.log(`🔍 Productos GOJO únicos encontrados: ${gojosUnicos.length}`);
-      gojosUnicos.forEach(([id, info]) => {
-        console.log(`  - ID ${id}: ${info.diseno} (${info.tipo_prenda} - ${info.color})`);
-      });
-      
-      // Debug variantes de GOJO 1
-      const variantesGojo1 = variantes?.filter(v => v.diseno === 'GOJO 1') || [];
-      console.log(`🔍 Variantes de GOJO 1: ${variantesGojo1.length}`);
-      if (variantesGojo1.length > 0) {
-        console.log(`  Producto ID de las variantes: ${variantesGojo1[0].producto_id}`);
-        variantesGojo1.forEach(v => {
-          console.log(`    Talla ${v.talla}: stock ${v.stock_actual}`);
-        });
-      }
 
       // 2. Movimientos del período
       const { data: movimientos, error: errMov } = await supabase
@@ -205,10 +231,10 @@ export default function InventarioAgrupado() {
       });
 
       // 5. Luego agregar las variantes con stock
-      const variantesArray = variantes || [];
-      variantesArray.forEach((v: VarianteData) => {
+      variantesTransformadas.forEach((v) => {
         const key = `${v.producto_id}`;
-        // Si el producto no existe, agregarlo (por si acaso)
+        
+        // Si el producto no existe en agrupados, agregarlo
         if (!agrupados[key]) {
           agrupados[key] = {
             producto_id: v.producto_id,
@@ -219,6 +245,7 @@ export default function InventarioAgrupado() {
             tallas: {},
           };
         }
+        
         const talla = v.talla || "N/A";
         const mov = movMap.get(v.variante_id);
         agrupados[key].tallas[talla] = {
@@ -230,13 +257,6 @@ export default function InventarioAgrupado() {
       });
 
       const productosArray = Object.values(agrupados);
-      console.log(`📦 Productos totales cargados: ${productosArray.length}`);
-      
-      // Contar productos con y sin stock
-      const conStock = productosArray.filter(p => Object.keys(p.tallas).length > 0).length;
-      const sinStock = productosArray.filter(p => Object.keys(p.tallas).length === 0).length;
-      console.log(`✅ Con variantes: ${conStock} | ⚠️ Sin variantes: ${sinStock}`);
-      
       setProductos(productosArray);
     } catch (err: unknown) {
       const message =

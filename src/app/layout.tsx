@@ -77,13 +77,6 @@ export default async function RootLayout({
               </Link>
 
               <Link 
-                href="/caja" 
-                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
-              >
-                Caja
-              </Link>
-
-              <Link 
                 href="/dashboard" 
                 className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
               >

@@ -28,6 +28,19 @@ type Venta = {
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia'
 
+type VarianteConProducto = {
+  id: number
+  talla: string
+  stock_actual: number
+  productos: {
+    activo: boolean
+    disenos: { nombre: string }[]
+    tipos_prenda: { nombre: string }[]
+    colores: { nombre: string }[]
+    tienda_id: number
+  }[]
+}
+
 export default function POSModerno() {
   const supabase = useMemo(() => supabaseBrowser(), [])
   
@@ -60,6 +73,11 @@ export default function POSModerno() {
     '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
   })
 
+  // Estado para la fecha seleccionada (por defecto hoy)
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(() => {
+    return new Date().toISOString().split('T')[0]
+  })
+
   // Función para formatear números de forma consistente
   const formatNumber = (num: number) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
@@ -67,7 +85,7 @@ export default function POSModerno() {
   useEffect(() => {
     void cargarVentasDelDia()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [fechaSeleccionada])
 
   useEffect(() => {
     void cargarSesionCaja()
@@ -119,12 +137,11 @@ const cargarDenominacionesCaja = async () => {
 
 const cargarVentasDelDia = async () => {
   try {
-    const hoy = new Date().toISOString().split('T')[0]
     const { data, error: err } = await supabase
       .from('ventas')
       .select(`id, fecha, total, metodo_pago, numero_boleta, detalle_ventas!inner(variante_id)`)
-      .gte('fecha', `${hoy}T00:00:00`)
-      .lte('fecha', `${hoy}T23:59:59`)
+      .gte('fecha', `${fechaSeleccionada}T00:00:00`)
+      .lte('fecha', `${fechaSeleccionada}T23:59:59`)
       .order('fecha', { ascending: false })
 
     if (err) throw err
@@ -376,23 +393,34 @@ const cargarVentasDelDia = async () => {
 
   const cargarTallasDisponibles = async (color: string) => {
     try {
+      // Consultar directamente la tabla variantes con joins
       const { data, error } = await supabase
-        .from('variantes_admin_view')
-        .select('talla, variante_id, stock_actual')
-        .eq('tipo_prenda', tipoSel)
-        .eq('diseno', disenoSel)
-        .eq('color', color)
-        .eq('tienda_id', tiendaId as number)
-        .eq('producto_activo', true)
+        .from('variantes')
+        .select(`
+          id,
+          talla,
+          stock_actual,
+          productos!inner(
+            activo,
+            disenos!inner(nombre),
+            tipos_prenda!inner(nombre),
+            colores!inner(nombre),
+            tienda_id
+          )
+        `)
+        .eq('productos.disenos.nombre', disenoSel)
+        .eq('productos.tipos_prenda.nombre', tipoSel)
+        .eq('productos.colores.nombre', color)
+        .eq('productos.tienda_id', tiendaId as number)
+        .eq('productos.activo', true)
         .gt('stock_actual', 0)
-        .not('stock_actual', 'is', null)
         .order('talla')
 
       if (error) throw error
 
-      const tallasData = data?.map(d => ({
+      const tallasData = data?.map((d: VarianteConProducto) => ({
         talla: d.talla || '',
-        variante_id: d.variante_id,
+        variante_id: d.id,
         stock: d.stock_actual || 0
       })) || []
 
@@ -454,11 +482,10 @@ const cargarVentasDelDia = async () => {
     try {
       // Verificación de stock en tiempo real
       const { data: varCheck, error: eVar } = await supabase
-        .from('variantes_admin_view')
+        .from('variantes')
         .select('stock_actual')
-        .eq('variante_id', tallaSel.variante_id)
-        .eq('tienda_id', tiendaId as number)
-        .maybeSingle()
+        .eq('id', tallaSel.variante_id)
+        .single()
       
       if (eVar) throw eVar
       
@@ -517,7 +544,7 @@ const cargarVentasDelDia = async () => {
   if (paso === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-        <Header />
+        <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
 
         <div className="grid md:grid-cols-3 gap-6">
           <div className="md:col-span-2 bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100">
@@ -624,7 +651,7 @@ const cargarVentasDelDia = async () => {
   if (paso === 2) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-        <Header />
+        <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
         {error && (
           <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-lg animate-pulse max-w-3xl mx-auto mb-6">
             <div className="flex items-center gap-2">
@@ -703,7 +730,7 @@ const cargarVentasDelDia = async () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-        <Header />
+        <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
         {error && (
           <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-lg animate-pulse max-w-4xl mx-auto mb-6">
             <div className="flex items-center gap-2">
@@ -781,7 +808,7 @@ const cargarVentasDelDia = async () => {
   if (paso === 5) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-        <Header />
+        <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
         {error && (
           <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-lg animate-pulse max-w-3xl mx-auto mb-6">
             <div className="flex items-center gap-2">
@@ -884,7 +911,7 @@ const cargarVentasDelDia = async () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-        <Header />
+        <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
 
         <div className="bg-white rounded-xl shadow-2xl p-8 max-w-3xl mx-auto border border-gray-100">
           <div className="flex items-center gap-3 mb-8">
@@ -939,7 +966,7 @@ const cargarVentasDelDia = async () => {
   return null
 }
 
-function Header() {
+function Header({ fechaSeleccionada, setFechaSeleccionada }: { fechaSeleccionada: string; setFechaSeleccionada: (fecha: string) => void }) {
   return (
     <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white mb-6">
       <div className="flex items-center gap-3">
@@ -954,8 +981,23 @@ function Header() {
         <div className="flex-1">
           <h1 className="text-3xl font-bold">Ventas del día</h1>
           <p className="text-white/80 text-sm mt-1">
-            {new Date().toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' })} · {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+            {(() => {
+              const [year, month, day] = fechaSeleccionada.split('-').map(Number);
+              const fecha = new Date(year, month - 1, day);
+              return fecha.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' });
+            })()} · {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
           </p>
+        </div>
+        
+        {/* Selector de fecha */}
+        <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
+          <input
+            type="date"
+            value={fechaSeleccionada}
+            onChange={(e) => setFechaSeleccionada(e.target.value)}
+            max={new Date().toISOString().split('T')[0]}
+            className="bg-white/90 text-gray-800 px-4 py-2 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-white/50"
+          />
         </div>
       </div>
     </div>

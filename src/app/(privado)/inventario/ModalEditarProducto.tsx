@@ -51,10 +51,13 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
         try {
           const { data, error } = await supabase
             .from("variantes")
-            .select("talla, stock_actual")
+            .select("id, talla, stock_actual")
             .eq("producto_id", producto.producto_id);
           
           if (error) throw error;
+          
+          // Guardar el mapeo de talla -> variante_id para usar en handleGuardar
+          const variantesMap: { [key: string]: number } = {};
           
           // Inicializar todas las tallas en 0
           tallasEstandar.forEach(talla => {
@@ -66,8 +69,12 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
             const talla = variante.talla?.toUpperCase();
             if (talla && tallasEstandar.includes(talla)) {
               stockInicial[talla] = variante.stock_actual || 0;
+              variantesMap[talla] = variante.id;
             }
           });
+          
+          // Guardar el mapa en el estado del componente
+          (window as any).__variantesMap = variantesMap;
           
           setTallasStock(stockInicial);
         } catch (err) {
@@ -109,35 +116,55 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
 
       // 2. Actualizar o crear variantes para cada talla
       const tallasEstandar = ["S", "M", "L", "XL", "XXL", "XXXL"];
+      const variantesMap = (window as any).__variantesMap || {};
       
       for (const talla of tallasEstandar) {
         const nuevoStock = tallasStock[talla] || 0;
-        const varianteExistente = producto.tallas[talla];
+        const varianteId = variantesMap[talla];
         
-        if (varianteExistente && varianteExistente.variante_id) {
-          // Actualizar variante existente usando 'id' no 'variante_id'
+        if (varianteId) {
+          // Actualizar variante existente (incluso si tiene stock 0)
           const { error: errorVariante } = await supabase
             .from("variantes")
             .update({ stock_actual: nuevoStock })
-            .eq("id", varianteExistente.variante_id);
+            .eq("id", varianteId);
 
           if (errorVariante) {
             console.error(`Error actualizando variante ${talla}:`, errorVariante);
             throw errorVariante;
           }
         } else if (nuevoStock > 0) {
-          // Crear nueva variante si se ingresó stock y no existe
-          const { error: errorNuevaVariante } = await supabase
+          // Crear nueva variante solo si no existe y se ingresó stock
+          const { data: nuevaVariante, error: errorNuevaVariante } = await supabase
             .from("variantes")
             .insert({
               producto_id: producto.producto_id,
               talla: talla,
               stock_actual: nuevoStock
-            });
+            })
+            .select()
+            .single();
 
           if (errorNuevaVariante) {
             console.error(`Error creando variante ${talla}:`, errorNuevaVariante);
             throw errorNuevaVariante;
+          }
+
+          // Registrar movimiento de entrada para el stock inicial
+          if (nuevaVariante) {
+            const { error: errorMovimiento } = await supabase
+              .from("movimientos_inventario")
+              .insert({
+                variante_id: nuevaVariante.id,
+                tipo: "entrada",
+                cantidad: nuevoStock,
+                referencia: "Stock inicial al crear variante"
+              });
+
+            if (errorMovimiento) {
+              console.error(`Error registrando movimiento para ${talla}:`, errorMovimiento);
+              // No lanzar error, solo logear
+            }
           }
         }
       }
