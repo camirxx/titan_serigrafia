@@ -1189,27 +1189,27 @@ function ModalMovimientoCaja({
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden animate-slideUp"
+        className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden animate-slideUp flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header mejorado con gradiente y diseño moderno */}
-        <div className={`relative overflow-hidden ${tipo === 'ingreso' ? 'bg-gradient-to-br from-emerald-500 via-green-600 to-teal-600' : 'bg-gradient-to-br from-red-500 via-rose-600 to-pink-600'}`}>
+        <div className={`relative overflow-hidden rounded-t-2xl ${tipo === 'ingreso' ? 'bg-gradient-to-br from-emerald-500 via-green-600 to-teal-600' : 'bg-gradient-to-br from-red-500 via-rose-600 to-pink-600'}`}>
           <div className="absolute inset-0 opacity-20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-white rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
           </div>
           
-          <div className="relative p-8">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className={`p-4 rounded-2xl ${tipo === 'ingreso' ? 'bg-white/20' : 'bg-white/20'} backdrop-blur-sm`}>
-                  <span className="text-5xl">{tipo === 'ingreso' ? '💰' : '💸'}</span>
+          <div className="relative px-5 py-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl ${tipo === 'ingreso' ? 'bg-white/20' : 'bg-white/20'} backdrop-blur-sm flex items-center justify-center`}>
+                  <span className="text-2xl leading-none">{tipo === 'ingreso' ? '💰' : '💸'}</span>
                 </div>
                 <div>
-                  <h2 className="text-3xl font-bold text-white mb-1">
+                  <h2 className="text-2xl font-bold text-white">
                     {tipo === 'ingreso' ? 'Ingresar Dinero' : 'Retirar Dinero'}
                   </h2>
-                  <p className="text-white/90 text-base">
+                  <p className="text-white/90 text-xs">
                     {tipo === 'ingreso' ? 'Especifica los billetes que agregas a la caja' : 'Especifica los billetes que retiras de la caja'}
                   </p>
                 </div>
@@ -1227,7 +1227,7 @@ function ModalMovimientoCaja({
         </div>
 
         {/* Contenido del modal con scroll */}
-        <div className="p-8 space-y-6 max-h-[calc(90vh-200px)] overflow-y-auto">
+        <div className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Campo de concepto mejorado */}
           <div>
             <label className="flex items-center gap-2 text-base font-bold text-gray-800 mb-3">
@@ -1255,7 +1255,7 @@ function ModalMovimientoCaja({
               </div>
               <span>Desglose de billetes y monedas</span>
             </h3>
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-5 space-y-3 border-2 border-gray-200">
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-4 space-y-2 border-2 border-gray-200">
               {Object.keys(billetes).reverse().map((denom) => {
                 const cantidad = billetes[denom as keyof typeof billetes]
                 const disponible = denominacionesActuales[parseInt(denom)] || 0
@@ -1263,7 +1263,7 @@ function ModalMovimientoCaja({
                 const isLowStock = tipo === 'retiro' && disponible <= 3 && disponible > 0
                 
                 return (
-                  <div key={denom} className={`flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border-2 ${cantidad > 0 ? (tipo === 'ingreso' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-transparent'}`}>
+                  <div key={denom} className={`flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border-2 ${cantidad > 0 ? (tipo === 'ingreso' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-transparent'}`}>
                     <div className="min-w-[140px]">
                       <div className="font-bold text-xl text-gray-800 flex items-center gap-2">
                         <span className="text-2xl">{parseInt(denom) === 100 || parseInt(denom) === 500 ? '🪙' : '💵'}</span>
@@ -1336,7 +1336,7 @@ function ModalMovimientoCaja({
           </div>
 
           {/* Total mejorado con animación */}
-          <div className={`relative overflow-hidden p-8 rounded-2xl border-2 shadow-lg ${
+          <div className={`relative overflow-hidden p-5 rounded-2xl border-2 shadow-lg ${
             tipo === 'ingreso' 
               ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300' 
               : 'bg-gradient-to-br from-red-50 to-rose-50 border-red-300'
@@ -1346,19 +1346,19 @@ function ModalMovimientoCaja({
                 <div className="text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">
                   Total a {tipo === 'ingreso' ? 'ingresar' : 'retirar'}
                 </div>
-                <div className={`text-6xl font-bold ${tipo === 'ingreso' ? 'text-green-700' : 'text-red-700'} transition-all duration-300`}>
+                <div className={`text-5xl font-bold ${tipo === 'ingreso' ? 'text-green-700' : 'text-red-700'} transition-all duration-300`}>
                   ${formatNumber(total)}
                 </div>
               </div>
               {total > 0 && (
-                <div className="text-7xl animate-bounce">{tipo === 'ingreso' ? '💰' : '💸'}</div>
+                <div className="text-6xl animate-bounce">{tipo === 'ingreso' ? '💰' : '💸'}</div>
               )}
             </div>
           </div>
         </div>
 
         {/* Footer con botones mejorados */}
-        <div className="p-8 bg-gray-50 border-t-2 border-gray-200">
+        <div className="p-5 bg-gray-50 border-t-2 border-gray-200">
           <div className="flex gap-4">
             <button
               onClick={onClose}

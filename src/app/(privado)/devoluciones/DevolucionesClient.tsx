@@ -41,10 +41,26 @@ export default function DevolucionesClient() {
   const [tiposPrenda, setTiposPrenda] = useState<string[]>([]);
   const [colores, setColores] = useState<string[]>([]);
   const [disenos, setDisenos] = useState<string[]>([]);
+  const [disenosPorTipo, setDisenosPorTipo] = useState<Record<string, string[]>>({});
+  const [disenosFiltrados, setDisenosFiltrados] = useState<string[]>([]);
 
   const [disenoFiltro, setDisenoFiltro] = useState('');
   const [tipoPrendaFiltro, setTipoPrendaFiltro] = useState('');
   const [colorFiltro, setColorFiltro] = useState('');
+
+  // Efecto para filtrar diseños cuando cambia el tipo de prenda
+  useEffect(() => {
+    if (tipoPrendaFiltro) {
+      const disenosDelTipo = disenosPorTipo[tipoPrendaFiltro] || [];
+      setDisenosFiltrados(disenosDelTipo);
+      // Si el diseño seleccionado no está en la lista filtrada, limpiarlo
+      if (disenoFiltro && !disenosDelTipo.includes(disenoFiltro)) {
+        setDisenoFiltro('');
+      }
+    } else {
+      setDisenosFiltrados(disenos);
+    }
+  }, [tipoPrendaFiltro, disenosPorTipo, disenos, disenoFiltro]);
 
   const [productosVendidos, setProductosVendidos] = useState<ProductoVendido[]>([]);
   const [cantSel, setCantSel] = useState<CantidadesSeleccion>({});
@@ -113,15 +129,45 @@ export default function DevolucionesClient() {
 
   const cargarCatalogos = async () => {
     try {
-      const [{ data: tipos }, { data: cols }, { data: dis }] = await Promise.all([
+      const [{ data: tipos }, { data: cols }, { data: productos }] = await Promise.all([
         supabase.from('tipos_prenda').select('nombre').order('nombre'),
         supabase.from('colores').select('nombre').order('nombre'),
-        supabase.from('disenos').select('nombre').order('nombre'),
+        supabase.from('productos').select(`
+          disenos!inner(nombre),
+          tipos_prenda!inner(nombre)
+        `).order('disenos(nombre)'),
       ]);
 
       setTiposPrenda(tipos?.map((t) => t.nombre) ?? []);
       setColores(cols?.map((c) => c.nombre) ?? []);
-      setDisenos(dis?.map((d) => d.nombre) ?? []);
+
+      // Crear un mapa de diseños por tipo de prenda
+      const disenosPorTipoMap: Record<string, Set<string>> = {};
+      const todosDisenos = new Set<string>();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      productos?.forEach((producto: any) => {
+        const diseno = producto.disenos?.nombre;
+        const tipoPrenda = producto.tipos_prenda?.nombre;
+        
+        if (diseno && tipoPrenda) {
+          todosDisenos.add(diseno);
+          if (!disenosPorTipoMap[tipoPrenda]) {
+            disenosPorTipoMap[tipoPrenda] = new Set();
+          }
+          disenosPorTipoMap[tipoPrenda].add(diseno);
+        }
+      });
+
+      // Convertir Sets a arrays ordenados
+      const disenosPorTipoFinal: Record<string, string[]> = {};
+      Object.keys(disenosPorTipoMap).forEach((tipo) => {
+        disenosPorTipoFinal[tipo] = Array.from(disenosPorTipoMap[tipo]).sort();
+      });
+
+      setDisenos(Array.from(todosDisenos).sort());
+      setDisenosPorTipo(disenosPorTipoFinal);
+      setDisenosFiltrados(Array.from(todosDisenos).sort());
     } catch (err) {
       console.error('Error cargando catálogos:', err);
     }
@@ -423,6 +469,38 @@ export default function DevolucionesClient() {
       }
 
       resultados.push(data);
+      
+      // Enviar correo si es transferencia
+      const esTransferencia = (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'transferencia') ||
+                             (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia');
+      
+      if (esTransferencia && datosTransferencia.rut && datosTransferencia.nombre) {
+        try {
+          const montoTransferencia = metodo === 'reintegro_efectivo' ? montoReintegro : montoDiferencia;
+          
+          await fetch('/api/send-transfer-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              devolucionId: data,
+              rut: datosTransferencia.rut,
+              nombre: datosTransferencia.nombre,
+              banco: datosTransferencia.banco,
+              tipoCuenta: datosTransferencia.tipoCuenta,
+              numeroCuenta: datosTransferencia.numeroCuenta,
+              email: datosTransferencia.email,
+              monto: montoTransferencia,
+              tipo: tipo,
+            }),
+          });
+          console.log('Correo de transferencia enviado');
+        } catch (emailError) {
+          console.error('Error al enviar correo:', emailError);
+          // No fallar la operación si el correo falla
+        }
+      }
     }
 
     let mensajeExito = `✅ ${tipo === 'devolucion' ? 'Devolución' : 'Cambio'} creado correctamente. ID(s): ${resultados.join(', ')}`;
@@ -433,6 +511,13 @@ export default function DevolucionesClient() {
       } else {
         mensajeExito += `\n💰 Se reintegró diferencia de $${montoDiferencia.toLocaleString('es-CL')} al cliente por ${metodoPagoDiferencia}`;
       }
+    }
+    
+    // Agregar mensaje si se envió correo de transferencia
+    const esTransferenciaFinal = (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'transferencia') ||
+                                 (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia');
+    if (esTransferenciaFinal) {
+      mensajeExito += `\n📧 Se envió notificación por correo con los datos de transferencia`;
     }
 
     setOk(mensajeExito);
@@ -555,24 +640,6 @@ export default function DevolucionesClient() {
                 <div className="grid gap-4 md:grid-cols-3 bg-gray-50 rounded-xl p-4">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-gray-700">
-                      Diseño <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      className="w-full rounded-lg border border-gray-300 bg-white p-3 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition"
-                      value={disenoFiltro}
-                      onChange={(e) => setDisenoFiltro(e.target.value)}
-                    >
-                      <option value="">Seleccione un diseño</option>
-                      {disenos.map((d) => (
-                        <option key={d} value={d}>
-                          {d}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700">
                       Tipo de Prenda <span className="text-red-500">*</span>
                     </label>
                     <select
@@ -584,6 +651,27 @@ export default function DevolucionesClient() {
                       {tiposPrenda.map((t) => (
                         <option key={t} value={t}>
                           {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Diseño <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      className="w-full rounded-lg border border-gray-300 bg-white p-3 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      value={disenoFiltro}
+                      onChange={(e) => setDisenoFiltro(e.target.value)}
+                      disabled={!tipoPrendaFiltro}
+                    >
+                      <option value="">
+                        {tipoPrendaFiltro ? 'Seleccione un diseño' : 'Primero seleccione un tipo de prenda'}
+                      </option>
+                      {disenosFiltrados.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
                         </option>
                       ))}
                     </select>
