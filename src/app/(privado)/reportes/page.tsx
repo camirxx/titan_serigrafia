@@ -74,7 +74,7 @@ export default function ReportesHubPage() {
   }, []);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900">
+    <div className="relative min-h-screen overflow-hidden via-indigo-900 to-blue-900">
       {/* Bandas diagonales */}
       <div className="pointer-events-none absolute inset-0 opacity-20">
         <div className="absolute inset-0">

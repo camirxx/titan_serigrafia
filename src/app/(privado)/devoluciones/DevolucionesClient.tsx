@@ -509,7 +509,8 @@ export default function DevolucionesClient() {
           </div>
         </div>
 
-        <div className="rounded-3xl bg-white/95 p-4 shadow-2xl backdrop-blur sm:p-6">
+        <div className="rounded-3xl p-4 shadow-2xl sm:p-6">
+
           {error && (
             <div className="mb-4 rounded-lg border-l-4 border-red-500 bg-red-50 p-4">
               <div className="flex items-start">
