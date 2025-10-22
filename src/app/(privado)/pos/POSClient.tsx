@@ -543,7 +543,7 @@ const cargarVentasDelDia = async () => {
 
   if (paso === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="min-h-screen bg-transparent p-6">
         <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
 
         <div className="grid md:grid-cols-3 gap-6">
