@@ -1,4 +1,4 @@
-// src/app/HomeClient.tsx
+// src/app/HomeClient.tsx 
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -15,7 +15,6 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
   const [currentTime, setCurrentTime] = useState('');
 
   useEffect(() => {
-    // Actualizar fecha y hora
     const updateDateTime = () => {
       const now = new Date();
       setCurrentDate(
@@ -43,12 +42,10 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
     router.push(path);
   };
 
-
-
   const isAdmin = userRole === 'admin' || userRole === 'desarrollador';
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900">
+    <div className="relative min-h-screen overflow-hidden">
       {/* Decorative diagonal stripes */}
       <div className="pointer-events-none absolute inset-0 opacity-20">
         <div className="absolute left-0 top-0 h-full w-full">
@@ -93,7 +90,6 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
       {/* Main Content */}
       <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-12">
         <div className="min-h-[400px] rounded-3xl bg-white/95 p-6 shadow-2xl backdrop-blur sm:min-h-[500px] sm:p-12">
-          {/* Main Action Buttons - Single Row */}
           <div
             className={`mb-8 grid gap-6 sm:mb-12 sm:gap-8 ${
               isAdmin ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-2'
@@ -155,11 +151,8 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
               </button>
             )}
           </div>
-
         </div>
       </main>
-
-      
     </div>
   );
 }
