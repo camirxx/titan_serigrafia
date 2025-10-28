@@ -360,23 +360,26 @@ export default function InventarioAgrupado() {
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
 
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-white drop-shadow-lg">
-              Inventario
-            </h1>
-            <p className="text-white/80 text-sm mt-1">
-              {new Date().toLocaleDateString("es-CL", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}{" "}
-              ·{" "}
-              {new Date().toLocaleTimeString("es-CL", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-          </div>
+          <div className="flex-1">
+              <h1 className="text-3xl font-bold text-white drop-shadow-lg">
+                Inventario
+              </h1>
+              <p className="text-white/80 text-sm mt-1">
+                {(() => {
+                  const fecha = new Date();
+                  const fechaFormateada = fecha.toLocaleDateString("es-CL", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  });
+                  const horaActual = fecha.toLocaleTimeString("es-CL", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  return `${fechaFormateada} · ${horaActual}`;
+                })()}
+              </p>
+            </div>
 
           <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
             <div className="w-12 h-12 bg-purple-900 rounded-full"></div>
