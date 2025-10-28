@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useTransition } from 'react';
-import { Search, Users, Shield, Check, X, ChevronLeft } from 'lucide-react';
+import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 type Rol = "admin" | "vendedor" | "desarrollador";
@@ -27,6 +27,7 @@ interface TrabajadoresUIProps {
   updateRole: (formData: FormData) => Promise<{ success: boolean; message: string }>;
   toggleActivo: (formData: FormData) => Promise<{ success: boolean; message: string }>;
   updateTienda: (formData: FormData) => Promise<{ success: boolean; message: string }>;
+  createUser: (formData: FormData) => Promise<{ success: boolean; message: string }>;
 }
 
 export default function TrabajadoresUI({ 
@@ -34,20 +35,21 @@ export default function TrabajadoresUI({
   tiendas, 
   updateRole, 
   toggleActivo, 
-  updateTienda 
+  updateTienda,
+  createUser 
 }: TrabajadoresUIProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [isPending, startTransition] = useTransition();
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
- 
- // const [showModal, setShowModal] = useState(false);
-  //const [newUser, setNewUser] = useState({
-    //email: '',
-    //nombre: '',
-    //rol: 'vendedor' as Rol,
-    //tienda_id: ''
- // });
+  const [showModal, setShowModal] = useState(false);
+  const [newUser, setNewUser] = useState({
+    email: '',
+    nombre: '',
+    password: '',
+    rol: 'vendedor' as Rol,
+    tienda_id: ''
+  });
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -75,6 +77,27 @@ export default function TrabajadoresUI({
     });
   };
 
+  const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const result = await createUser(formData);
+      if (result.success) {
+        showNotification('success', result.message);
+        setShowModal(false);
+        setNewUser({
+          email: '',
+          nombre: '',
+          password: '',
+          rol: 'vendedor',
+          tienda_id: ''
+        });
+      } else {
+        showNotification('error', result.message);
+      }
+    });
+  };
+
   const filteredUsuarios = usuarios.filter(u => 
     u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.nombre?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -99,14 +122,7 @@ export default function TrabajadoresUI({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 relative overflow-hidden">
-      
-      {/* Franjas decorativas */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-32 h-full bg-gradient-to-b from-green-400 to-transparent transform -skew-x-12"></div>
-        <div className="absolute top-0 left-1/3 w-24 h-full bg-gradient-to-b from-green-500 to-transparent transform -skew-x-12"></div>
-        <div className="absolute top-0 right-1/4 w-32 h-full bg-gradient-to-b from-green-400 to-transparent transform -skew-x-12"></div>
-      </div>
+    <div className="min-h-screen p-6">
 
       {/* Notificaciones */}
       {notification && (
@@ -122,47 +138,50 @@ export default function TrabajadoresUI({
         </div>
       )}
 
-      {/* Header */}
-      <header className="relative z-10 p-4 sm:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white/95 backdrop-blur rounded-3xl shadow-2xl p-6">
-            <div className="flex items-center gap-4 mb-6">
-              <button 
-                onClick={() => router.push('/')}
-                className="p-3 hover:bg-purple-100 rounded-full transition"
-              >
-                <ChevronLeft className="w-6 h-6 text-purple-700" />
-              </button>
-              <div className="flex-1">
-                <h1 className="text-3xl font-bold text-gray-900">Gestión de Trabajadores</h1>
-                <p className="text-gray-600 mt-1">Administra usuarios, roles y permisos del sistema</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="px-4 py-2 bg-purple-100 rounded-full">
-                  <span className="font-bold text-purple-900">{usuarios.length}</span>
-                  <span className="text-purple-700 ml-1">trabajadores</span>
-                </div>
-              </div>
+      {/* Header estilo POS */}
+      <header className="max-w-7xl mx-auto mb-6">
+        <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white mb-6">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.push('/')} className="bg-white/20 backdrop-blur-sm p-3 rounded-xl hover:bg-white/30 transition">
+              <ChevronLeft className="w-6 h-6 text-white" />
+            </button>
+            <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
+              <Users className="w-8 h-8 text-white" />
             </div>
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold">Gestión de Trabajadores</h1>
+              <p className="text-white/80 text-sm mt-1">
+                {usuarios.length} trabajadores registrados
+              </p>
+            </div>
+            <button
+              onClick={() => setShowModal(true)}
+              className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl hover:bg-white/30 transition flex items-center gap-2 font-semibold"
+            >
+              <UserPlus className="w-5 h-5" />
+              Nuevo Usuario
+            </button>
+          </div>
+        </div>
 
-            {/* Buscador */}
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Buscar trabajador por email o nombre..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
-              />
-            </div>
+        {/* Buscador */}
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-6">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Buscar trabajador por email o nombre..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+            />
           </div>
         </div>
       </header>
 
       {/* Contenido Principal */}
-      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-8 pb-12">
-        <div className="bg-white/95 backdrop-blur rounded-3xl shadow-2xl overflow-hidden">
+      <main className="max-w-7xl mx-auto">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
           
           {/* Tabla Desktop */}
           <div className="hidden lg:block overflow-x-auto">
@@ -405,14 +424,130 @@ export default function TrabajadoresUI({
           )}
         </div>
 
-         {/* Debug Info - TEMPORAL 
-    <div className="fixed top-20 left-4 bg-yellow-200 p-4 rounded z-50">
-      <p>Total usuarios: {usuarios.length}</p>
-      <p>ShowModal: {showModal ? 'true' : 'false'}</p>
-    </div>
-*/}
-
       </main>
+
+      {/* Modal Crear Usuario */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-3 rounded-xl">
+                    <UserPlus className="w-6 h-6 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-white">Crear Nuevo Usuario</h2>
+                </div>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition"
+                >
+                  <X className="w-6 h-6 text-white" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  placeholder="usuario@ejemplo.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Nombre Completo <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="nombre"
+                  value={newUser.nombre}
+                  onChange={(e) => setNewUser({ ...newUser, nombre: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  placeholder="Juan Pérez"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Contraseña <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  placeholder="Mínimo 6 caracteres"
+                  minLength={6}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Rol <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="rol"
+                  value={newUser.rol}
+                  onChange={(e) => setNewUser({ ...newUser, rol: e.target.value as Rol })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  required
+                >
+                  <option value="vendedor">Vendedor</option>
+                  <option value="admin">Admin</option>
+                  <option value="desarrollador">Desarrollador</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Tienda Asignada
+                </label>
+                <select
+                  name="tienda_id"
+                  value={newUser.tienda_id}
+                  onChange={(e) => setNewUser({ ...newUser, tienda_id: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                >
+                  <option value="">Sin asignar</option>
+                  {tiendas.map(t => (
+                    <option key={t.id} value={t.id}>{t.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isPending ? 'Creando...' : 'Crear Usuario'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-3 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

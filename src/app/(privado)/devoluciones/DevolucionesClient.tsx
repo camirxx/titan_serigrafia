@@ -562,62 +562,53 @@ export default function DevolucionesClient() {
 };
 
   return (
-    <div className="">
-      <div className="pointer-events-none absolute inset-0 opacity-20">
-        <div className="absolute inset-0">
-          <div className="absolute left-1/5 top-0 h-full w-32 -skew-x-12 transform bg-gradient-to-b from-green-400 to-transparent" />
-          <div className="absolute left-1/3 top-0 h-full w-24 -skew-x-12 transform bg-gradient-to-b from-green-500 to-transparent" />
-          <div className="absolute right-1/4 top-0 h-full w-32 -skew-x-12 transform bg-gradient-to-b from-green-400 to-transparent" />
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      {/* Header estilo POS */}
+      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white mb-6">
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.back()} className="bg-white/20 backdrop-blur-sm p-3 rounded-xl hover:bg-white/30 transition">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold">Devoluciones / Cambios</h1>
+            <p className="text-white/80 text-sm mt-1">
+              {fecha} · {hora}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6 sm:mb-10">
-          <div className="flex items-center justify-between rounded-[28px] bg-gradient-to-r from-indigo-700 via-purple-700 to-violet-700 p-4 text-white shadow-2xl sm:p-6">
-            <button
-              onClick={() => router.back()}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25 sm:h-14 sm:w-14"
-            >
-              <span className="text-xl">‹</span>
-            </button>
+      <div className="rounded-3xl p-4 shadow-2xl sm:p-6">
 
-            <div className="text-center">
-              <h1 className="text-3xl font-bold drop-shadow-lg">Devoluciones / Cambios</h1>
-              <p className="mt-1 text-sm text-white/80">
-                {fecha} · {hora}
-              </p>
-            </div>
-
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-lg sm:h-16 sm:w-16">
-              <div className="h-8 w-8 rounded-full bg-purple-900 sm:h-12 sm:w-12" />
+        {error && (
+          <div className="mb-4 rounded-lg border-l-4 border-red-500 bg-red-50 p-4">
+            <div className="flex items-start">
+              <span className="text-2xl mr-3">⚠️</span>
+              <div>
+                <h3 className="font-semibold text-red-800">Error</h3>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="rounded-3xl p-4 shadow-2xl sm:p-6">
-
-          {error && (
-            <div className="mb-4 rounded-lg border-l-4 border-red-500 bg-red-50 p-4">
-              <div className="flex items-start">
-                <span className="text-2xl mr-3">⚠️</span>
-                <div>
-                  <h3 className="font-semibold text-red-800">Error</h3>
-                  <p className="text-sm text-red-700 mt-1">{error}</p>
-                </div>
+        )}
+        {ok && (
+          <div className="mb-4 rounded-lg border-l-4 border-green-500 bg-green-50 p-4">
+            <div className="flex items-start">
+              <span className="text-2xl mr-3">✅</span>
+              <div>
+                <h3 className="font-semibold text-green-800">Éxito</h3>
+                <p className="text-sm text-green-700 mt-1 whitespace-pre-line">{ok}</p>
               </div>
             </div>
-          )}
-          {ok && (
-            <div className="mb-4 rounded-lg border-l-4 border-green-500 bg-green-50 p-4">
-              <div className="flex items-start">
-                <span className="text-2xl mr-3">✅</span>
-                <div>
-                  <h3 className="font-semibold text-green-800">Éxito</h3>
-                  <p className="text-sm text-green-700 mt-1 whitespace-pre-line">{ok}</p>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
+        )}
 
           <div className="mb-6 mx-auto max-w-4xl">
             <div className="rounded-3xl bg-white p-8 shadow-2xl border-t-4 border-purple-600">
@@ -1372,6 +1363,6 @@ export default function DevolucionesClient() {
           </div>
         </div>
       </div>
-    </div>
+  
   );
 }

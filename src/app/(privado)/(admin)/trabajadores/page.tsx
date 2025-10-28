@@ -112,6 +112,64 @@ async function updateTienda(formData: FormData) {
   return { success: true, message: "Tienda actualizada correctamente" };
 }
 
+async function createUser(formData: FormData) {
+  "use server";
+
+  const gate = await requireRole("admin");
+  if (!gate.ok) redirect("/");
+
+  const email = String(formData.get("email") || "").trim();
+  const nombre = String(formData.get("nombre") || "").trim();
+  const password = String(formData.get("password") || "").trim();
+  const rol = String(formData.get("rol") || "") as Rol;
+  const tienda_id = formData.get("tienda_id");
+
+  if (!email || !password || !nombre || !rol) {
+    return { success: false, message: "Todos los campos son obligatorios" };
+  }
+
+  if (password.length < 6) {
+    return { success: false, message: "La contraseña debe tener al menos 6 caracteres" };
+  }
+
+  const supabase = await supabaseServer();
+
+  // Crear usuario en Supabase Auth
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true, // Auto-confirmar email
+  });
+
+  if (authError) {
+    console.error("createUser auth error:", authError.message);
+    return { success: false, message: `Error al crear usuario: ${authError.message}` };
+  }
+
+  if (!authData.user) {
+    return { success: false, message: "No se pudo crear el usuario" };
+  }
+
+  // Actualizar datos en la tabla usuarios
+  const { error: updateError } = await supabase
+    .from("usuarios")
+    .update({
+      nombre,
+      rol,
+      tienda_id: tienda_id ? Number(tienda_id) : null,
+      activo: true,
+    })
+    .eq("id", authData.user.id);
+
+  if (updateError) {
+    console.error("createUser update error:", updateError.message);
+    return { success: false, message: `Error al actualizar datos: ${updateError.message}` };
+  }
+
+  revalidatePath("/trabajadores");
+  return { success: true, message: `Usuario ${email} creado correctamente` };
+}
+
 // ---- Página (Server Component) ----
 export default async function TrabajadoresPage() {
   const gate = await requireRole("admin");
@@ -119,7 +177,7 @@ export default async function TrabajadoresPage() {
 
   const supabase = await supabaseServer();
   
-  // Obtener TODOS los usuarios (sin filtros)
+  // Obtener TODOS los usuarios (sin filtros de rol)
   const { data, error } = await supabase
     .from("usuarios")
     .select(`
@@ -134,7 +192,18 @@ export default async function TrabajadoresPage() {
     `)
     .order("created_at", { ascending: false });
   
-  console.log('Usuarios encontrados:', data?.length || 0); // Debug
+  console.log('=== DEBUG TRABAJADORES ===');
+  console.log('Total usuarios encontrados:', data?.length || 0);
+  console.log('Usuarios por rol:', data?.reduce((acc: Record<string, number>, u) => {
+    const rol = u.rol || 'sin_rol';
+    acc[rol] = (acc[rol] || 0) + 1;
+    return acc;
+  }, {}));
+  console.log('Primeros 3 usuarios:', data?.slice(0, 3).map(u => ({ 
+    email: u.email, 
+    rol: u.rol, 
+    nombre: u.nombre 
+  })));
 
   if (error) {
     console.error("fetch usuarios error:", error.message);
@@ -174,6 +243,7 @@ export default async function TrabajadoresPage() {
       updateRole={updateRole}
       toggleActivo={toggleActivo}
       updateTienda={updateTienda}
+      createUser={createUser}
     />
   );
 }

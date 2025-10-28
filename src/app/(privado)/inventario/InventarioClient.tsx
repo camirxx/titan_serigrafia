@@ -338,51 +338,34 @@ export default function InventarioAgrupado() {
 
   return (
     <div className="min-h-screen relative">
-      {/* Header con fondo morado/verde */}
-      <div
-        className="relative mb-6 rounded-2xl overflow-hidden"
-        style={{
-          background:
-            "linear-gradient(135deg, #4C1D95 0%, #5B21B6 50%, #7C3AED 100%)",
-        }}
-      >
-        {/* Diseño decorativo verde */}
-        <div className="absolute inset-0 opacity-20 pointer-events-none">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-green-400 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-green-400 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
-        </div>
-
-        <div className="relative flex items-center justify-between p-6">
-          <button
-            onClick={() => window.history.back()}
-            className="p-3 bg-white/20 backdrop-blur-sm rounded-full hover:bg-white/30 transition"
-          >
+      {/* Header estilo POS */}
+      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white mb-6">
+        <div className="flex items-center gap-3">
+          <button onClick={() => window.history.back()} className="bg-white/20 backdrop-blur-sm p-3 rounded-xl hover:bg-white/30 transition">
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
-
+          <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
           <div className="flex-1">
-              <h1 className="text-3xl font-bold text-white drop-shadow-lg">
-                Inventario
-              </h1>
-              <p className="text-white/80 text-sm mt-1">
-                {(() => {
-                  const fecha = new Date();
-                  const fechaFormateada = fecha.toLocaleDateString("es-CL", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  });
-                  const horaActual = fecha.toLocaleTimeString("es-CL", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-                  return `${fechaFormateada} · ${horaActual}`;
-                })()}
-              </p>
-            </div>
-
-          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
-            <div className="w-12 h-12 bg-purple-900 rounded-full"></div>
+            <h1 className="text-3xl font-bold">Inventario</h1>
+            <p className="text-white/80 text-sm mt-1">
+              {(() => {
+                const fecha = new Date();
+                const fechaFormateada = fecha.toLocaleDateString("es-CL", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                });
+                const horaActual = fecha.toLocaleTimeString("es-CL", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+                return `${fechaFormateada} · ${horaActual}`;
+              })()}
+            </p>
           </div>
         </div>
       </div>
