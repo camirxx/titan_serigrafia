@@ -1,6 +1,7 @@
 // src/lib/supabaseServer.ts
 import { cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 const resolveSupabaseEnv = () => {
   const url =
@@ -50,4 +51,30 @@ export async function supabaseServer() {
   });
 
   return supabase;
+}
+
+// Cliente de administrador con service role key para operaciones privilegiadas
+export function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url) {
+    throw new Error(
+      "Supabase URL is missing. Set NEXT_PUBLIC_SUPABASE_URL."
+    );
+  }
+
+  if (!serviceRoleKey) {
+    console.error("❌ SUPABASE_SERVICE_ROLE_KEY no está configurada en .env.local");
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is missing. Please add it to your .env.local file. You can find it in Supabase Dashboard → Settings → API → service_role key"
+    );
+  }
+
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
 }

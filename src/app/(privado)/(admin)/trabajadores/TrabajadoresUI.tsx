@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useTransition } from 'react';
-import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus } from 'lucide-react';
+import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus, Eye, EyeOff, Edit2, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 type Rol = "admin" | "vendedor" | "desarrollador";
@@ -24,25 +24,31 @@ type Usuario = {
 interface TrabajadoresUIProps {
   usuarios: Usuario[];
   tiendas: Tienda[];
+  currentUserId: string | null;
   updateRole: (formData: FormData) => Promise<{ success: boolean; message: string }>;
   toggleActivo: (formData: FormData) => Promise<{ success: boolean; message: string }>;
   updateTienda: (formData: FormData) => Promise<{ success: boolean; message: string }>;
   createUser: (formData: FormData) => Promise<{ success: boolean; message: string }>;
+  deleteUser: (formData: FormData) => Promise<{ success: boolean; message: string }>;
 }
 
 export default function TrabajadoresUI({ 
   usuarios, 
   tiendas, 
+  currentUserId,
   updateRole, 
   toggleActivo, 
   updateTienda,
-  createUser 
+  createUser,
+  deleteUser 
 }: TrabajadoresUIProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [isPending, startTransition] = useTransition();
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
     email: '',
     nombre: '',
@@ -53,7 +59,7 @@ export default function TrabajadoresUI({
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
-    setTimeout(() => setNotification(null), 3000);
+    setTimeout(() => setNotification(null), 5000); // 5 segundos para mejor visibilidad
   };
 
   const handleUpdateRole = async (formData: FormData) => {
@@ -85,6 +91,7 @@ export default function TrabajadoresUI({
       if (result.success) {
         showNotification('success', result.message);
         setShowModal(false);
+        setShowPassword(false);
         setNewUser({
           email: '',
           nombre: '',
@@ -95,6 +102,16 @@ export default function TrabajadoresUI({
       } else {
         showNotification('error', result.message);
       }
+    });
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    const formData = new FormData();
+    formData.append('id', userId);
+    startTransition(async () => {
+      const result = await deleteUser(formData);
+      showNotification(result.success ? 'success' : 'error', result.message);
+      setShowDeleteConfirm(null);
     });
   };
 
@@ -124,9 +141,9 @@ export default function TrabajadoresUI({
   return (
     <div className="min-h-screen p-6">
 
-      {/* Notificaciones */}
+      {/* Notificaciones - z-index mayor que el modal */}
       {notification && (
-        <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl backdrop-blur-lg border-2 transition-all duration-300 ${
+        <div className={`fixed top-6 right-6 z-[9999] px-6 py-4 rounded-xl shadow-2xl backdrop-blur-lg border-2 transition-all duration-300 ${
           notification.type === 'success' 
             ? 'bg-green-500/90 border-green-300 text-white' 
             : 'bg-red-500/90 border-red-300 text-white'
@@ -193,6 +210,7 @@ export default function TrabajadoresUI({
                   <th className="px-6 py-4 text-left font-bold">Tienda Asignada</th>
                   <th className="px-6 py-4 text-left font-bold">Estado</th>
                   <th className="px-6 py-4 text-left font-bold">Fecha Ingreso</th>
+                  <th className="px-6 py-4 text-center font-bold">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -224,6 +242,7 @@ export default function TrabajadoresUI({
                           <select
                             name="rol"
                             defaultValue={u.rol || ''}
+                            disabled={u.id === currentUserId}
                             onChange={(e) => {
                               const form = e.currentTarget.form;
                               if (form) {
@@ -231,9 +250,12 @@ export default function TrabajadoresUI({
                                 handleUpdateRole(formData);
                               }
                             }}
-                            className={`appearance-none pl-3 pr-10 py-2 rounded-lg border-2 font-semibold cursor-pointer transition focus:ring-2 focus:ring-purple-500 outline-none ${
+                            className={`appearance-none pl-3 pr-10 py-2 rounded-lg border-2 font-semibold transition focus:ring-2 focus:ring-purple-500 outline-none ${
                               getRolBadgeColor(u.rol)
+                            } ${
+                              u.id === currentUserId ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
                             }`}
+                            title={u.id === currentUserId ? 'No puedes cambiar tu propio rol' : ''}
                           >
                             <option value="vendedor">Vendedor</option>
                             <option value="admin">Admin</option>
@@ -306,6 +328,24 @@ export default function TrabajadoresUI({
                           })
                         : '—'}
                     </td>
+
+                    {/* Acciones */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        {u.id !== currentUserId && (
+                          <button
+                            onClick={() => setShowDeleteConfirm(u.id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            title="Eliminar usuario"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
+                        {u.id === currentUserId && (
+                          <span className="text-xs text-gray-400 italic">Tu cuenta</span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -335,6 +375,7 @@ export default function TrabajadoresUI({
                       <select
                         name="rol"
                         defaultValue={u.rol || ''}
+                        disabled={u.id === currentUserId}
                         onChange={(e) => {
                           const form = e.currentTarget.form;
                           if (form) {
@@ -344,6 +385,8 @@ export default function TrabajadoresUI({
                         }}
                         className={`w-full pl-3 pr-10 py-2 rounded-lg border-2 font-semibold ${
                           getRolBadgeColor(u.rol)
+                        } ${
+                          u.id === currentUserId ? 'opacity-60 cursor-not-allowed' : ''
                         }`}
                       >
                         <option value="vendedor">Vendedor</option>
@@ -351,6 +394,9 @@ export default function TrabajadoresUI({
                         <option value="desarrollador">Desarrollador</option>
                       </select>
                     </form>
+                    {u.id === currentUserId && (
+                      <p className="text-xs text-gray-500 mt-1">No puedes cambiar tu propio rol</p>
+                    )}
                   </div>
 
                   {/* Tienda */}
@@ -401,6 +447,19 @@ export default function TrabajadoresUI({
                       </span>
                     </form>
                   </div>
+
+                  {/* Botón Eliminar (Mobile) */}
+                  {u.id !== currentUserId && (
+                    <div className="pt-3 border-t border-gray-200">
+                      <button
+                        onClick={() => setShowDeleteConfirm(u.id)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-semibold"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar Usuario
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -482,16 +541,25 @@ export default function TrabajadoresUI({
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Contraseña <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="password"
-                  name="password"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
-                  placeholder="Mínimo 6 caracteres"
-                  minLength={6}
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    className="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                    placeholder="Mínimo 6 caracteres"
+                    minLength={6}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -545,6 +613,44 @@ export default function TrabajadoresUI({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminación */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="bg-gradient-to-r from-red-600 to-pink-600 p-6 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-3 rounded-xl">
+                  <Trash2 className="w-6 h-6 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold text-white">Confirmar Eliminación</h2>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <p className="text-gray-700 mb-6">
+                ¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleDeleteUser(showDeleteConfirm)}
+                  disabled={isPending}
+                  className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-red-700 hover:to-pink-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isPending ? 'Eliminando...' : 'Sí, Eliminar'}
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="px-6 py-3 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

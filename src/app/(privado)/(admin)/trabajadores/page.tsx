@@ -1,7 +1,7 @@
 // src/app/(privado)/(admin)/trabajadores/page.tsx
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { supabaseServer, supabaseAdmin } from "@/lib/supabaseServer";
 import { requireRole } from "@/lib/guards";
 import TrabajadoresUI from "./TrabajadoresUI";
 
@@ -45,7 +45,14 @@ async function updateRole(formData: FormData) {
 
   if (!id || !rol) return { success: false, message: "Datos incompletos" };
 
+  // Proteger: el admin no puede cambiar su propio rol
   const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user && user.id === id) {
+    return { success: false, message: "No puedes cambiar tu propio rol" };
+  }
+
   const { error } = await supabase
     .from("usuarios")
     .update({ rol })
@@ -125,17 +132,35 @@ async function createUser(formData: FormData) {
   const tienda_id = formData.get("tienda_id");
 
   if (!email || !password || !nombre || !rol) {
-    return { success: false, message: "Todos los campos son obligatorios" };
+    return { success: false, message: "❌ Error: Todos los campos son obligatorios (email, nombre, contraseña y rol)" };
   }
 
   if (password.length < 6) {
-    return { success: false, message: "La contraseña debe tener al menos 6 caracteres" };
+    return { success: false, message: "❌ Error: La contraseña debe tener al menos 6 caracteres" };
+  }
+
+  // Validar formato de email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return { success: false, message: "❌ Error: El formato del email no es válido" };
   }
 
   const supabase = await supabaseServer();
+  const adminClient = supabaseAdmin(); // Cliente con permisos de administrador
 
-  // Crear usuario en Supabase Auth
-  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+  // Verificar si el email ya existe
+  const { data: existingUser } = await supabase
+    .from("usuarios")
+    .select("email")
+    .eq("email", email)
+    .single();
+
+  if (existingUser) {
+    return { success: false, message: `❌ Error: El email ${email} ya está registrado en el sistema` };
+  }
+
+  // Crear usuario en Supabase Auth usando el cliente admin
+  const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
     password,
     email_confirm: true, // Auto-confirmar email
@@ -143,31 +168,75 @@ async function createUser(formData: FormData) {
 
   if (authError) {
     console.error("createUser auth error:", authError.message);
-    return { success: false, message: `Error al crear usuario: ${authError.message}` };
+    
+    // Mensajes de error más específicos
+    if (authError.message.includes("already registered")) {
+      return { success: false, message: `❌ Error: El email ${email} ya está registrado` };
+    }
+    if (authError.message.includes("password")) {
+      return { success: false, message: "❌ Error: La contraseña no cumple con los requisitos de seguridad" };
+    }
+    
+    return { success: false, message: `❌ Error al crear usuario: ${authError.message}` };
   }
 
   if (!authData.user) {
-    return { success: false, message: "No se pudo crear el usuario" };
+    return { success: false, message: "❌ Error: No se pudo crear el usuario. Intenta nuevamente" };
   }
 
-  // Actualizar datos en la tabla usuarios
-  const { error: updateError } = await supabase
+  // Usar upsert para insertar o actualizar datos en la tabla usuarios
+  const { error: upsertError } = await adminClient
     .from("usuarios")
-    .update({
+    .upsert({
+      id: authData.user.id,
+      email: email,
       nombre,
       rol,
       tienda_id: tienda_id ? Number(tienda_id) : null,
       activo: true,
-    })
-    .eq("id", authData.user.id);
+    }, {
+      onConflict: 'id'
+    });
 
-  if (updateError) {
-    console.error("createUser update error:", updateError.message);
-    return { success: false, message: `Error al actualizar datos: ${updateError.message}` };
+  if (upsertError) {
+    console.error("createUser upsert error:", upsertError.message);
+    return { success: false, message: `❌ Error al guardar los datos del usuario: ${upsertError.message}` };
   }
 
   revalidatePath("/trabajadores");
-  return { success: true, message: `Usuario ${email} creado correctamente` };
+  return { success: true, message: `✅ Usuario ${nombre} creado exitosamente. Ya puede iniciar sesión con ${email}` };
+}
+
+async function deleteUser(formData: FormData) {
+  "use server";
+
+  const gate = await requireRole("admin");
+  if (!gate.ok) redirect("/");
+
+  const id = String(formData.get("id") || "");
+
+  if (!id) return { success: false, message: "ID requerido" };
+
+  // Proteger: el admin no puede eliminarse a sí mismo
+  const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user && user.id === id) {
+    return { success: false, message: "❌ No puedes eliminar tu propia cuenta" };
+  }
+
+  const adminClient = supabaseAdmin();
+
+  // Eliminar usuario de Supabase Auth
+  const { error: authError } = await adminClient.auth.admin.deleteUser(id);
+
+  if (authError) {
+    console.error("deleteUser error:", authError.message);
+    return { success: false, message: `❌ Error al eliminar usuario: ${authError.message}` };
+  }
+
+  revalidatePath("/trabajadores");
+  return { success: true, message: "✅ Usuario eliminado correctamente" };
 }
 
 // ---- Página (Server Component) ----
@@ -176,6 +245,10 @@ export default async function TrabajadoresPage() {
   if (!gate.ok) redirect("/");
 
   const supabase = await supabaseServer();
+  
+  // Obtener el ID del usuario actual (admin)
+  const { data: { user } } = await supabase.auth.getUser();
+  const currentUserId = user?.id || null;
   
   // Obtener TODOS los usuarios (sin filtros de rol)
   const { data, error } = await supabase
@@ -240,10 +313,12 @@ export default async function TrabajadoresPage() {
     <TrabajadoresUI 
       usuarios={usuarios}
       tiendas={tiendas}
+      currentUserId={currentUserId}
       updateRole={updateRole}
       toggleActivo={toggleActivo}
       updateTienda={updateTienda}
       createUser={createUser}
+      deleteUser={deleteUser}
     />
   );
 }
