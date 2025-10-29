@@ -24,6 +24,18 @@ type Devolucion = {
   cantidad_items: number;
   total_unidades_devueltas: number;
   monto_total_devuelto: number;
+  metodo_pago_reintegro: string | null;
+  transferencia_rut: string | null;
+  transferencia_nombre: string | null;
+  transferencia_banco: string | null;
+  transferencia_tipo_cuenta: string | null;
+  transferencia_numero_cuenta: string | null;
+  transferencia_email: string | null;
+  transferencia_realizada: boolean | null;
+  fecha_transferencia: string | null;
+  tipo_diferencia: string | null;
+  monto_diferencia: number | null;
+  metodo_pago_diferencia: string | null;
 };
 
 type DevolucionDetalle = {
@@ -56,7 +68,8 @@ export default function ReporteDevolucionesClient() {
   const [detalles, setDetalles] = useState<DevolucionDetalle[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [vistaActual, setVistaActual] = useState<'resumen' | 'detalle'>('resumen');
+  const [vistaActual, setVistaActual] = useState<'resumen' | 'detalle' | 'transferencias'>('resumen');
+  const [actualizando, setActualizando] = useState<number | null>(null);
 
   const buscar = useCallback(async () => {
     setErrorMsg(null);
@@ -77,6 +90,14 @@ export default function ReporteDevolucionesClient() {
         .limit(200);
 
       if (errResumen) throw errResumen;
+
+      console.log('📊 [REPORTES] Datos cargados:', {
+        totalDevoluciones: dataResumen?.length || 0,
+        primeraDevolucion: dataResumen?.[0],
+        filtrosAplicados: { desde, hasta, tipoFiltro, metodoFiltro }
+      });
+
+      setDevoluciones(dataResumen || []);
 
       // Cargar detalle
       let qDetalle = supabase
@@ -207,15 +228,93 @@ export default function ReporteDevolucionesClient() {
     }
   };
 
-  const downloadCSV = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  // Función para verificar base de datos directamente
+  const verificarBaseDatos = async () => {
+    try {
+      console.log('🔍 Verificando base de datos directamente...');
+      
+      // Verificar tabla devoluciones directamente
+      const { data: todasDevoluciones, error: errorDevoluciones } = await supabase
+        .from('devoluciones')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (errorDevoluciones) {
+        console.error('Error consultando devoluciones:', errorDevoluciones);
+        setErrorMsg(`Error en tabla devoluciones: ${errorDevoluciones.message}`);
+        return;
+      }
+
+      console.log('📋 Últimas devoluciones en BD:', todasDevoluciones);
+
+      // Verificar vista
+      const { data: vistaData, error: errorVista } = await supabase
+        .from('reporte_devoluciones_view')
+        .select('*')
+        .order('fecha_devolucion', { ascending: false })
+        .limit(5);
+
+      if (errorVista) {
+        console.error('Error consultando vista:', errorVista);
+        setErrorMsg(`Error en vista: ${errorVista.message}`);
+        return;
+      }
+
+      console.log('👁️ Datos en vista:', vistaData);
+
+      setErrorMsg(null);
+      alert(`✅ Base de datos OK\n\nDevoluciones en BD: ${todasDevoluciones?.length || 0}\nDevoluciones en vista: ${vistaData?.length || 0}\n\nRevisa la consola del navegador (F12) para más detalles.`);
+
+    } catch (error) {
+      console.error('Error verificando BD:', error);
+      setErrorMsg('Error verificando base de datos');
+    }
   };
+
+  // Función para marcar transferencia como realizada
+  const marcarTransferencia = async (devolucionId: number, realizada: boolean) => {
+    setActualizando(devolucionId);
+    try {
+      const { error } = await supabase.rpc('marcar_transferencia_realizada', {
+        p_devolucion_id: devolucionId,
+        p_realizada: realizada,
+      });
+
+      if (error) throw error;
+
+      // Actualizar el estado local
+      setDevoluciones((prev) =>
+        prev.map((d) =>
+          d.devolucion_id === devolucionId
+            ? { ...d, transferencia_realizada: realizada, fecha_transferencia: realizada ? new Date().toISOString() : null }
+            : d
+        )
+      );
+    } catch (error) {
+      console.error('Error al marcar transferencia:', error);
+      setErrorMsg('Error al actualizar el estado de la transferencia');
+    } finally {
+      setActualizando(null);
+    }
+  };
+
+  // Filtrar devoluciones con transferencia
+  const devolucionesConTransferencia = devoluciones.filter((d) => {
+    const esTransferencia = (d.metodo_pago_reintegro === 'transferencia') ||
+                           (d.tipo_diferencia === 'cliente_recibe' && d.metodo_pago_diferencia === 'transferencia');
+    return esTransferencia && d.transferencia_rut;
+  });
+
+  const transferenciasPendientes = devolucionesConTransferencia.filter((d) => !d.transferencia_realizada);
+  const transferenciasRealizadas = devolucionesConTransferencia.filter((d) => d.transferencia_realizada);
+
+  console.log('🏦 [REPORTES] Transferencias:', {
+    totalConTransferencia: devolucionesConTransferencia.length,
+    transferenciasPendientes: transferenciasPendientes.length,
+    transferenciasRealizadas: transferenciasRealizadas.length,
+    primeraTransferencia: transferenciasPendientes[0]
+  });
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -227,7 +326,7 @@ export default function ReporteDevolucionesClient() {
 
       {/* Filtros */}
       <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Desde</label>
             <input
@@ -282,6 +381,19 @@ export default function ReporteDevolucionesClient() {
           </div>
           <div className="flex items-end">
             <button
+              onClick={() => {
+                setDesde('');
+                setHasta('');
+                setTipoFiltro('');
+                setMetodoFiltro('');
+              }}
+              className="w-full h-11 rounded-lg border-2 border-orange-300 text-orange-700 font-medium hover:bg-orange-50 transition-colors"
+            >
+              🧹 Limpiar Filtros
+            </button>
+          </div>
+          <div className="flex items-end">
+            <button
               onClick={exportCSV}
               className="w-full h-11 rounded-lg border-2 border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
               disabled={!devoluciones.length}
@@ -292,18 +404,52 @@ export default function ReporteDevolucionesClient() {
         </div>
       </div>
 
-      {/* Error */}
-      {errorMsg && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-start">
-            <span className="text-red-600 text-xl mr-3">⚠️</span>
-            <div>
-              <h3 className="text-red-800 font-medium">Error al cargar datos</h3>
-              <p className="text-red-700 text-sm mt-1">{errorMsg}</p>
-            </div>
+      {/* Debug Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-blue-900 mb-2">🔍 Información de Debug</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+          <div>
+            <span className="font-medium">Total Devoluciones:</span>
+            <span className="ml-2 text-blue-700 font-bold">{devoluciones.length}</span>
+          </div>
+          <div>
+            <span className="font-medium">Transferencias:</span>
+            <span className="ml-2 text-green-700 font-bold">{transferenciasPendientes.length} pendientes</span>
+          </div>
+          <div>
+            <span className="font-medium">Filtros:</span>
+            <span className="ml-2 text-gray-700">
+              {tipoFiltro || 'Todos'} | {metodoFiltro || 'Todos'}
+            </span>
+          </div>
+          <div>
+            <span className="font-medium">Estado:</span>
+            <span className="ml-2 text-gray-700">
+              {loading ? 'Cargando...' : 'Listo'}
+            </span>
           </div>
         </div>
-      )}
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={buscar}
+            disabled={loading}
+            className="px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 disabled:bg-gray-400"
+          >
+            {loading ? '⏳...' : '🔄 Recargar Datos'}
+          </button>
+          <button
+            onClick={verificarBaseDatos}
+            className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+          >
+            🔍 Verificar BD
+          </button>
+        </div>
+        {devoluciones.length > 0 && (
+          <div className="mt-2 text-xs text-gray-600">
+            <strong>Última devolución:</strong> #{devoluciones[0]?.devolucion_id} - {new Date(devoluciones[0]?.fecha_devolucion).toLocaleDateString('es-CL')}
+          </div>
+        )}
+      </div>
 
       {/* Estadísticas */}
       {devoluciones.length > 0 && (
@@ -461,6 +607,21 @@ export default function ReporteDevolucionesClient() {
                 }`}
               >
                 📊 Vista Resumen
+              </button>
+              <button
+                onClick={() => setVistaActual('transferencias')}
+                className={`px-6 py-2 font-medium transition-colors relative ${
+                  vistaActual === 'transferencias' 
+                    ? 'bg-purple-600 text-white' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                🏦 Transferencias
+                {transferenciasPendientes.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {transferenciasPendientes.length}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setVistaActual('detalle')}
@@ -635,6 +796,167 @@ export default function ReporteDevolucionesClient() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tabla Transferencias */}
+      {vistaActual === 'transferencias' && (
+        <div className="space-y-6">
+          {/* Transferencias Pendientes */}
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                ⏳ Transferencias Pendientes
+                <span className="bg-white text-red-600 text-sm font-bold px-2 py-1 rounded-full">
+                  {transferenciasPendientes.length}
+                </span>
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">ID</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Banco</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Cuenta</th>
+                    <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Monto</th>
+                    <th className="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {transferenciasPendientes.map((d) => (
+                    <tr key={d.devolucion_id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                        #{d.devolucion_id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {new Date(d.fecha_devolucion).toLocaleDateString('es-CL')}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="font-medium text-gray-900">{d.transferencia_nombre}</div>
+                        <div className="text-xs text-gray-500">RUT: {d.transferencia_rut}</div>
+                        {d.transferencia_email && (
+                          <div className="text-xs text-gray-500">📧 {d.transferencia_email}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="font-medium text-gray-900">{d.transferencia_banco}</div>
+                        <div className="text-xs text-gray-500 capitalize">
+                          {d.transferencia_tipo_cuenta?.replace('_', ' ')}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                        {d.transferencia_numero_cuenta}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-green-600">
+                        ${(d.monto_reintegro || d.monto_diferencia || 0).toLocaleString('es-CL')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <button
+                          onClick={() => marcarTransferencia(d.devolucion_id, true)}
+                          disabled={actualizando === d.devolucion_id}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {actualizando === d.devolucion_id ? (
+                            <>⏳ Procesando...</>
+                          ) : (
+                            <>✓ Marcar como Transferido</>
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {transferenciasPendientes.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center">
+                        <div className="text-gray-400 text-4xl mb-2">✅</div>
+                        <p className="text-gray-500 font-medium">No hay transferencias pendientes</p>
+                        <p className="text-gray-400 text-sm mt-1">
+                          Todas las transferencias han sido realizadas
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Transferencias Realizadas */}
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                ✅ Transferencias Realizadas
+                <span className="bg-white text-green-600 text-sm font-bold px-2 py-1 rounded-full">
+                  {transferenciasRealizadas.length}
+                </span>
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">ID</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Fecha Dev.</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Banco</th>
+                    <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Monto</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Fecha Transf.</th>
+                    <th className="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {transferenciasRealizadas.map((d) => (
+                    <tr key={d.devolucion_id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                        #{d.devolucion_id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {new Date(d.fecha_devolucion).toLocaleDateString('es-CL')}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="font-medium text-gray-900">{d.transferencia_nombre}</div>
+                        <div className="text-xs text-gray-500">RUT: {d.transferencia_rut}</div>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="font-medium text-gray-900">{d.transferencia_banco}</div>
+                        <div className="text-xs text-gray-500">{d.transferencia_numero_cuenta}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-gray-900">
+                        ${(d.monto_reintegro || d.monto_diferencia || 0).toLocaleString('es-CL')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {d.fecha_transferencia ? new Date(d.fecha_transferencia).toLocaleDateString('es-CL') : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <button
+                          onClick={() => marcarTransferencia(d.devolucion_id, false)}
+                          disabled={actualizando === d.devolucion_id}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white text-xs font-medium rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {actualizando === d.devolucion_id ? (
+                            <>⏳ Procesando...</>
+                          ) : (
+                            <>↩️ Marcar como Pendiente</>
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {transferenciasRealizadas.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center">
+                        <div className="text-gray-400 text-4xl mb-2">📋</div>
+                        <p className="text-gray-500 font-medium">No hay transferencias realizadas</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

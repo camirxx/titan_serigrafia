@@ -249,7 +249,7 @@ export default function DevolucionesClient() {
       tipo_prenda: detalle.tipo_prenda || 'Sin tipo',
       color: detalle.color,
       talla: detalle.talla || '—',
-      cantidad_vendida: detalle.cantidad_disponible, // ⭐ Mostrar solo lo disponible
+      cantidad_vendida: detalle.cantidad_disponible, //  Mostrar solo lo disponible
       precio_unitario: detalle.precio_unitario,
       fecha_venta: detalle.fecha,
       metodo_pago: detalle.metodo_pago as MetodoPago,
@@ -368,6 +368,13 @@ export default function DevolucionesClient() {
       return;
     }
 
+    console.log('📝 [CLIENT] Iniciando creación de devolución:', {
+      tipo,
+      metodo,
+      itemsSeleccionados: itemsSeleccionados.length,
+      usuarioId
+    });
+
     setLoading(true);
     try {
       const porVenta = new Map<number, typeof itemsSeleccionados>();
@@ -430,19 +437,23 @@ export default function DevolucionesClient() {
           }
         }
 
-      console.log('Payload enviado a RPC:', payload);
+      console.log('🚀 [CLIENT] Enviando payload a RPC:', payload);
 
       const { data, error: rpcError } = await supabase.rpc('crear_devolucion_json', payload);
 
+      console.log('📥 [CLIENT] Respuesta RPC:', { data, error: rpcError });
+
       if (rpcError) {
-        console.error('Error RPC completo:', rpcError);
+        console.error('❌ [CLIENT] Error RPC completo:', rpcError);
         throw new Error(`Error en RPC: ${rpcError.message} (${rpcError.code})`);
       }
 
       if (!data) {
+        console.error('❌ [CLIENT] RPC no devolvió ID de devolución');
         throw new Error('La función RPC no devolvió un ID de devolución');
       }
 
+      console.log('✅ [CLIENT] Devolución creada con ID:', data);
       resultados.push(data);
       
       // Enviar correo si es transferencia
@@ -450,9 +461,8 @@ export default function DevolucionesClient() {
                              (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia');
       
       if (esTransferencia && datosTransferencia.rut && datosTransferencia.nombre) {
+        console.log('📧 [CLIENT] Enviando correo de transferencia para devolución:', data, '- Monto:', metodo === 'reintegro_efectivo' ? montoReintegro : montoDiferencia);
         try {
-          const montoTransferencia = metodo === 'reintegro_efectivo' ? montoReintegro : montoDiferencia;
-          
           await fetch('/api/send-transfer-email', {
             method: 'POST',
             headers: {
@@ -466,13 +476,13 @@ export default function DevolucionesClient() {
               tipoCuenta: datosTransferencia.tipoCuenta,
               numeroCuenta: datosTransferencia.numeroCuenta,
               email: datosTransferencia.email,
-              monto: montoTransferencia,
+              monto: metodo === 'reintegro_efectivo' ? montoReintegro : montoDiferencia,
               tipo: tipo,
             }),
           });
-          console.log('Correo de transferencia enviado');
+          console.log('✅ [CLIENT] Correo de transferencia enviado exitosamente');
         } catch (emailError) {
-          console.error('Error al enviar correo:', emailError);
+          console.error('❌ [CLIENT] Error al enviar correo:', emailError);
           // No fallar la operación si el correo falla
         }
       }
