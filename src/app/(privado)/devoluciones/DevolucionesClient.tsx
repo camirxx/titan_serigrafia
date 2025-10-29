@@ -203,97 +203,72 @@ export default function DevolucionesClient() {
   };
 
   const buscarProductos = async () => {
-    setError(null);
-    setOk(null);
-    setLoading(true);
+  setError(null);
+  setOk(null);
+  setLoading(true);
 
-    try {
-      // Construir query para detalle_ventas con joins
-      let query = supabase
-        .from('detalle_ventas')
-        .select(`
-          id,
-          venta_id,
-          variante_id,
-          cantidad,
-          precio_unitario,
-          variantes!inner(
-            id,
-            talla,
-            producto_id,
-            productos!inner(
-              id,
-              disenos!inner(nombre),
-              tipos_prenda!inner(nombre),
-              colores(nombre)
-            )
-          ),
-          ventas!inner(
-            id,
-            fecha,
-            metodo_pago,
-            numero_boleta
-          )
-        `)
-        .order('venta_id', { ascending: false })
-        .limit(100);
+  try {
+    // Usar la nueva vista que calcula cantidades disponibles
+    let query = supabase
+      .from('v_venta_detalle_devolucion')
+      .select('*');
 
-      // Aplicar filtros
-      if (disenoFiltro) {
-        query = query.ilike('variantes.productos.disenos.nombre', `%${disenoFiltro}%`);
-      }
-      if (tipoPrendaFiltro) {
-        query = query.ilike('variantes.productos.tipos_prenda.nombre', `%${tipoPrendaFiltro}%`);
-      }
-      if (colorFiltro) {
-        query = query.ilike('variantes.productos.colores.nombre', `%${colorFiltro}%`);
-      }
-
-      const { data: detalles, error: errDetalles } = await query;
-
-      if (errDetalles) {
-        console.error('Error en query:', errDetalles);
-        throw errDetalles;
-      }
-
-      if (!detalles || detalles.length === 0) {
-        setProductosVendidos([]);
-        setError('No se encontraron productos vendidos con esos criterios.');
-        return;
-      }
-
-      // Transformar los datos
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const productosConInfo: ProductoVendido[] = detalles.map((detalle: any) => ({
-        detalle_venta_id: detalle.id,
-        venta_id: detalle.venta_id,
-        variante_id: detalle.variante_id,
-        producto_id: detalle.variantes.producto_id,
-        diseno: detalle.variantes.productos.disenos.nombre || 'Sin diseño',
-        tipo_prenda: detalle.variantes.productos.tipos_prenda.nombre || 'Sin tipo',
-        color: detalle.variantes.productos.colores?.nombre || null,
-        talla: detalle.variantes.talla || '—',
-        cantidad_vendida: detalle.cantidad,
-        precio_unitario: detalle.precio_unitario,
-        fecha_venta: detalle.ventas.fecha,
-        metodo_pago: detalle.ventas.metodo_pago as MetodoPago,
-        numero_boleta: detalle.ventas.numero_boleta,
-      }));
-
-      setProductosVendidos(productosConInfo);
-
-      const initSel: CantidadesSeleccion = {};
-      productosConInfo.forEach((p) => (initSel[p.detalle_venta_id] = 0));
-      setCantSel(initSel);
-    } catch (err) {
-      console.error('Error completo:', err);
-      setError(err instanceof Error ? err.message : 'Error en la búsqueda');
-      setProductosVendidos([]);
-    } finally {
-      setLoading(false);
+    // Aplicar filtros
+    if (disenoFiltro) {
+      query = query.ilike('diseno', `%${disenoFiltro}%`);
     }
-  };
+    if (tipoPrendaFiltro) {
+      query = query.ilike('tipo_prenda', `%${tipoPrendaFiltro}%`);
+    }
+    if (colorFiltro) {
+      query = query.ilike('color', `%${colorFiltro}%`);
+    }
 
+    const { data: detalles, error: errDetalles } = await query
+      .order('venta_id', { ascending: false })
+      .limit(100);
+
+    if (errDetalles) {
+      console.error('Error en query:', errDetalles);
+      throw errDetalles;
+    }
+
+    if (!detalles || detalles.length === 0) {
+      setProductosVendidos([]);
+      setError('No se encontraron productos vendidos con esos criterios o todos ya fueron devueltos.');
+      return;
+    }
+
+    // Mapear directamente desde la vista
+    const productosConInfo: ProductoVendido[] = detalles.map((detalle: any) => ({
+      detalle_venta_id: detalle.detalle_venta_id,
+      venta_id: detalle.venta_id,
+      variante_id: detalle.variante_id,
+      producto_id: detalle.producto_id,
+      diseno: detalle.diseno || 'Sin diseño',
+      tipo_prenda: detalle.tipo_prenda || 'Sin tipo',
+      color: detalle.color,
+      talla: detalle.talla || '—',
+      cantidad_vendida: detalle.cantidad_disponible, // ⭐ Mostrar solo lo disponible
+      precio_unitario: detalle.precio_unitario,
+      fecha_venta: detalle.fecha,
+      metodo_pago: detalle.metodo_pago as MetodoPago,
+      numero_boleta: detalle.numero_boleta,
+    }));
+
+    setProductosVendidos(productosConInfo);
+
+    const initSel: CantidadesSeleccion = {};
+    productosConInfo.forEach((p) => (initSel[p.detalle_venta_id] = 0));
+    setCantSel(initSel);
+  } catch (err) {
+    console.error('Error completo:', err);
+    setError(err instanceof Error ? err.message : 'Error en la búsqueda');
+    setProductosVendidos([]);
+  } finally {
+    setLoading(false);
+  }
+};
   const totalSeleccionado = useMemo(() => {
     return productosVendidos.reduce((acc, p) => {
       const q = Number(cantSel[p.detalle_venta_id] ?? 0);
