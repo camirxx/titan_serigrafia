@@ -266,20 +266,31 @@ export default async function TrabajadoresPage() {
     .order("created_at", { ascending: false });
   
   console.log('=== DEBUG TRABAJADORES ===');
+  console.log('Error en query:', error);
   console.log('Total usuarios encontrados:', data?.length || 0);
-  console.log('Usuarios por rol:', data?.reduce((acc: Record<string, number>, u) => {
-    const rol = u.rol || 'sin_rol';
-    acc[rol] = (acc[rol] || 0) + 1;
-    return acc;
-  }, {}));
-  console.log('Primeros 3 usuarios:', data?.slice(0, 3).map(u => ({ 
-    email: u.email, 
-    rol: u.rol, 
-    nombre: u.nombre 
-  })));
+  console.log('Data completa:', JSON.stringify(data, null, 2));
+  
+  if (data && data.length > 0) {
+    console.log('Usuarios por rol:', data.reduce((acc: Record<string, number>, u: UsuarioRow) => {
+      const rol = u.rol || 'sin_rol';
+      acc[rol] = (acc[rol] || 0) + 1;
+      return acc;
+    }, {}));
+    console.log('Primeros 3 usuarios:', data.slice(0, 3).map((u: UsuarioRow) => ({ 
+      email: u.email, 
+      rol: u.rol, 
+      nombre: u.nombre 
+    })));
+  } else {
+    console.log('⚠️ NO SE ENCONTRARON USUARIOS EN LA BASE DE DATOS');
+    console.log('Verificar que:');
+    console.log('1. La tabla "usuarios" existe');
+    console.log('2. Hay usuarios registrados en la tabla');
+    console.log('3. Los permisos RLS permiten leer la tabla');
+  }
 
   if (error) {
-    console.error("fetch usuarios error:", error.message);
+    console.error("❌ ERROR fetch usuarios:", error);
   }
 
   // Obtener lista de tiendas para el selector

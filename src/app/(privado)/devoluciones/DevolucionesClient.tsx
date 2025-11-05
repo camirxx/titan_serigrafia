@@ -240,21 +240,38 @@ export default function DevolucionesClient() {
     }
 
     // Mapear directamente desde la vista
-    const productosConInfo: ProductoVendido[] = detalles.map((detalle: any) => ({
-      detalle_venta_id: detalle.detalle_venta_id,
-      venta_id: detalle.venta_id,
-      variante_id: detalle.variante_id,
-      producto_id: detalle.producto_id,
-      diseno: detalle.diseno || 'Sin diseño',
-      tipo_prenda: detalle.tipo_prenda || 'Sin tipo',
-      color: detalle.color,
-      talla: detalle.talla || '—',
-      cantidad_vendida: detalle.cantidad_disponible, //  Mostrar solo lo disponible
-      precio_unitario: detalle.precio_unitario,
-      fecha_venta: detalle.fecha,
-      metodo_pago: detalle.metodo_pago as MetodoPago,
-      numero_boleta: detalle.numero_boleta,
-    }));
+    const productosConInfo: ProductoVendido[] = detalles.map((detalle: Record<string, unknown>) => {
+      const det = detalle as {
+        detalle_venta_id: number;
+        venta_id: number;
+        variante_id: number;
+        producto_id: number;
+        diseno: string;
+        tipo_prenda: string;
+        color: string | null;
+        talla: string;
+        cantidad_disponible: number;
+        precio_unitario: number;
+        fecha: string;
+        metodo_pago: MetodoPago;
+        numero_boleta: string | null;
+      };
+      return {
+        detalle_venta_id: det.detalle_venta_id,
+        venta_id: det.venta_id,
+        variante_id: det.variante_id,
+        producto_id: det.producto_id,
+        diseno: det.diseno || 'Sin diseño',
+        tipo_prenda: det.tipo_prenda || 'Sin tipo',
+        color: det.color,
+        talla: det.talla || '—',
+        cantidad_vendida: det.cantidad_disponible, //  Mostrar solo lo disponible
+        precio_unitario: det.precio_unitario,
+        fecha_venta: det.fecha,
+        metodo_pago: det.metodo_pago,
+        numero_boleta: det.numero_boleta,
+      };
+    });
 
     setProductosVendidos(productosConInfo);
 
