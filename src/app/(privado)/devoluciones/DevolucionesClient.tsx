@@ -240,7 +240,7 @@ export default function DevolucionesClient() {
     }
 
     // Mapear directamente desde la vista
-    const productosConInfo: ProductoVendido[] = detalles.map((detalle: Record<string, unknown>) => {
+    const productosConInfo: ProductoVendido[] = (detalles as Record<string, unknown>[]).map((detalle: Record<string, unknown>) => {
       const det = detalle as {
         detalle_venta_id: number;
         venta_id: number;

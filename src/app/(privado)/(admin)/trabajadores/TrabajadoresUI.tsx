@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useTransition } from 'react';
-import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus, Eye, EyeOff, Edit2, Trash2 } from 'lucide-react';
+import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 type Rol = "admin" | "vendedor" | "desarrollador";
