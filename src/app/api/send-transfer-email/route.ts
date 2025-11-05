@@ -15,8 +15,11 @@ export async function POST(request: NextRequest) {
       tipo,
     } = body;
 
+    console.log('🚀 [SEND-TRANSFER-EMAIL] Recibida solicitud para devolución:', devolucionId);
+
     // Validar datos requeridos
     if (!rut || !nombre || !banco || !numeroCuenta || !monto) {
+      console.log('❌ [SEND-TRANSFER-EMAIL] Datos faltantes:', { rut: !!rut, nombre: !!nombre, banco: !!banco, numeroCuenta: !!numeroCuenta, monto: !!monto });
       return NextResponse.json(
         { error: 'Faltan datos requeridos para la transferencia' },
         { status: 400 }
@@ -112,15 +115,25 @@ export async function POST(request: NextRequest) {
     // Aquí usaremos Resend para enviar el correo
     // Necesitarás instalar: npm install resend
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
-    
+
     if (!RESEND_API_KEY) {
-      console.error('RESEND_API_KEY no está configurada');
-      // Por ahora, solo logueamos el error pero no fallamos la operación
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Devolución registrada (correo pendiente de configuración)' 
-      });
+      console.log('❌ [SEND-TRANSFER-EMAIL] RESEND_API_KEY no está configurada');
+      return NextResponse.json(
+        { error: 'RESEND_API_KEY no está configurada' },
+        { status: 500 }
+      );
     }
+
+    // Verificar formato de API key
+    if (!RESEND_API_KEY.startsWith('re_')) {
+      console.log('❌ [SEND-TRANSFER-EMAIL] Formato de API key inválido');
+      return NextResponse.json(
+        { error: 'Formato de API key inválido' },
+        { status: 500 }
+      );
+    }
+
+    console.log('✅ [SEND-TRANSFER-EMAIL] API Key configurada correctamente');
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -129,21 +142,24 @@ export async function POST(request: NextRequest) {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: 'Titan Serigrafía <notificaciones@titan-serigrafia.com>',
-        to: ['dylanwtf16@gmail.com'],
-        subject: `🏦 Nueva Transferencia Pendiente - Devolución #${devolucionId}`,
+        from: 'Titan Serigrafía <delivered@resend.dev>',
+        to: ['dy.soto04@gmail.com'],
+        subject: `🏦 [TITAN SERIGRAFIA] Nueva Transferencia Pendiente - Devolución #${devolucionId}`,
         html: emailContent,
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Error al enviar correo:', errorData);
+      console.error('❌ [SEND-TRANSFER-EMAIL] Error al enviar correo:', errorData);
       return NextResponse.json({ 
         success: true, 
         message: 'Devolución registrada (error al enviar correo)' 
       });
     }
+
+    const responseData = await response.json();
+    console.log('✅ [SEND-TRANSFER-EMAIL] Correo enviado exitosamente para devolución:', devolucionId, '- ID Email:', responseData.id);
 
     return NextResponse.json({ 
       success: true, 

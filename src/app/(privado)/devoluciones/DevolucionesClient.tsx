@@ -203,119 +203,72 @@ export default function DevolucionesClient() {
   };
 
   const buscarProductos = async () => {
-    setError(null);
-    setOk(null);
-    setLoading(true);
+  setError(null);
+  setOk(null);
+  setLoading(true);
 
-    try {
-      // Construir query para detalle_ventas con joins
-      let query = supabase
-        .from('detalle_ventas')
-        .select(`
-          id,
-          venta_id,
-          variante_id,
-          cantidad,
-          precio_unitario,
-          variantes!inner(
-            id,
-            talla,
-            producto_id,
-            productos!inner(
-              id,
-              disenos!inner(nombre),
-              tipos_prenda!inner(nombre),
-              colores(nombre)
-            )
-          ),
-          ventas!inner(
-            id,
-            fecha,
-            metodo_pago,
-            numero_boleta
-          )
-        `)
-        .order('venta_id', { ascending: false })
-        .limit(100);
+  try {
+    // Usar la nueva vista que calcula cantidades disponibles
+    let query = supabase
+      .from('v_venta_detalle_devolucion')
+      .select('*');
 
-      // Aplicar filtros
-      if (disenoFiltro) {
-        query = query.ilike('variantes.productos.disenos.nombre', `%${disenoFiltro}%`);
-      }
-      if (tipoPrendaFiltro) {
-        query = query.ilike('variantes.productos.tipos_prenda.nombre', `%${tipoPrendaFiltro}%`);
-      }
-      if (colorFiltro) {
-        query = query.ilike('variantes.productos.colores.nombre', `%${colorFiltro}%`);
-      }
-
-      const { data: detalles, error: errDetalles } = await query;
-
-      if (errDetalles) {
-        console.error('Error en query:', errDetalles);
-        throw errDetalles;
-      }
-
-      if (!detalles || detalles.length === 0) {
-        setProductosVendidos([]);
-        setError('No se encontraron productos vendidos con esos criterios.');
-        return;
-      }
-
-      // Transformar los datos
-      const productosConInfo: ProductoVendido[] = detalles.map((detalle: Record<string, unknown>) => {
-        const det = detalle as {
-          id: number;
-          venta_id: number;
-          variante_id: number;
-          cantidad: number;
-          precio_unitario: number;
-          variantes: {
-            talla: string;
-            producto_id: number;
-            productos: {
-              disenos: { nombre: string };
-              tipos_prenda: { nombre: string };
-              colores?: { nombre?: string };
-            };
-          };
-          ventas: {
-            fecha: string;
-            metodo_pago: MetodoPago;
-            numero_boleta: string | null;
-          };
-        };
-        return {
-          detalle_venta_id: det.id,
-          venta_id: det.venta_id,
-          variante_id: det.variante_id,
-          producto_id: det.variantes.producto_id,
-          diseno: det.variantes.productos.disenos.nombre || 'Sin diseño',
-          tipo_prenda: det.variantes.productos.tipos_prenda.nombre || 'Sin tipo',
-          color: det.variantes.productos.colores?.nombre || null,
-          talla: det.variantes.talla || '—',
-          cantidad_vendida: det.cantidad,
-          precio_unitario: det.precio_unitario,
-          fecha_venta: det.ventas.fecha,
-          metodo_pago: det.ventas.metodo_pago,
-          numero_boleta: det.ventas.numero_boleta,
-        };
-      });
-
-      setProductosVendidos(productosConInfo);
-
-      const initSel: CantidadesSeleccion = {};
-      productosConInfo.forEach((p) => (initSel[p.detalle_venta_id] = 0));
-      setCantSel(initSel);
-    } catch (err) {
-      console.error('Error completo:', err);
-      setError(err instanceof Error ? err.message : 'Error en la búsqueda');
-      setProductosVendidos([]);
-    } finally {
-      setLoading(false);
+    // Aplicar filtros
+    if (disenoFiltro) {
+      query = query.ilike('diseno', `%${disenoFiltro}%`);
     }
-  };
+    if (tipoPrendaFiltro) {
+      query = query.ilike('tipo_prenda', `%${tipoPrendaFiltro}%`);
+    }
+    if (colorFiltro) {
+      query = query.ilike('color', `%${colorFiltro}%`);
+    }
 
+    const { data: detalles, error: errDetalles } = await query
+      .order('venta_id', { ascending: false })
+      .limit(100);
+
+    if (errDetalles) {
+      console.error('Error en query:', errDetalles);
+      throw errDetalles;
+    }
+
+    if (!detalles || detalles.length === 0) {
+      setProductosVendidos([]);
+      setError('No se encontraron productos vendidos con esos criterios o todos ya fueron devueltos.');
+      return;
+    }
+
+    // Mapear directamente desde la vista
+    const productosConInfo: ProductoVendido[] = detalles.map((detalle: any) => ({
+      detalle_venta_id: detalle.detalle_venta_id,
+      venta_id: detalle.venta_id,
+      variante_id: detalle.variante_id,
+      producto_id: detalle.producto_id,
+      diseno: detalle.diseno || 'Sin diseño',
+      tipo_prenda: detalle.tipo_prenda || 'Sin tipo',
+      color: detalle.color,
+      talla: detalle.talla || '—',
+      cantidad_vendida: detalle.cantidad_disponible, //  Mostrar solo lo disponible
+      precio_unitario: detalle.precio_unitario,
+      fecha_venta: detalle.fecha,
+      metodo_pago: detalle.metodo_pago as MetodoPago,
+      numero_boleta: detalle.numero_boleta,
+    }));
+
+    setProductosVendidos(productosConInfo);
+
+    const initSel: CantidadesSeleccion = {};
+    productosConInfo.forEach((p) => (initSel[p.detalle_venta_id] = 0));
+    setCantSel(initSel);
+  } catch (err) {
+    console.error('Error completo:', err);
+    setError(err instanceof Error ? err.message : 'Error en la búsqueda');
+    setProductosVendidos([]);
+  } finally {
+    setLoading(false);
+  }
+};
   const totalSeleccionado = useMemo(() => {
     return productosVendidos.reduce((acc, p) => {
       const q = Number(cantSel[p.detalle_venta_id] ?? 0);
@@ -415,6 +368,13 @@ export default function DevolucionesClient() {
       return;
     }
 
+    console.log('📝 [CLIENT] Iniciando creación de devolución:', {
+      tipo,
+      metodo,
+      itemsSeleccionados: itemsSeleccionados.length,
+      usuarioId
+    });
+
     setLoading(true);
     try {
       const porVenta = new Map<number, typeof itemsSeleccionados>();
@@ -477,19 +437,23 @@ export default function DevolucionesClient() {
           }
         }
 
-      console.log('Payload enviado a RPC:', payload);
+      console.log('🚀 [CLIENT] Enviando payload a RPC:', payload);
 
       const { data, error: rpcError } = await supabase.rpc('crear_devolucion_json', payload);
 
+      console.log('📥 [CLIENT] Respuesta RPC:', { data, error: rpcError });
+
       if (rpcError) {
-        console.error('Error RPC completo:', rpcError);
+        console.error('❌ [CLIENT] Error RPC completo:', rpcError);
         throw new Error(`Error en RPC: ${rpcError.message} (${rpcError.code})`);
       }
 
       if (!data) {
+        console.error('❌ [CLIENT] RPC no devolvió ID de devolución');
         throw new Error('La función RPC no devolvió un ID de devolución');
       }
 
+      console.log('✅ [CLIENT] Devolución creada con ID:', data);
       resultados.push(data);
       
       // Enviar correo si es transferencia
@@ -497,9 +461,8 @@ export default function DevolucionesClient() {
                              (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia');
       
       if (esTransferencia && datosTransferencia.rut && datosTransferencia.nombre) {
+        console.log('📧 [CLIENT] Enviando correo de transferencia para devolución:', data, '- Monto:', metodo === 'reintegro_efectivo' ? montoReintegro : montoDiferencia);
         try {
-          const montoTransferencia = metodo === 'reintegro_efectivo' ? montoReintegro : montoDiferencia;
-          
           await fetch('/api/send-transfer-email', {
             method: 'POST',
             headers: {
@@ -513,13 +476,13 @@ export default function DevolucionesClient() {
               tipoCuenta: datosTransferencia.tipoCuenta,
               numeroCuenta: datosTransferencia.numeroCuenta,
               email: datosTransferencia.email,
-              monto: montoTransferencia,
+              monto: metodo === 'reintegro_efectivo' ? montoReintegro : montoDiferencia,
               tipo: tipo,
             }),
           });
-          console.log('Correo de transferencia enviado');
+          console.log('✅ [CLIENT] Correo de transferencia enviado exitosamente');
         } catch (emailError) {
-          console.error('Error al enviar correo:', emailError);
+          console.error('❌ [CLIENT] Error al enviar correo:', emailError);
           // No fallar la operación si el correo falla
         }
       }
