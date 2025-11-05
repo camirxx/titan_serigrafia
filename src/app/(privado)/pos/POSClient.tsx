@@ -543,7 +543,7 @@ const cargarVentasDelDia = async () => {
 
   if (paso === 0) {
     return (
-      <div className="min-h-screen bg-transparent p-6">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6">
         <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
 
         <div className="grid md:grid-cols-3 gap-6">
@@ -650,7 +650,7 @@ const cargarVentasDelDia = async () => {
 
   if (paso === 2) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6">
         <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
         {error && (
           <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-lg animate-pulse max-w-3xl mx-auto mb-6">
@@ -661,7 +661,7 @@ const cargarVentasDelDia = async () => {
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-2xl p-8 max-w-3xl mx-auto border border-gray-100">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-8 max-w-3xl mx-auto">
           <div className="flex items-center gap-3 mb-8">
             <button onClick={() => setPaso(1)} className="p-2 hover:bg-indigo-50 rounded-xl transition">
               <ChevronLeft className="w-6 h-6 text-indigo-600" />
@@ -729,7 +729,7 @@ const cargarVentasDelDia = async () => {
     const accion = paso === 1 ? seleccionarTipo : paso === 3 ? seleccionarColor : () => {}
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6">
         <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
         {error && (
           <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-lg animate-pulse max-w-4xl mx-auto mb-6">
@@ -740,7 +740,7 @@ const cargarVentasDelDia = async () => {
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-2xl p-8 max-w-4xl mx-auto border border-gray-100">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-8 max-w-4xl mx-auto">
           <div className="flex items-center gap-3 mb-8">
             <button onClick={() => setPaso(paso === 1 ? 0 : paso - 1)} className="p-2 hover:bg-indigo-50 rounded-xl transition">
               <ChevronLeft className="w-6 h-6 text-indigo-600" />
@@ -807,7 +807,7 @@ const cargarVentasDelDia = async () => {
 
   if (paso === 5) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6">
         <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
         {error && (
           <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-lg animate-pulse max-w-3xl mx-auto mb-6">
@@ -818,7 +818,7 @@ const cargarVentasDelDia = async () => {
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-2xl p-8 max-w-3xl mx-auto border border-gray-100">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-8 max-w-3xl mx-auto">
           <div className="flex items-center gap-3 mb-8">
             <button onClick={() => setPaso(4)} className="p-2 hover:bg-indigo-50 rounded-xl transition">
               <ChevronLeft className="w-6 h-6 text-indigo-600" />
@@ -910,10 +910,10 @@ const cargarVentasDelDia = async () => {
     const faltante = precioNum - totalBilletes
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6">
         <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
 
-        <div className="bg-white rounded-xl shadow-2xl p-8 max-w-3xl mx-auto border border-gray-100">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-8 max-w-3xl mx-auto">
           <div className="flex items-center gap-3 mb-8">
             <button onClick={() => setPaso(5)} className="p-2 hover:bg-indigo-50 rounded-xl transition">
               <ChevronLeft className="w-6 h-6 text-indigo-600" />

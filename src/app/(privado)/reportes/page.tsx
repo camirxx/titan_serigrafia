@@ -39,13 +39,7 @@ const tiles = [
     cta: 'Ver tendencias',
     color: 'green'
   },
-  { 
-    slug: 'exportes', 
-    title: '📊 Reportes y Exportación', 
-    desc: 'Descarga CSV/Excel con ventas, stock y tendencias.', 
-    cta: 'Generar reportes',
-    color: 'indigo'
-  },
+
 ];
 
 const colorClasses = {
@@ -125,33 +119,7 @@ export default function ReportesHubPage() {
           ))}
         </div>
 
-        {/* Información adicional */}
-        <div className="mt-8 rounded-2xl bg-white/10 backdrop-blur p-6 text-white border border-white/20">
-          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <span>ℹ️</span>
-            Sobre los Reportes
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-white/90">
-            <div>
-              <h3 className="font-medium text-white mb-2">📊 Reportes Disponibles</h3>
-              <ul className="space-y-1 text-white/80">
-                <li>• Análisis de ventas por producto y categorías</li>
-                <li>• Preferencias de tallas y colores</li>
-                <li>• Seguimiento de devoluciones y cambios</li>
-                <li>• Control de inventario y alertas</li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-medium text-white mb-2">💡 Características</h3>
-              <ul className="space-y-1 text-white/80">
-                <li>• Filtros por fecha y categorías</li>
-                <li>• Gráficos interactivos en tiempo real</li>
-                <li>• Exportación a CSV y Excel</li>
-                <li>• Comparativas y tendencias</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+       
     </div>
   );
 }

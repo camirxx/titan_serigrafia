@@ -82,9 +82,9 @@ export async function middleware(req: NextRequest) {
     url.pathname.startsWith("/images") ||
     url.pathname.startsWith("/public");
 
-  // Sin usuario → redirigir a acceso restringido
+  // Sin usuario → redirigir a login
   if (!user && !isPublic) {
-    const redirectUrl = new URL("/acceso-restringido", url);
+    const redirectUrl = new URL("/login", url);
     redirectUrl.searchParams.set("next", url.pathname);
     return NextResponse.redirect(redirectUrl);
   }

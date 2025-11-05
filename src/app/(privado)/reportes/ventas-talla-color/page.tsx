@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell, PieChart, Pie, Legend
 } from 'recharts';
+import { exportToCSV, exportToExcel, prepareDataForExport } from '@/lib/exportUtils';
 
 type Row = {
   talla: string;
@@ -141,7 +142,35 @@ export default function VentasTallaColorPage() {
   const chartData = modo === 'talla' ? dataPorTalla : dataPorColor;
 
   // --- Export CSV ---
-  const exportCSV = () => {
+  const handleExportCSV = () => {
+    const columnsMap = modo === 'talla' ? {
+      talla: 'Talla',
+      total_unidades: 'Unidades Vendidas',
+      total_monto: 'Monto Total ($)'
+    } : {
+      color: 'Color',
+      total_unidades: 'Unidades Vendidas',
+      total_monto: 'Monto Total ($)'
+    };
+    const preparedData = prepareDataForExport(rows, columnsMap);
+    exportToCSV(preparedData, `ventas_${modo}_${new Date().toISOString().split('T')[0]}`);
+  };
+
+  const handleExportExcel = () => {
+    const columnsMap = modo === 'talla' ? {
+      talla: 'Talla',
+      total_unidades: 'Unidades Vendidas',
+      total_monto: 'Monto Total ($)'
+    } : {
+      color: 'Color',
+      total_unidades: 'Unidades Vendidas',
+      total_monto: 'Monto Total ($)'
+    };
+    const preparedData = prepareDataForExport(rows, columnsMap);
+    exportToExcel(preparedData, `ventas_${modo}_${new Date().toISOString().split('T')[0]}`);
+  };
+
+  const exportCSV_OLD = () => {
     const header = ['talla', 'color', 'unidades', 'fecha'];
     const lines = rows.map((r) =>
       [r.talla, r.color, r.unidades, new Date(r.fecha).toLocaleDateString()].join(','),
@@ -156,12 +185,16 @@ export default function VentasTallaColorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
-        {/* Header con gradiente */}
-        <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+      {/* Header con gradiente */}
+      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-6 text-white">
+        <div className="flex items-center gap-3">
+          <button onClick={() => window.history.back()} className="bg-white/20 backdrop-blur-sm p-3 rounded-xl hover:bg-white/30 transition">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
@@ -211,11 +244,18 @@ export default function VentasTallaColorPage() {
                 ) : '🔍 Filtrar'}
               </button>
               <button
-                onClick={exportCSV}
-                className="flex-1 h-11 rounded-lg border-2 border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 hover:border-gray-400 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleExportCSV}
+                className="flex-1 h-11 rounded-lg border-2 border-indigo-300 bg-white text-indigo-700 font-semibold hover:bg-indigo-50 hover:border-indigo-400 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!rows.length}
               >
-                📊 Exportar CSV
+                📄 CSV
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="flex-1 h-11 rounded-lg border-2 border-green-300 bg-white text-green-700 font-semibold hover:bg-green-50 hover:border-green-400 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!rows.length}
+              >
+                📊 Excel
               </button>
             </div>
             <div className="md:col-span-2 flex items-end">
@@ -265,7 +305,7 @@ export default function VentasTallaColorPage() {
             </h2>
             <div className="bg-gradient-to-r from-indigo-100 to-purple-100 px-4 py-2 rounded-lg">
               <span className="text-sm font-semibold text-indigo-700">
-                Total: {chartData.reduce((sum, item) => sum + item.unidades, 0)} unidades
+                Total: {chartData.reduce((sum: number, item: { unidades: number }) => sum + item.unidades, 0)} unidades
               </span>
             </div>
           </div>
@@ -287,7 +327,7 @@ export default function VentasTallaColorPage() {
                     </linearGradient>
                   ))}
                   {/* Gradientes para colores reales (modo color) */}
-                  {modo === 'color' && chartData.map((entry, index) => {
+                  {modo === 'color' && chartData.map((entry: { etiqueta: string }, index: number) => {
                     const colorHex = getColorHex(entry.etiqueta);
                     return (
                       <linearGradient key={`color-gradient-${index}`} id={`color-gradient-${index}`} x1="0" y1="0" x2="1" y2="0">
@@ -330,7 +370,7 @@ export default function VentasTallaColorPage() {
                   animationDuration={1000}
                   animationBegin={0}
                 >
-                  {chartData.map((entry, index) => {
+                  {chartData.map((entry: { etiqueta: string }, index: number) => {
                     // Si estamos en modo color, usar el color real; si no, usar la paleta genérica
                     const fillColor = modo === 'color' 
                       ? `url(#color-gradient-${index})`
@@ -423,7 +463,6 @@ export default function VentasTallaColorPage() {
             </table>
           </div>
         </div>
-      </div>
     </div>
   );
 }

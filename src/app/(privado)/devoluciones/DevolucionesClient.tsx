@@ -138,17 +138,17 @@ export default function DevolucionesClient() {
         `).order('disenos(nombre)'),
       ]);
 
-      setTiposPrenda(tipos?.map((t) => t.nombre) ?? []);
-      setColores(cols?.map((c) => c.nombre) ?? []);
+      setTiposPrenda(tipos?.map((t: Record<string, string>) => t.nombre) ?? []);
+      setColores(cols?.map((c: Record<string, string>) => c.nombre) ?? []);
 
       // Crear un mapa de diseños por tipo de prenda
       const disenosPorTipoMap: Record<string, Set<string>> = {};
       const todosDisenos = new Set<string>();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      productos?.forEach((producto: any) => {
-        const diseno = producto.disenos?.nombre;
-        const tipoPrenda = producto.tipos_prenda?.nombre;
+      productos?.forEach((producto: Record<string, unknown>) => {
+        const prod = producto as { disenos?: { nombre?: string }; tipos_prenda?: { nombre?: string } };
+        const diseno = prod.disenos?.nombre;
+        const tipoPrenda = prod.tipos_prenda?.nombre;
         
         if (diseno && tipoPrenda) {
           todosDisenos.add(diseno);
@@ -263,22 +263,44 @@ export default function DevolucionesClient() {
       }
 
       // Transformar los datos
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const productosConInfo: ProductoVendido[] = detalles.map((detalle: any) => ({
-        detalle_venta_id: detalle.id,
-        venta_id: detalle.venta_id,
-        variante_id: detalle.variante_id,
-        producto_id: detalle.variantes.producto_id,
-        diseno: detalle.variantes.productos.disenos.nombre || 'Sin diseño',
-        tipo_prenda: detalle.variantes.productos.tipos_prenda.nombre || 'Sin tipo',
-        color: detalle.variantes.productos.colores?.nombre || null,
-        talla: detalle.variantes.talla || '—',
-        cantidad_vendida: detalle.cantidad,
-        precio_unitario: detalle.precio_unitario,
-        fecha_venta: detalle.ventas.fecha,
-        metodo_pago: detalle.ventas.metodo_pago as MetodoPago,
-        numero_boleta: detalle.ventas.numero_boleta,
-      }));
+      const productosConInfo: ProductoVendido[] = detalles.map((detalle: Record<string, unknown>) => {
+        const det = detalle as {
+          id: number;
+          venta_id: number;
+          variante_id: number;
+          cantidad: number;
+          precio_unitario: number;
+          variantes: {
+            talla: string;
+            producto_id: number;
+            productos: {
+              disenos: { nombre: string };
+              tipos_prenda: { nombre: string };
+              colores?: { nombre?: string };
+            };
+          };
+          ventas: {
+            fecha: string;
+            metodo_pago: MetodoPago;
+            numero_boleta: string | null;
+          };
+        };
+        return {
+          detalle_venta_id: det.id,
+          venta_id: det.venta_id,
+          variante_id: det.variante_id,
+          producto_id: det.variantes.producto_id,
+          diseno: det.variantes.productos.disenos.nombre || 'Sin diseño',
+          tipo_prenda: det.variantes.productos.tipos_prenda.nombre || 'Sin tipo',
+          color: det.variantes.productos.colores?.nombre || null,
+          talla: det.variantes.talla || '—',
+          cantidad_vendida: det.cantidad,
+          precio_unitario: det.precio_unitario,
+          fecha_venta: det.ventas.fecha,
+          metodo_pago: det.ventas.metodo_pago,
+          numero_boleta: det.ventas.numero_boleta,
+        };
+      });
 
       setProductosVendidos(productosConInfo);
 

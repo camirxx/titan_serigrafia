@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend
 } from 'recharts';
+import { exportToCSV, exportToExcel, prepareDataForExport } from '@/lib/exportUtils';
 
 type Row = {
   fecha: string;
@@ -71,28 +72,36 @@ export default function IngresosTendenciasPage() {
     ventas: r.total_ventas,
   }));
 
-  const exportCSV = () => {
-    const header = ['fecha', 'ingresos', 'ventas'];
-    const lines = rows.map((r) => [
-      new Date(r.fecha).toLocaleDateString(),
-      r.total_ingresos,
-      r.total_ventas,
-    ].join(','));
-    const blob = new Blob([header.join(',') + '\n' + lines.join('\n')], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'ingresos.csv'; a.click();
-    URL.revokeObjectURL(url);
+  const handleExportCSV = () => {
+    const columnsMap = {
+      fecha: 'Fecha',
+      total_ingresos: 'Total Ingresos ($)',
+      total_ventas: 'Total Ventas'
+    };
+    const preparedData = prepareDataForExport(rows, columnsMap);
+    exportToCSV(preparedData, `ingresos_${new Date().toISOString().split('T')[0]}`);
+  };
+
+  const handleExportExcel = () => {
+    const columnsMap = {
+      fecha: 'Fecha',
+      total_ingresos: 'Total Ingresos ($)',
+      total_ventas: 'Total Ventas'
+    };
+    const preparedData = prepareDataForExport(rows, columnsMap);
+    exportToExcel(preparedData, `ingresos_${new Date().toISOString().split('T')[0]}`);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header Espectacular */}
-        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-2xl shadow-2xl p-8 text-white transform hover:scale-[1.01] transition-transform duration-300">
-          <div className="flex items-center gap-4">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+      {/* Header Espectacular */}
+      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-2xl shadow-2xl p-6 text-white">
+        <div className="flex items-center gap-3">
+          <button onClick={() => window.history.back()} className="bg-white/20 backdrop-blur-sm p-3 rounded-xl hover:bg-white/30 transition">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
             <div className="bg-white/20 backdrop-blur-sm p-4 rounded-2xl">
               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -166,16 +175,20 @@ export default function IngresosTendenciasPage() {
                 )}
               </button>
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end gap-2">
               <button
-                onClick={exportCSV}
-                className="w-full py-3 rounded-xl border-2 border-emerald-300 bg-white text-emerald-700 font-bold hover:bg-emerald-50 hover:border-emerald-400 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                onClick={handleExportCSV}
+                className="flex-1 py-3 rounded-xl border-2 border-indigo-300 bg-white text-indigo-700 font-bold hover:bg-indigo-50 hover:border-indigo-400 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 disabled={!rows.length}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Exportar CSV
+                📄 CSV
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="flex-1 py-3 rounded-xl border-2 border-green-300 bg-white text-green-700 font-bold hover:bg-green-50 hover:border-green-400 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                disabled={!rows.length}
+              >
+                📊 Excel
               </button>
             </div>
           </div>
@@ -392,7 +405,6 @@ export default function IngresosTendenciasPage() {
             </table>
           </div>
         </div>
-      </div>
     </div>
   );
 }

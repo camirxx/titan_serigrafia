@@ -136,12 +136,12 @@ export default function InventarioAgrupado() {
 
       // Obtener productos únicos
       const productosUnicos = new Map<number, { diseno: string; tipo_prenda: string; color: string }>();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      todosProductos?.forEach((p: any) => {
-        productosUnicos.set(p.id, {
-          diseno: p.disenos?.nombre || "Sin diseño",
-          tipo_prenda: p.tipos_prenda?.nombre || "Sin tipo",
-          color: p.colores?.nombre || "Sin color"
+      todosProductos?.forEach((p: Record<string, unknown>) => {
+        const producto = p as { id: number; disenos?: { nombre?: string }; tipos_prenda?: { nombre?: string }; colores?: { nombre?: string } };
+        productosUnicos.set(producto.id, {
+          diseno: producto.disenos?.nombre || "Sin diseño",
+          tipo_prenda: producto.tipos_prenda?.nombre || "Sin tipo",
+          color: producto.colores?.nombre || "Sin color"
         });
       });
 
@@ -169,17 +169,19 @@ export default function InventarioAgrupado() {
       }
       
       // Transformar al formato esperado
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const variantesTransformadas = variantes?.map((v: any) => ({
-        variante_id: v.id,
-        producto_id: v.producto_id,
-        talla: v.talla,
-        stock_actual: v.stock_actual,
-        diseno: v.productos?.disenos?.nombre || "Sin diseño",
-        tipo_prenda: v.productos?.tipos_prenda?.nombre || "Sin tipo",
-        color: v.productos?.colores?.nombre || "Sin color",
-        producto_activo: v.productos?.activo || false
-      })) || [];
+      const variantesTransformadas = variantes?.map((v: Record<string, unknown>) => {
+        const variante = v as { id: number; producto_id: number; talla: string; stock_actual: number; productos?: { disenos?: { nombre?: string }; tipos_prenda?: { nombre?: string }; colores?: { nombre?: string }; activo?: boolean } };
+        return {
+          variante_id: variante.id,
+          producto_id: variante.producto_id,
+          talla: variante.talla,
+          stock_actual: variante.stock_actual,
+          diseno: variante.productos?.disenos?.nombre || "Sin diseño",
+          tipo_prenda: variante.productos?.tipos_prenda?.nombre || "Sin tipo",
+          color: variante.productos?.colores?.nombre || "Sin color",
+          producto_activo: variante.productos?.activo || false
+        };
+      }) || [];
       
 
       // 2. Movimientos del período

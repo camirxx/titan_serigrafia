@@ -91,8 +91,8 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
       <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-12">
         <div className="min-h-[400px] rounded-3xl bg-white/95 p-6 shadow-2xl backdrop-blur sm:min-h-[500px] sm:p-12">
           <div
-            className={`mb-8 grid gap-6 sm:mb-12 sm:gap-8 ${
-              isAdmin ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-2'
+            className={`mb-8 grid gap-6 sm:mb-12 sm:gap-8 grid-cols-2 ${
+              isAdmin ? 'lg:grid-cols-3' : ''
             }`}
           >
             {/* VENTAS */}
@@ -114,12 +114,53 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
               className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
-                <div className="text-7xl sm:text-8xl">📋</div>
+                <div className="text-7xl sm:text-8xl">📦</div>
                 <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
                   INVENTARIO
                 </h3>
               </div>
             </button>
+
+            {/* DEVOLUCIONES */}
+            <button
+              onClick={() => handleNavigation('/devoluciones')}
+              className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
+            >
+              <div className="flex h-full flex-col items-center justify-center gap-4">
+                <div className="text-7xl sm:text-8xl">🔄</div>
+                <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
+                  DEVOLUCIONES
+                </h3>
+              </div>
+            </button>
+
+            {/* DASHBOARD */}
+            <button
+              onClick={() => handleNavigation('/dashboard')}
+              className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
+            >
+              <div className="flex h-full flex-col items-center justify-center gap-4">
+                <div className="text-7xl sm:text-8xl">📊</div>
+                <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
+                  DASHBOARD
+                </h3>
+              </div>
+            </button>
+
+            {/* REPORTES - Solo Admin */}
+            {isAdmin && (
+              <button
+                onClick={() => handleNavigation('/reportes')}
+                className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
+              >
+                <div className="flex h-full flex-col items-center justify-center gap-4">
+                  <div className="text-7xl sm:text-8xl">📈</div>
+                  <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
+                    REPORTES
+                  </h3>
+                </div>
+              </button>
+            )}
 
             {/* TRABAJADORES - Solo Admin */}
             {isAdmin && (
@@ -131,21 +172,6 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
                   <div className="text-7xl sm:text-8xl">👥</div>
                   <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
                     TRABAJADORES
-                  </h3>
-                </div>
-              </button>
-            )}
-
-            {/* DASHBOARD - Solo Admin */}
-            {isAdmin && (
-              <button
-                onClick={() => handleNavigation('/dashboard')}
-                className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
-              >
-                <div className="flex h-full flex-col items-center justify-center gap-4">
-                  <div className="text-7xl sm:text-8xl">📊</div>
-                  <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
-                    REPORTES
                   </h3>
                 </div>
               </button>

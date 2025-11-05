@@ -6,6 +6,9 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
+import ReportHeader from '@/components/ReportHeader';
+import { RotateCcw } from 'lucide-react';
+import { exportToCSV, exportToExcel, prepareDataForExport } from '@/lib/exportUtils';
 
 type Devolucion = {
   devolucion_id: number;
@@ -163,93 +166,111 @@ export default function ReporteDevolucionesClient() {
     new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
   );
 
-  // Export CSV
-  const exportCSV = () => {
-    if (vistaActual === 'resumen') {
-      const header = ['ID', 'Fecha', 'Tipo', 'Método', 'Monto Reintegro', 'Venta ID', 'Boleta', 'Usuario', 'Tienda', 'Items', 'Unidades', 'Monto Devuelto'];
-      const lines = devoluciones.map((d) =>
-        [
-          d.devolucion_id,
-          new Date(d.fecha_devolucion).toLocaleString('es-CL'),
-          d.tipo,
-          d.metodo_resolucion,
-          d.monto_reintegro,
-          d.venta_id,
-          d.numero_boleta || 'N/A',
-          d.usuario_nombre,
-          d.tienda_nombre,
-          d.cantidad_items,
-          d.total_unidades_devueltas,
-          d.monto_total_devuelto
-        ].join(',')
-      );
-      const csv = [header.join(','), ...lines].join('\n');
-      downloadCSV(csv, 'devoluciones_resumen.csv');
-    } else {
-      const header = ['ID Dev.', 'Fecha', 'Tipo', 'Diseño', 'Tipo Prenda', 'Color', 'Talla', 'Cantidad', 'Precio Unit.', 'Subtotal', 'Motivo'];
-      const lines = detalles.map((d) =>
-        [
-          d.devolucion_id,
-          new Date(d.fecha_devolucion).toLocaleString('es-CL'),
-          d.tipo,
-          `"${d.diseno}"`,
-          d.tipo_prenda,
-          d.color || 'N/A',
-          d.talla,
-          d.cantidad_devuelta,
-          d.precio_unitario,
-          d.subtotal_item,
-          `"${d.motivo_descripcion || 'N/A'}"`
-        ].join(',')
-      );
-      const csv = [header.join(','), ...lines].join('\n');
-      downloadCSV(csv, 'devoluciones_detalle.csv');
-    }
+  // Funciones de exportación mejoradas
+  const handleExportCSV = () => {
+    const data = vistaActual === 'resumen' ? devoluciones : detalles;
+    const columnsMap = vistaActual === 'resumen' ? {
+      devolucion_id: 'ID',
+      fecha_devolucion: 'Fecha',
+      tipo: 'Tipo',
+      metodo_resolucion: 'Método',
+      monto_reintegro: 'Monto Reintegro',
+      venta_id: 'Venta ID',
+      numero_boleta: 'Boleta',
+      usuario_nombre: 'Usuario',
+      tienda_nombre: 'Tienda',
+      cantidad_items: 'Items',
+      total_unidades_devueltas: 'Unidades',
+      monto_total_devuelto: 'Monto Devuelto'
+    } : {
+      devolucion_id: 'ID Devolución',
+      fecha_devolucion: 'Fecha',
+      tipo: 'Tipo',
+      diseno: 'Diseño',
+      tipo_prenda: 'Tipo Prenda',
+      color: 'Color',
+      talla: 'Talla',
+      cantidad_devuelta: 'Cantidad',
+      precio_unitario: 'Precio Unit.',
+      subtotal_item: 'Subtotal',
+      motivo_descripcion: 'Motivo'
+    };
+    
+    const preparedData = prepareDataForExport(data, columnsMap);
+    const filename = `devoluciones_${vistaActual}_${new Date().toISOString().split('T')[0]}`;
+    exportToCSV(preparedData, filename);
   };
 
-  const downloadCSV = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportExcel = () => {
+    const data = vistaActual === 'resumen' ? devoluciones : detalles;
+    const columnsMap = vistaActual === 'resumen' ? {
+      devolucion_id: 'ID',
+      fecha_devolucion: 'Fecha',
+      tipo: 'Tipo',
+      metodo_resolucion: 'Método',
+      monto_reintegro: 'Monto Reintegro',
+      venta_id: 'Venta ID',
+      numero_boleta: 'Boleta',
+      usuario_nombre: 'Usuario',
+      tienda_nombre: 'Tienda',
+      cantidad_items: 'Items',
+      total_unidades_devueltas: 'Unidades',
+      monto_total_devuelto: 'Monto Devuelto'
+    } : {
+      devolucion_id: 'ID Devolución',
+      fecha_devolucion: 'Fecha',
+      tipo: 'Tipo',
+      diseno: 'Diseño',
+      tipo_prenda: 'Tipo Prenda',
+      color: 'Color',
+      talla: 'Talla',
+      cantidad_devuelta: 'Cantidad',
+      precio_unitario: 'Precio Unit.',
+      subtotal_item: 'Subtotal',
+      motivo_descripcion: 'Motivo'
+    };
+    
+    const preparedData = prepareDataForExport(data, columnsMap);
+    const filename = `devoluciones_${vistaActual}_${new Date().toISOString().split('T')[0]}`;
+    exportToExcel(preparedData, filename);
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h1 className="text-3xl font-bold text-gray-900">↩️ Reporte de Devoluciones</h1>
-        <p className="text-gray-600 mt-2">Análisis detallado de devoluciones y cambios</p>
-      </div>
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+      {/* Header con nuevo formato */}
+      <ReportHeader
+        title="Devoluciones y Cambios"
+        icon={<RotateCcw className="w-8 h-8" />}
+        onExportCSV={handleExportCSV}
+        onExportExcel={handleExportExcel}
+        showExport={devoluciones.length > 0}
+      />
 
       {/* Filtros */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+      <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Desde</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Desde</label>
             <input
               type="date"
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
               value={desde}
               onChange={(e) => setDesde(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Hasta</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Hasta</label>
             <input
               type="date"
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
               value={hasta}
               onChange={(e) => setHasta(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo</label>
             <select
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
               value={tipoFiltro}
               onChange={(e) => setTipoFiltro(e.target.value)}
             >
@@ -259,9 +280,9 @@ export default function ReporteDevolucionesClient() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Método</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Método</label>
             <select
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
               value={metodoFiltro}
               onChange={(e) => setMetodoFiltro(e.target.value)}
             >
@@ -274,19 +295,10 @@ export default function ReporteDevolucionesClient() {
           <div className="flex items-end">
             <button
               onClick={buscar}
-              className="w-full h-11 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700 transition-colors disabled:bg-gray-400"
+              className="w-full h-11 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
               {loading ? 'Cargando...' : 'Buscar'}
-            </button>
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={exportCSV}
-              className="w-full h-11 rounded-lg border-2 border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
-              disabled={!devoluciones.length}
-            >
-              📥 Exportar
             </button>
           </div>
         </div>
