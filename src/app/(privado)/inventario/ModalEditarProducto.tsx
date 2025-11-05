@@ -45,7 +45,6 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
       // Cargar stock real de las variantes desde la base de datos
       const cargarStockReal = async () => {
         const supabase = supabaseBrowser();
-        const tallasEstandar = ["S", "M", "L", "XL", "XXL", "XXXL"];
         const stockInicial: { [key: string]: number } = {};
         
         try {
@@ -59,15 +58,23 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
           // Guardar el mapeo de talla -> variante_id para usar en handleGuardar
           const variantesMap: { [key: string]: number } = {};
           
-          // Inicializar todas las tallas en 0
-          tallasEstandar.forEach(talla => {
+          // Crear un set de todas las tallas que existen para este producto
+          const tallasExistentes = new Set<string>();
+          data?.forEach(variante => {
+            if (variante.talla) {
+              tallasExistentes.add(variante.talla.toUpperCase());
+            }
+          });
+          
+          // Inicializar todas las tallas existentes en 0
+          tallasExistentes.forEach(talla => {
             stockInicial[talla] = 0;
           });
           
           // Actualizar con el stock real de las variantes que existen
           data?.forEach(variante => {
             const talla = variante.talla?.toUpperCase();
-            if (talla && tallasEstandar.includes(talla)) {
+            if (talla) {
               stockInicial[talla] = variante.stock_actual || 0;
               variantesMap[talla] = variante.id;
             }
@@ -81,7 +88,7 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
         } catch (err) {
           console.error("Error cargando stock:", err);
           // Si hay error, usar los datos del producto
-          tallasEstandar.forEach(talla => {
+          Object.keys(producto.tallas).forEach(talla => {
             stockInicial[talla] = producto.tallas[talla]?.total || 0;
           });
           setTallasStock(stockInicial);
@@ -116,11 +123,11 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
       }
 
       // 2. Actualizar o crear variantes para cada talla
-      const tallasEstandar = ["S", "M", "L", "XL", "XXL", "XXXL"];
+      // Usar las tallas que existen en tallasStock (que incluye todas las tallas del producto)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const variantesMap = (window as any).__variantesMap || {};
       
-      for (const talla of tallasEstandar) {
+      for (const talla of Object.keys(tallasStock)) {
         const nuevoStock = tallasStock[talla] || 0;
         const varianteId = variantesMap[talla];
         
@@ -277,7 +284,7 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
               </div>
               Stock por Tallas
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
               {Object.entries(tallasStock).map(([talla, stock]) => (
                 <div key={talla} className="bg-gradient-to-br from-gray-50 to-slate-100 rounded-xl p-4 border-2 border-gray-200">
                   <label className="block text-sm font-bold text-gray-700 mb-2 text-center">

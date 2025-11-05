@@ -7,17 +7,6 @@ import ModalAgregarDiseno from "./ModalAgregarDiseno";
 import ModalAgregarStock from "./ModalAgregarStock";
 import ModalEditarProducto from "./ModalEditarProducto";
 
-// type VarianteData = {
-//   variante_id: number;
-//   talla: string | null;
-//   stock_actual: number;
-//   producto_id: number;
-//   diseno: string | null;
-//   tipo_prenda: string | null;
-//   color: string | null;
-//   producto_activo: boolean;
-// };
-
 type ProductoAgrupado = {
   producto_id: number;
   diseno: string;
@@ -41,27 +30,6 @@ type MovimientoInventario = {
   fecha: string;
 };
 
-// type ProductoSupabase = {
-//   id: number;
-//   disenos: { nombre: string }[];
-//   tipos_prenda: { nombre: string }[];
-//   colores: { nombre: string }[];
-// };
-
-// type VarianteSupabase = {
-//   id: number;
-//   producto_id: number;
-//   talla: string | null;
-//   stock_actual: number;
-//   productos: {
-//     id: number;
-//     activo: boolean;
-//     disenos: { nombre: string }[];
-//     tipos_prenda: { nombre: string }[];
-//     colores: { nombre: string }[];
-//   }[];
-// };
-
 const isMovimientoInventarioArray = (
   data: unknown
 ): data is MovimientoInventario[] => {
@@ -80,9 +48,6 @@ const isMovimientoInventarioArray = (
   );
 };
 
-const TALLAS_ORDEN = ["S", "M", "L", "XL", "XXL", "XXXL"];
-
-// Orden de categorías para ordenamiento
 const ORDEN_CATEGORIAS: { [key: string]: number } = {
   'polera': 1,
   'poleron': 2,
@@ -113,6 +78,23 @@ export default function InventarioAgrupado() {
     return new Date().toISOString().split("T")[0];
   });
 
+  // Recopilar todas las tallas únicas que existen en el inventario
+  const todasLasTallas = useMemo(() => {
+    const tallasSet = new Set<string>();
+    productos.forEach(prod => {
+      Object.keys(prod.tallas).forEach(talla => {
+        tallasSet.add(talla);
+      });
+    });
+    
+    // Ordenar: primero las tallas estándar, luego las adicionales alfabéticamente
+    const tallasEstandar = ["S", "M", "L", "XL", "XXL", "XXXL"];
+    const tallasOrdenadas = [...tallasEstandar.filter(t => tallasSet.has(t))];
+    const tallasExtras = [...tallasSet].filter(t => !tallasEstandar.includes(t)).sort();
+    
+    return [...tallasOrdenadas, ...tallasExtras];
+  }, [productos]);
+
   // ---- 1) Declarar primero cargarInventario (useCallback) ----
   const cargarInventario = useCallback(async () => {
     setLoading(true);
@@ -128,7 +110,7 @@ export default function InventarioAgrupado() {
           colores(nombre)
         `)
         .eq("activo", true);
-      
+
       if (errProductos) {
         console.error("Error cargando productos:", errProductos);
         throw errProductos;
@@ -153,7 +135,7 @@ export default function InventarioAgrupado() {
           producto_id,
           talla,
           stock_actual,
-          productos!inner(
+          productos!left(
             id,
             activo,
             disenos(nombre),
@@ -161,13 +143,15 @@ export default function InventarioAgrupado() {
             colores(nombre)
           )
         `)
-        .eq("productos.activo", true);
-      
+        .not("productos.activo", "is", null)
+        .not("talla", "is", null)
+        .neq("talla", "");
+
       if (errVariantes) {
         console.error("Error cargando variantes:", errVariantes);
         throw errVariantes;
       }
-      
+
       // Transformar al formato esperado
       const variantesTransformadas = variantes?.map((v: Record<string, unknown>) => {
         const variante = v as { id: number; producto_id: number; talla: string; stock_actual: number; productos?: { disenos?: { nombre?: string }; tipos_prenda?: { nombre?: string }; colores?: { nombre?: string }; activo?: boolean } };
@@ -182,7 +166,7 @@ export default function InventarioAgrupado() {
           producto_activo: variante.productos?.activo || false
         };
       }) || [];
-      
+
 
       // 2. Movimientos del período
       const { data: movimientos, error: errMov } = await supabase
@@ -222,7 +206,7 @@ export default function InventarioAgrupado() {
 
       // 4. Primero agregar todos los productos únicos (con o sin variantes)
       const agrupados: { [key: string]: ProductoAgrupado } = {};
-      
+
       productosUnicos.forEach((info, productoId) => {
         agrupados[`${productoId}`] = {
           producto_id: productoId,
@@ -233,7 +217,7 @@ export default function InventarioAgrupado() {
           tallas: {},
         };
       });
-      
+
       // 5. Luego agregar las variantes con stock
       variantesTransformadas.forEach((v) => {
         const key = `${v.producto_id}`;
@@ -311,11 +295,11 @@ export default function InventarioAgrupado() {
     return filtrados.sort((a, b) => {
       const ordenA = ORDEN_CATEGORIAS[a.tipo_prenda.toLowerCase()] || 999;
       const ordenB = ORDEN_CATEGORIAS[b.tipo_prenda.toLowerCase()] || 999;
-      
+
       if (ordenA !== ordenB) {
         return ordenA - ordenB;
       }
-      
+
       // Si son de la misma categoría, ordenar alfabéticamente por diseño
       return a.diseno.localeCompare(b.diseno);
     });
@@ -594,7 +578,7 @@ export default function InventarioAgrupado() {
 
                 {/* ENTRADA */}
                 <th
-                  colSpan={TALLAS_ORDEN.length}
+                  colSpan={todasLasTallas.length}
                   className="text-center p-4 font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600"
                 >
                   📥 ENTRADA
@@ -602,7 +586,7 @@ export default function InventarioAgrupado() {
 
                 {/* SALIDA */}
                 <th
-                  colSpan={TALLAS_ORDEN.length}
+                  colSpan={todasLasTallas.length}
                   className="text-center p-4 font-bold text-white bg-gradient-to-r from-orange-500 to-red-600"
                 >
                   📤 SALIDA
@@ -610,7 +594,7 @@ export default function InventarioAgrupado() {
 
                 {/* TOTAL */}
                 <th
-                  colSpan={TALLAS_ORDEN.length}
+                  colSpan={todasLasTallas.length}
                   className="text-center p-4 font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600"
                 >
                   📦 STOCK
@@ -629,7 +613,7 @@ export default function InventarioAgrupado() {
                 <th className="sticky left-[200px] bg-indigo-50/95 z-20"></th>
                 <th></th>
 
-                {TALLAS_ORDEN.map((t) => (
+                {todasLasTallas.map((t) => (
                   <th
                     key={`e-${t}`}
                     className="p-2 text-center text-sm font-bold text-blue-700"
@@ -637,7 +621,7 @@ export default function InventarioAgrupado() {
                     {t}
                   </th>
                 ))}
-                {TALLAS_ORDEN.map((t) => (
+                {todasLasTallas.map((t) => (
                   <th
                     key={`s-${t}`}
                     className="p-2 text-center text-sm font-bold text-red-700"
@@ -645,7 +629,7 @@ export default function InventarioAgrupado() {
                     {t}
                   </th>
                 ))}
-                {TALLAS_ORDEN.map((t) => (
+                {todasLasTallas.map((t) => (
                   <th
                     key={`t-${t}`}
                     className="p-2 text-center text-sm font-bold text-purple-700"
@@ -684,7 +668,7 @@ export default function InventarioAgrupado() {
                   </td>
                   <td className="p-4 text-gray-700 font-medium">{prod.color}</td>
 
-                  {TALLAS_ORDEN.map((t) => (
+                  {todasLasTallas.map((t) => (
                     <td
                       key={`e-${t}`}
                       className="p-2 text-center bg-blue-50/50 text-sm font-semibold"
@@ -692,7 +676,7 @@ export default function InventarioAgrupado() {
                       {prod.tallas[t]?.entrada || 0}
                     </td>
                   ))}
-                  {TALLAS_ORDEN.map((t) => (
+                  {todasLasTallas.map((t) => (
                     <td
                       key={`s-${t}`}
                       className="p-2 text-center bg-red-50/50 text-sm font-semibold"
@@ -700,7 +684,7 @@ export default function InventarioAgrupado() {
                       {prod.tallas[t]?.salida || 0}
                     </td>
                   ))}
-                  {TALLAS_ORDEN.map((t) => {
+                  {todasLasTallas.map((t) => {
                     const stock = prod.tallas[t]?.total || 0;
                     return (
                       <td
