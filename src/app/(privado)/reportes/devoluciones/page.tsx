@@ -70,7 +70,7 @@ export default function ReporteDevolucionesClient() {
   const [devoluciones, setDevoluciones] = useState<Devolucion[]>([]);
   const [detalles, setDetalles] = useState<DevolucionDetalle[]>([]);
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [, setErrorMsg] = useState<string | null>(null);
   const [vistaActual, setVistaActual] = useState<'resumen' | 'detalle' | 'transferencias'>('resumen');
   const [actualizando, setActualizando] = useState<number | null>(null);
 
@@ -313,6 +313,7 @@ export default function ReporteDevolucionesClient() {
   };
 
   // Export CSV (función antigua, mantener por compatibilidad)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const exportCSV = () => {
     if (vistaActual === 'resumen') {
       const header = ['ID', 'Fecha', 'Tipo', 'Método', 'Monto Reintegro', 'Venta ID', 'Boleta', 'Usuario', 'Tienda', 'Items', 'Unidades', 'Monto Devuelto'];

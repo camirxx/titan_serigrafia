@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell, PieChart, Pie, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell
 } from 'recharts';
 import { exportToCSV, exportToExcel, prepareDataForExport } from '@/lib/exportUtils';
 
@@ -170,6 +170,7 @@ export default function VentasTallaColorPage() {
     exportToExcel(preparedData, `ventas_${modo}_${new Date().toISOString().split('T')[0]}`);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const exportCSV_OLD = () => {
     const header = ['talla', 'color', 'unidades', 'fecha'];
     const lines = rows.map((r) =>
