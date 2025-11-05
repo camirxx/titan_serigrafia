@@ -187,7 +187,132 @@ export default function ReporteDevolucionesClient() {
     new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
   );
 
-  // Export CSV
+  // Filtrar transferencias
+  const transferenciasPendientes = devoluciones.filter(d => 
+    (d.metodo_pago_reintegro === 'transferencia' || 
+     (d.tipo_diferencia === 'cliente_recibe' && d.metodo_pago_diferencia === 'transferencia')) &&
+    !d.transferencia_realizada
+  );
+
+  const transferenciasRealizadas = devoluciones.filter(d => 
+    (d.metodo_pago_reintegro === 'transferencia' || 
+     (d.tipo_diferencia === 'cliente_recibe' && d.metodo_pago_diferencia === 'transferencia')) &&
+    d.transferencia_realizada
+  );
+
+  // Función para marcar transferencia
+  const marcarTransferencia = async (devolucionId: number, realizada: boolean) => {
+    setActualizando(devolucionId);
+    try {
+      const { error } = await supabase
+        .from('devoluciones')
+        .update({
+          transferencia_realizada: realizada,
+          fecha_transferencia: realizada ? new Date().toISOString() : null
+        })
+        .eq('id', devolucionId);
+
+      if (error) throw error;
+
+      // Recargar datos
+      await buscar();
+    } catch (err) {
+      console.error('Error actualizando transferencia:', err);
+      setErrorMsg('Error al actualizar el estado de la transferencia');
+    } finally {
+      setActualizando(null);
+    }
+  };
+
+  // Función para verificar base de datos
+  const verificarBaseDatos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('devoluciones')
+        .select('id, fecha, tipo, metodo_resolucion')
+        .order('fecha', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+
+      console.log('🔍 [DEBUG] Últimas 5 devoluciones en BD:', data);
+      alert(`Encontradas ${data?.length || 0} devoluciones recientes. Ver consola para detalles.`);
+    } catch (err) {
+      console.error('Error verificando BD:', err);
+      alert('Error al verificar la base de datos');
+    }
+  };
+
+  // Funciones de exportación
+  const handleExportCSV = () => {
+    const data = vistaActual === 'resumen' ? devoluciones : detalles;
+    const columnsMap = vistaActual === 'resumen' ? {
+      devolucion_id: 'ID',
+      fecha_devolucion: 'Fecha',
+      tipo: 'Tipo',
+      metodo_resolucion: 'Método',
+      monto_reintegro: 'Monto Reintegro',
+      venta_id: 'Venta ID',
+      numero_boleta: 'Boleta',
+      usuario_nombre: 'Usuario',
+      tienda_nombre: 'Tienda',
+      cantidad_items: 'Items',
+      total_unidades_devueltas: 'Unidades',
+      monto_total_devuelto: 'Monto Devuelto'
+    } : {
+      devolucion_id: 'ID Devolución',
+      fecha_devolucion: 'Fecha',
+      tipo: 'Tipo',
+      diseno: 'Diseño',
+      tipo_prenda: 'Tipo Prenda',
+      color: 'Color',
+      talla: 'Talla',
+      cantidad_devuelta: 'Cantidad',
+      precio_unitario: 'Precio Unit.',
+      subtotal_item: 'Subtotal',
+      motivo_descripcion: 'Motivo'
+    };
+    
+    const preparedData = prepareDataForExport(data, columnsMap);
+    const filename = `devoluciones_${vistaActual}_${new Date().toISOString().split('T')[0]}`;
+    exportToCSV(preparedData, filename);
+  };
+
+  const handleExportExcel = () => {
+    const data = vistaActual === 'resumen' ? devoluciones : detalles;
+    const columnsMap = vistaActual === 'resumen' ? {
+      devolucion_id: 'ID',
+      fecha_devolucion: 'Fecha',
+      tipo: 'Tipo',
+      metodo_resolucion: 'Método',
+      monto_reintegro: 'Monto Reintegro',
+      venta_id: 'Venta ID',
+      numero_boleta: 'Boleta',
+      usuario_nombre: 'Usuario',
+      tienda_nombre: 'Tienda',
+      cantidad_items: 'Items',
+      total_unidades_devueltas: 'Unidades',
+      monto_total_devuelto: 'Monto Devuelto'
+    } : {
+      devolucion_id: 'ID Devolución',
+      fecha_devolucion: 'Fecha',
+      tipo: 'Tipo',
+      diseno: 'Diseño',
+      tipo_prenda: 'Tipo Prenda',
+      color: 'Color',
+      talla: 'Talla',
+      cantidad_devuelta: 'Cantidad',
+      precio_unitario: 'Precio Unit.',
+      subtotal_item: 'Subtotal',
+      motivo_descripcion: 'Motivo'
+    };
+    
+    const preparedData = prepareDataForExport(data, columnsMap);
+    const filename = `devoluciones_${vistaActual}_${new Date().toISOString().split('T')[0]}`;
+    exportToExcel(preparedData, filename);
+  };
+
+  // Export CSV (función antigua, mantener por compatibilidad)
   const exportCSV = () => {
     if (vistaActual === 'resumen') {
       const header = ['ID', 'Fecha', 'Tipo', 'Método', 'Monto Reintegro', 'Venta ID', 'Boleta', 'Usuario', 'Tienda', 'Items', 'Unidades', 'Monto Devuelto'];
