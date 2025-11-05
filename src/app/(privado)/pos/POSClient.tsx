@@ -50,7 +50,6 @@ export default function POSModerno() {
   
   const [ventas, setVentas] = useState<Venta[]>([])
   const [totalDia, setTotalDia] = useState(0)
-  const [totalEfectivo, setTotalEfectivo] = useState(0)
   const [saldoInicialCaja, setSaldoInicialCaja] = useState(0)
   const [sesionCajaId, setSesionCajaId] = useState<number | null>(null)
   const [tiendaId, setTiendaId] = useState<number | null>(null)
@@ -70,6 +69,11 @@ export default function POSModerno() {
   const [numeroBoleta, setNumeroBoleta] = useState('')
   
   const [billetes, setBilletes] = useState({
+    '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+  })
+
+  // Estado para los billetes del vuelto (change)
+  const [billetesVuelto, setBilletesVuelto] = useState<Record<string, number>>({
     '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
   })
 
@@ -148,7 +152,6 @@ const cargarVentasDelDia = async () => {
 
     const ventasProcesadas: Venta[] = []
     let total = 0
-    let totalEf = 0
 
     for (const v of data || []) {
       const detalles = Array.isArray(v.detalle_ventas) ? v.detalle_ventas : [v.detalle_ventas]
@@ -174,16 +177,12 @@ const cargarVentasDelDia = async () => {
             numero_boleta: v.numero_boleta || null
           })
           total += Number(v.total)
-          if (v.metodo_pago === 'efectivo') {
-            totalEf += Number(v.total)
-          }
         }
       }
     }
 
     setVentas(ventasProcesadas)
     setTotalDia(total)
-    setTotalEfectivo(totalEf)
   } catch (err: unknown) {
     console.error(err)
     setError(getErrorMessage(err, 'Error al cargar ventas del día'))
@@ -287,6 +286,7 @@ const cargarVentasDelDia = async () => {
       setLoading(false)
     }
   }
+
   const iniciarVenta = async () => {
     if (!tiendaId) {
       setError('No se pudo determinar tu tienda. Verifica tu usuario.')
@@ -512,6 +512,20 @@ const cargarVentasDelDia = async () => {
       const { error: err } = await supabase.rpc('crear_venta_simple', { p: payload })
       if (err) throw err
 
+      // Si es pago en efectivo, registrar el ingreso de los billetes del cliente
+      if (metodo === 'efectivo' && Object.values(billetes).some(cant => cant > 0)) {
+        await registrarIngresoCaja(billetes, `Ingreso venta - ${tipoSel} ${disenoSel} ${colorSel} ${tallaSel.talla}`)
+      }
+
+      // Si hay vuelto que entregar, registrar el egreso de caja
+      const precioNum = parseFloat(precio)
+      const totalBilletes = calcularTotalBilletes()
+      const faltante = precioNum - totalBilletes
+
+      if (faltante < 0 && Object.values(billetesVuelto).some(cant => cant > 0)) {
+        await registrarEgresoCaja(billetesVuelto, `Vuelto venta - ${tipoSel} ${disenoSel} ${colorSel} ${tallaSel.talla}`)
+      }
+
       resetearFormulario()
       await cargarVentasDelDia()
       await cargarSesionCaja()
@@ -532,6 +546,7 @@ const cargarVentasDelDia = async () => {
     setMetodo('efectivo')
     setNumeroBoleta('')
     setBilletes({ '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0 })
+    setBilletesVuelto({ '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0 })
     setError(null)
   }
 
@@ -634,7 +649,6 @@ const cargarVentasDelDia = async () => {
           </div>
 
           <PanelCaja
-          totalEfectivo={totalEfectivo}
           saldoInicial={saldoInicialCaja}
           totalDia={totalDia}
           ventas={ventas.length}
@@ -913,7 +927,7 @@ const cargarVentasDelDia = async () => {
       <div className="max-w-7xl mx-auto p-4 sm:p-6">
         <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
 
-        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-8 max-w-3xl mx-auto">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-8 max-w-6xl mx-auto">
           <div className="flex items-center gap-3 mb-8">
             <button onClick={() => setPaso(5)} className="p-2 hover:bg-indigo-50 rounded-xl transition">
               <ChevronLeft className="w-6 h-6 text-indigo-600" />
@@ -925,38 +939,70 @@ const cargarVentasDelDia = async () => {
           </div>
 
           <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
-            <div className="text-lg font-bold text-blue-900">Total a pagar: ${precioNum.toLocaleString()}</div>
+            <div className="text-lg font-bold text-blue-900">Total a pagar: ${formatNumber(precioNum)}</div>
           </div>
 
-          <div className="space-y-3 mb-6">
-            {Object.keys(billetes).reverse().map((denom) => (
-              <div key={denom} className="flex items-center gap-4">
-                <span className="font-bold text-lg text-gray-700 w-28">${parseInt(denom).toLocaleString()}</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={billetes[denom as keyof typeof billetes]}
-                  onChange={(e) => setBilletes(prev => ({ ...prev, [denom]: Math.max(0, parseInt(e.target.value) || 0) }))}
-                  className="w-24 px-3 py-2 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 outline-none"
-                />
-                <span className="text-gray-600">= ${(parseInt(denom) * billetes[denom as keyof typeof billetes]).toLocaleString()}</span>
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Columna izquierda: Dinero que recibe */}
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <span className="text-2xl">💵</span>
+                Dinero recibido del cliente
+              </h3>
+              <div className="space-y-3">
+                {Object.keys(billetes).reverse().map((denom) => (
+                  <div key={denom} className="flex items-center gap-4">
+                    <span className="font-bold text-lg text-gray-700 w-28">${formatNumber(parseInt(denom))}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={billetes[denom as keyof typeof billetes]}
+                      onChange={(e) => setBilletes(prev => ({ ...prev, [denom]: Math.max(0, parseInt(e.target.value) || 0) }))}
+                      className="w-24 px-3 py-2 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 outline-none"
+                    />
+                    <span className="text-gray-600">= ${formatNumber(parseInt(denom) * billetes[denom as keyof typeof billetes])}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className={`p-4 rounded-xl mb-6 ${faltante > 0 ? 'bg-red-50 border-2 border-red-200' : 'bg-green-50 border-2 border-green-200'}`}>
-            <div className="text-lg font-bold">Total ingresado: ${totalBilletes.toLocaleString()}</div>
-            {faltante > 0 && <div className="text-red-700 font-semibold">Falta: ${faltante.toLocaleString()}</div>}
-            {faltante < 0 && <div className="text-green-700 font-semibold">Vuelto: ${Math.abs(faltante).toLocaleString()}</div>}
-            {faltante === 0 && <div className="text-green-700 font-semibold flex items-center gap-2"><Check className="w-5 h-5" /> Monto exacto</div>}
+              <div className={`p-4 rounded-xl mt-6 ${faltante > 0 ? 'bg-red-50 border-2 border-red-200' : 'bg-green-50 border-2 border-green-200'}`}>
+                <div className="text-lg font-bold">Total ingresado: ${formatNumber(totalBilletes)}</div>
+                {faltante > 0 && <div className="text-red-700 font-semibold">Falta: ${formatNumber(faltante)}</div>}
+                {faltante < 0 && <div className="text-orange-700 font-semibold text-xl">⚠️ Vuelto a entregar: ${formatNumber(Math.abs(faltante))}</div>}
+                {faltante === 0 && <div className="text-green-700 font-semibold flex items-center gap-2"><Check className="w-5 h-5" /> Monto exacto</div>}
+              </div>
+            </div>
+
+            {/* Columna derecha: Vuelto a entregar (solo si hay vuelto) */}
+            {faltante < 0 && (
+              <VueltoSelector
+                vuelto={Math.abs(faltante)}
+                denominacionesDisponibles={denominacionesReales}
+                billetesVuelto={billetesVuelto}
+                onBilletesChange={setBilletesVuelto}
+              />
+            )}
           </div>
 
           <button
             onClick={registrarVenta}
-            disabled={loading || faltante > 0}
-            className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
+            disabled={loading || faltante > 0 || (faltante < 0 && (() => {
+              const totalVueltoSeleccionado = Object.entries(billetesVuelto).reduce((sum, [denom, cant]) => 
+                sum + (parseInt(denom) * cant), 0
+              )
+              return Math.abs(totalVueltoSeleccionado - Math.abs(faltante)) > 0.01
+            })())}
+            className="w-full py-4 mt-8 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
           >
-            {loading ? 'Registrando...' : 'Confirmar Venta'}
+            {loading ? 'Registrando...' : 
+             faltante > 0 ? 'Falta dinero por ingresar' :
+             (faltante < 0 && (() => {
+               const totalVueltoSeleccionado = Object.entries(billetesVuelto).reduce((sum, [denom, cant]) => 
+                 sum + (parseInt(denom) * cant), 0
+               )
+               return Math.abs(totalVueltoSeleccionado - Math.abs(faltante)) > 0.01
+             })()) ? 'Completa el vuelto exacto' :
+             'Confirmar Venta'}
           </button>
         </div>
       </div>
@@ -964,6 +1010,113 @@ const cargarVentasDelDia = async () => {
   }
 
   return null
+}
+
+function VueltoSelector({ 
+  vuelto, 
+  denominacionesDisponibles, 
+  billetesVuelto, 
+  onBilletesChange 
+}: { 
+  vuelto: number
+  denominacionesDisponibles: Record<number, number>
+  billetesVuelto: Record<string, number>
+  onBilletesChange: React.Dispatch<React.SetStateAction<Record<string, number>>>
+}) {
+  const formatNumber = (num: number) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  }
+
+  const calcularTotalVueltoSeleccionado = () => {
+    return Object.entries(billetesVuelto).reduce((sum, [denom, cant]) => 
+      sum + (parseInt(denom) * cant), 0
+    )
+  }
+
+  const totalSeleccionado = calcularTotalVueltoSeleccionado()
+  const restante = vuelto - totalSeleccionado
+
+  return (
+    <div className="border-l-2 border-gray-200 pl-8">
+      <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+        <span className="text-2xl">💰</span>
+        Vuelto a entregar
+      </h3>
+
+      <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 mb-4">
+        <div className="text-lg font-bold text-orange-900">Vuelto requerido: ${formatNumber(vuelto)}</div>
+        <div className={`text-sm font-semibold mt-1 ${totalSeleccionado === vuelto ? 'text-green-600' : restante > 0 ? 'text-red-600' : 'text-blue-600'}`}>
+          {totalSeleccionado === vuelto ? '✓ Monto exacto' : restante > 0 ? `Faltan: ${formatNumber(restante)}` : `Exceso: ${formatNumber(Math.abs(restante))}`}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {Object.keys(billetesVuelto).reverse().map((denom) => {
+          const cantidad = billetesVuelto[denom as keyof typeof billetesVuelto]
+          const disponible = denominacionesDisponibles[parseInt(denom)] || 0
+          const subtotal = parseInt(denom) * cantidad
+
+          return (
+            <div key={denom} className="flex items-center gap-4">
+              <span className="font-bold text-lg text-gray-700 w-28">${formatNumber(parseInt(denom))}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nuevaCantidad = Math.max(0, cantidad - 1)
+                    onBilletesChange({ 
+                      ...billetesVuelto, 
+                      [denom]: nuevaCantidad 
+                    })
+                  }}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-100 hover:bg-red-200 text-red-700 font-bold text-lg transition"
+                  disabled={cantidad <= 0}
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min="0"
+                  max={disponible}
+                  value={cantidad}
+                  onChange={(e) => {
+                    const valor = Math.max(0, Math.min(parseInt(e.target.value) || 0, disponible))
+                    onBilletesChange({ 
+                      ...billetesVuelto, 
+                      [denom]: valor 
+                    })
+                  }}
+                  className="w-20 px-2 py-1 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nuevaCantidad = Math.min(cantidad + 1, disponible)
+                    onBilletesChange({ 
+                      ...billetesVuelto, 
+                      [denom]: nuevaCantidad 
+                    })
+                  }}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-green-100 hover:bg-green-200 text-green-700 font-bold text-lg transition"
+                  disabled={cantidad >= disponible}
+                >
+                  +
+                </button>
+              </div>
+              <span className="text-gray-600 text-sm">
+                Disponible: {disponible}
+              </span>
+              <span className="text-gray-600 ml-auto">= ${formatNumber(subtotal)}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className={`p-3 rounded-xl mt-4 ${totalSeleccionado === vuelto ? 'bg-green-50 border-2 border-green-200' : 'bg-gray-50 border-2 border-gray-200'}`}>
+        <div className="text-lg font-bold">Total seleccionado: ${formatNumber(totalSeleccionado)}</div>
+      </div>
+    </div>
+  )
 }
 
 function Header({ fechaSeleccionada, setFechaSeleccionada }: { fechaSeleccionada: string; setFechaSeleccionada: (fecha: string) => void }) {
@@ -1004,16 +1157,14 @@ function Header({ fechaSeleccionada, setFechaSeleccionada }: { fechaSeleccionada
   )
 }
 function PanelCaja({ 
-  totalEfectivo, 
   saldoInicial,
   totalDia, 
   ventas, 
   sesionAbierta, 
   denominacionesReales,
   onIngresar, 
-  onRetirar 
+  onRetirar
 }: { 
-  totalEfectivo: number
   saldoInicial: number
   totalDia: number
   ventas: number
@@ -1036,7 +1187,7 @@ function PanelCaja({
     }, 0)
   }
   
-  const efectivoTotal = calcularTotalReal() + saldoInicial + totalEfectivo
+  const efectivoTotal = calcularTotalReal() + saldoInicial
 
   return (
     <>
