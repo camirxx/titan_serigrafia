@@ -111,6 +111,7 @@ export default function ReportesHubPage() {
               t.color === 'red' ? 'text-red-700' :
               t.color === 'blue' ? 'text-blue-700' :
               t.color === 'green' ? 'text-green-700' :
+              t.color === 'orange' ? 'text-orange-700' :
               'text-indigo-700'
             }`}>
               {t.cta} →

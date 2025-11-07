@@ -94,12 +94,6 @@ export default function ReporteDevolucionesClient() {
 
       if (errResumen) throw errResumen;
 
-      console.log('📊 [REPORTES] Datos cargados:', {
-        totalDevoluciones: dataResumen?.length || 0,
-        primeraDevolucion: dataResumen?.[0],
-        filtrosAplicados: { desde, hasta, tipoFiltro, metodoFiltro }
-      });
-
       setDevoluciones(dataResumen || []);
 
       // Cargar detalle
@@ -118,7 +112,6 @@ export default function ReporteDevolucionesClient() {
 
       if (errDetalle) throw errDetalle;
 
-      setDevoluciones(dataResumen || []);
       setDetalles(dataDetalle || []);
     } catch (e: unknown) {
       setDevoluciones([]);
@@ -204,15 +197,45 @@ export default function ReporteDevolucionesClient() {
   const marcarTransferencia = async (devolucionId: number, realizada: boolean) => {
     setActualizando(devolucionId);
     try {
-      const { error } = await supabase
-        .from('devoluciones')
-        .update({
-          transferencia_realizada: realizada,
-          fecha_transferencia: realizada ? new Date().toISOString() : null
-        })
-        .eq('id', devolucionId);
+      // Usar función RPC para asegurar que el update funcione correctamente
+      const { error } = await supabase.rpc('marcar_transferencia_realizada', {
+        p_devolucion_id: devolucionId,
+        p_realizada: realizada
+      });
 
       if (error) throw error;
+
+      // Si se marca como realizada, enviar correo de confirmación al cliente
+      if (realizada) {
+        const devolucion = devoluciones.find(d => d.devolucion_id === devolucionId);
+        if (devolucion) {
+          try {
+            const response = await fetch('/api/send-confirmation-email', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                devolucionId,
+                rut: devolucion.transferencia_rut,
+                nombre: devolucion.transferencia_nombre,
+                banco: devolucion.transferencia_banco,
+                tipoCuenta: devolucion.transferencia_tipo_cuenta,
+                numeroCuenta: devolucion.transferencia_numero_cuenta,
+                email: devolucion.transferencia_email,
+                monto: devolucion.monto_reintegro || devolucion.monto_diferencia || 0,
+                tipo: devolucion.tipo,
+              }),
+            });
+
+            if (!response.ok) {
+              console.error('Error al enviar correo de confirmación:', await response.text());
+            }
+          } catch (emailError) {
+            console.error('Error al enviar correo de confirmación:', emailError);
+          }
+        }
+      }
 
       // Recargar datos
       await buscar();
@@ -221,25 +244,6 @@ export default function ReporteDevolucionesClient() {
       setErrorMsg('Error al actualizar el estado de la transferencia');
     } finally {
       setActualizando(null);
-    }
-  };
-
-  // Función para verificar base de datos
-  const verificarBaseDatos = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('devoluciones')
-        .select('id, fecha, tipo, metodo_resolucion')
-        .order('fecha', { ascending: false })
-        .limit(5);
-
-      if (error) throw error;
-
-      console.log('🔍 [DEBUG] Últimas 5 devoluciones en BD:', data);
-      alert(`Encontradas ${data?.length || 0} devoluciones recientes. Ver consola para detalles.`);
-    } catch (err) {
-      console.error('Error verificando BD:', err);
-      alert('Error al verificar la base de datos');
     }
   };
 
@@ -312,61 +316,6 @@ export default function ReporteDevolucionesClient() {
     exportToExcel(preparedData, filename);
   };
 
-  // Export CSV (función antigua, mantener por compatibilidad)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const exportCSV = () => {
-    if (vistaActual === 'resumen') {
-      const header = ['ID', 'Fecha', 'Tipo', 'Método', 'Monto Reintegro', 'Venta ID', 'Boleta', 'Usuario', 'Tienda', 'Items', 'Unidades', 'Monto Devuelto'];
-      const lines = devoluciones.map((d) =>
-        [
-          d.devolucion_id,
-          new Date(d.fecha_devolucion).toLocaleString('es-CL'),
-          d.tipo,
-          d.metodo_resolucion,
-          d.monto_reintegro,
-          d.venta_id,
-          d.numero_boleta || 'N/A',
-          d.usuario_nombre,
-          d.tienda_nombre,
-          d.cantidad_items,
-          d.total_unidades_devueltas,
-          d.monto_total_devuelto
-        ].join(',')
-      );
-      const csv = [header.join(','), ...lines].join('\n');
-      downloadCSV(csv, 'devoluciones_resumen.csv');
-    } else {
-      const header = ['ID Dev.', 'Fecha', 'Tipo', 'Diseño', 'Tipo Prenda', 'Color', 'Talla', 'Cantidad', 'Precio Unit.', 'Subtotal', 'Motivo'];
-      const lines = detalles.map((d) =>
-        [
-          d.devolucion_id,
-          new Date(d.fecha_devolucion).toLocaleString('es-CL'),
-          d.tipo,
-          `"${d.diseno}"`,
-          d.tipo_prenda,
-          d.color || 'N/A',
-          d.talla,
-          d.cantidad_devuelta,
-          d.precio_unitario,
-          d.subtotal_item,
-          `"${d.motivo_descripcion || 'N/A'}"`
-        ].join(',')
-      );
-      const csv = [header.join(','), ...lines].join('\n');
-      downloadCSV(csv, 'devoluciones_detalle.csv');
-    }
-  };
-
-  const downloadCSV = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Header con nuevo formato */}
@@ -380,7 +329,7 @@ export default function ReporteDevolucionesClient() {
 
       {/* Filtros */}
       <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Desde</label>
             <input
@@ -427,69 +376,13 @@ export default function ReporteDevolucionesClient() {
           <div className="flex items-end">
             <button
               onClick={buscar}
-              className="w-full h-11 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-12 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-base hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
               {loading ? 'Cargando...' : 'Buscar'}
             </button>
           </div>
-          <div className="flex items-end">
-            <button
-              onClick={exportCSV}
-              className="w-full h-11 rounded-lg border-2 border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
-              disabled={!devoluciones.length}
-            >
-              📥 Exportar
-            </button>
-          </div>
         </div>
-      </div>
-
-      {/* Debug Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 mb-2">🔍 Información de Debug</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-          <div>
-            <span className="font-medium">Total Devoluciones:</span>
-            <span className="ml-2 text-blue-700 font-bold">{devoluciones.length}</span>
-          </div>
-          <div>
-            <span className="font-medium">Transferencias:</span>
-            <span className="ml-2 text-green-700 font-bold">{transferenciasPendientes.length} pendientes</span>
-          </div>
-          <div>
-            <span className="font-medium">Filtros:</span>
-            <span className="ml-2 text-gray-700">
-              {tipoFiltro || 'Todos'} | {metodoFiltro || 'Todos'}
-            </span>
-          </div>
-          <div>
-            <span className="font-medium">Estado:</span>
-            <span className="ml-2 text-gray-700">
-              {loading ? 'Cargando...' : 'Listo'}
-            </span>
-          </div>
-        </div>
-        <div className="mt-3 flex gap-2">
-          <button
-            onClick={buscar}
-            disabled={loading}
-            className="px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 disabled:bg-gray-400"
-          >
-            {loading ? '⏳...' : '🔄 Recargar Datos'}
-          </button>
-          <button
-            onClick={verificarBaseDatos}
-            className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-          >
-            🔍 Verificar BD
-          </button>
-        </div>
-        {devoluciones.length > 0 && (
-          <div className="mt-2 text-xs text-gray-600">
-            <strong>Última devolución:</strong> #{devoluciones[0]?.devolucion_id} - {new Date(devoluciones[0]?.fecha_devolucion).toLocaleDateString('es-CL')}
-          </div>
-        )}
       </div>
 
       {/* Estadísticas */}

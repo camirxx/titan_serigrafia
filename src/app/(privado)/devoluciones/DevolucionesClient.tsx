@@ -473,6 +473,28 @@ export default function DevolucionesClient() {
       console.log('✅ [CLIENT] Devolución creada con ID:', data);
       resultados.push(data);
       
+      // Enviar email de egreso si es reintegro en efectivo
+      if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'efectivo' && montoReintegro > 0) {
+        console.log('💸 [CLIENT] Enviando email de egreso por reintegro:', montoReintegro);
+        try {
+          await fetch('/api/send-caja-egreso-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              monto: montoReintegro,
+              motivo: `Reintegro devolución #${data}`,
+              usuario: 'Sistema', // Por ahora, después podríamos obtener el nombre del usuario
+            }),
+          });
+          console.log('✅ [CLIENT] Email de egreso enviado exitosamente');
+        } catch (emailError) {
+          console.error('❌ [CLIENT] Error al enviar email de egreso:', emailError);
+          // No fallar la operación si el email falla
+        }
+      }
+      
       // Enviar correo si es transferencia
       const esTransferencia = (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'transferencia') ||
                              (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia');
@@ -520,6 +542,11 @@ export default function DevolucionesClient() {
                                  (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia');
     if (esTransferenciaFinal) {
       mensajeExito += `\n📧 Se envió notificación por correo con los datos de transferencia`;
+    }
+
+    // Agregar mensaje si se envió email de egreso
+    if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'efectivo' && montoReintegro > 0) {
+      mensajeExito += `\n💸 Se envió notificación por correo de egreso de caja`;
     }
 
     setOk(mensajeExito);

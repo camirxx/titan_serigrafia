@@ -259,24 +259,41 @@ const cargarVentasDelDia = async () => {
     if (!sesionCajaId) { setError('Abre la caja antes de registrar egresos'); return }
     setError(null); setLoading(true)
     try {
-      // Convertir las claves de string a number para el JSON
-      const denomsJSON: Record<number, number> = {}
-      Object.entries(denominaciones).forEach(([key, value]) => {
-        if (value > 0) {
-          denomsJSON[parseInt(key)] = value
-        }
-      })
-      
+      // Calcular total del egreso
+      const totalEgreso = Object.entries(denominaciones).reduce((sum, [denom, cant]) =>
+        sum + (parseInt(denom) * cant), 0
+      );
+
       const { error } = await supabase.rpc('caja_retirar_denominaciones', {
         p_sesion_id: sesionCajaId,
-        p_denominaciones: denomsJSON,
+        p_denominaciones: denominaciones,
         p_concepto: concepto || 'retiro',
       })
       if (error) {
         console.error('Error RPC:', error)
         throw error
       }
-      
+
+      // Enviar email de notificación de egreso
+      console.log('💸 Enviando email de egreso por retiro de efectivo:', totalEgreso);
+      try {
+        await fetch('/api/send-caja-egreso-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            monto: totalEgreso,
+            motivo: concepto || 'Retiro manual de efectivo',
+            usuario: 'Usuario del POS', // Podríamos obtener el nombre real del usuario
+          }),
+        });
+        console.log('✅ Email de egreso enviado exitosamente');
+      } catch (emailError) {
+        console.error('❌ Error al enviar email de egreso:', emailError);
+        // No fallar la operación si el email falla
+      }
+
       await cargarVentasDelDia()
       await cargarDenominacionesCaja()
     } catch (err: unknown) {
