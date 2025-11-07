@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { exportToCSV, exportToExcel, prepareDataForExport } from '@/lib/exportUtils';
+import ReportHeader from '@/components/ReportHeader';
+import { Boxes } from 'lucide-react';
 
 // Mapeo de nombres de colores a códigos hexadecimales
 const COLOR_MAP: Record<string, string> = {
@@ -181,25 +183,13 @@ export default function EstadoStockPage() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* Header con gradiente */}
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-6 text-white">
-        <div className="flex items-center gap-3">
-          <button onClick={() => window.history.back()} className="bg-white/20 backdrop-blur-sm p-3 rounded-xl hover:bg-white/30 transition">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold">Estado del Stock</h1>
-            <p className="text-white/80 text-sm mt-1">Inventario agrupado por diseño y tallas disponibles</p>
-          </div>
-        </div>
-      </div>
+      <ReportHeader
+        title="Estado del Stock"
+        subtitle="Inventario agrupado por diseño y tallas disponibles"
+        icon={<Boxes className="w-8 h-8" />}
+        onExportCSV={rows.length ? handleExportCSV : undefined}
+        onExportExcel={rows.length ? handleExportExcel : undefined}
+      />
 
       {/* Controles y filtros */}
       <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
@@ -238,20 +228,6 @@ export default function EstadoStockPage() {
                     Actualizando…
                   </span>
                 ) : '🔄 Recargar'}
-              </button>
-              <button
-                onClick={handleExportCSV}
-                className="h-11 px-5 rounded-lg border-2 border-indigo-300 bg-white text-indigo-700 font-semibold hover:bg-indigo-50 hover:border-indigo-400 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!rows.length}
-              >
-                📄 CSV
-              </button>
-              <button
-                onClick={handleExportExcel}
-                className="h-11 px-5 rounded-lg border-2 border-green-300 bg-white text-green-700 font-semibold hover:bg-green-50 hover:border-green-400 hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!rows.length}
-              >
-                📊 Excel
               </button>
             </div>
           </div>

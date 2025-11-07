@@ -576,7 +576,12 @@ const cargarVentasDelDia = async () => {
   if (paso === 0) {
     return (
       <div className="max-w-7xl mx-auto p-4 sm:p-6">
-        <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} />
+        <Header 
+          fechaSeleccionada={fechaSeleccionada} 
+          setFechaSeleccionada={setFechaSeleccionada}
+          onNuevaVenta={iniciarVenta}
+          sesionCajaId={sesionCajaId}
+        />
 
         <div className="grid md:grid-cols-3 gap-6">
           <div className="md:col-span-2 bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100">
@@ -638,30 +643,6 @@ const cargarVentasDelDia = async () => {
                   )}
                 </tbody>
               </table>
-            </div>
-
-            <div className="p-6 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200">
-              <button 
-                onClick={iniciarVenta} 
-                disabled={!sesionCajaId}
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-lg font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
-                {!sesionCajaId ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                    ABRE LA CAJA PRIMERO
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    NUEVA VENTA
-                  </span>
-                )}
-              </button>
             </div>
           </div>
 
@@ -1136,7 +1117,17 @@ function VueltoSelector({
   )
 }
 
-function Header({ fechaSeleccionada, setFechaSeleccionada }: { fechaSeleccionada: string; setFechaSeleccionada: (fecha: string) => void }) {
+function Header({ 
+  fechaSeleccionada, 
+  setFechaSeleccionada,
+  onNuevaVenta,
+  sesionCajaId
+}: { 
+  fechaSeleccionada: string
+  setFechaSeleccionada: (fecha: string) => void
+  onNuevaVenta?: () => void
+  sesionCajaId?: number | null
+}) {
   return (
     <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white mb-6">
       <div className="flex items-center gap-3">
@@ -1159,6 +1150,20 @@ function Header({ fechaSeleccionada, setFechaSeleccionada }: { fechaSeleccionada
           </p>
         </div>
         
+        {/* Botón Nueva Venta */}
+        {onNuevaVenta && (
+          <button
+            onClick={onNuevaVenta}
+            disabled={!sesionCajaId}
+            className="bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            <span>Nueva Venta</span>
+          </button>
+        )}
+        
         {/* Selector de fecha */}
         <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
           <input
@@ -1173,6 +1178,7 @@ function Header({ fechaSeleccionada, setFechaSeleccionada }: { fechaSeleccionada
     </div>
   )
 }
+
 function PanelCaja({ 
   saldoInicial,
   totalDia, 
@@ -1357,7 +1363,7 @@ function ModalMovimientoCaja({
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden animate-slideUp flex flex-col"
+        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slideUp flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header mejorado con gradiente y diseño moderno */}
@@ -1367,17 +1373,17 @@ function ModalMovimientoCaja({
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-white rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
           </div>
           
-          <div className="relative px-5 py-8">
+          <div className="relative px-6 py-7">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-xl ${tipo === 'ingreso' ? 'bg-white/20' : 'bg-white/20'} backdrop-blur-sm flex items-center justify-center`}>
-                  <span className="text-2xl leading-none">{tipo === 'ingreso' ? '💰' : '💸'}</span>
+                <div className={`p-3 rounded-xl ${tipo === 'ingreso' ? 'bg-white/20' : 'bg-white/20'} backdrop-blur-sm flex items-center justify-center`}>
+                  <span className="text-4xl leading-none">{tipo === 'ingreso' ? '💰' : '💸'}</span>
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-white">
+                  <h2 className="text-3xl font-bold text-white">
                     {tipo === 'ingreso' ? 'Ingresar Dinero' : 'Retirar Dinero'}
                   </h2>
-                  <p className="text-white/90 text-xs">
+                  <p className="text-white/90 text-sm mt-0.5">
                     {tipo === 'ingreso' ? 'Especifica los billetes que agregas a la caja' : 'Especifica los billetes que retiras de la caja'}
                   </p>
                 </div>
@@ -1395,11 +1401,11 @@ function ModalMovimientoCaja({
         </div>
 
         {/* Contenido del modal con scroll */}
-        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+        <div className="p-4 space-y-3 overflow-y-auto flex-1">
           {/* Campo de concepto mejorado */}
           <div>
-            <label className="flex items-center gap-2 text-base font-bold text-gray-800 mb-3">
-              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <label className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-2">
+              <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               Concepto del movimiento *
@@ -1409,21 +1415,21 @@ function ModalMovimientoCaja({
               value={concepto}
               onChange={(e) => setConcepto(e.target.value)}
               placeholder={tipo === 'ingreso' ? 'Ej: Fondo de caja inicial, Venta externa...' : 'Ej: Compra de insumos, Pago a proveedor...'}
-              className="w-full px-5 py-4 text-base border-2 border-gray-300 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all duration-200 outline-none"
+              className="w-full px-3 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 outline-none"
             />
           </div>
 
           {/* Desglose de billetes mejorado */}
           <div>
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <div className={`p-2 rounded-lg ${tipo === 'ingreso' ? 'bg-green-100' : 'bg-red-100'}`}>
-                <svg className={`w-5 h-5 ${tipo === 'ingreso' ? 'text-green-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <h3 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <div className={`p-1.5 rounded-lg ${tipo === 'ingreso' ? 'bg-green-100' : 'bg-red-100'}`}>
+                <svg className={`w-4 h-4 ${tipo === 'ingreso' ? 'text-green-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <span>Desglose de billetes y monedas</span>
             </h3>
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-4 space-y-2 border-2 border-gray-200">
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-3 space-y-1.5 border-2 border-gray-200">
               {Object.keys(billetes).reverse().map((denom) => {
                 const cantidad = billetes[denom as keyof typeof billetes]
                 const disponible = denominacionesActuales[parseInt(denom)] || 0
@@ -1431,26 +1437,26 @@ function ModalMovimientoCaja({
                 const isLowStock = tipo === 'retiro' && disponible <= 3 && disponible > 0
                 
                 return (
-                  <div key={denom} className={`flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border-2 ${cantidad > 0 ? (tipo === 'ingreso' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-transparent'}`}>
-                    <div className="min-w-[140px]">
-                      <div className="font-bold text-xl text-gray-800 flex items-center gap-2">
-                        <span className="text-2xl">{parseInt(denom) === 100 || parseInt(denom) === 500 ? '🪙' : '💵'}</span>
+                  <div key={denom} className={`flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm hover:shadow transition-all duration-200 border ${cantidad > 0 ? (tipo === 'ingreso' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-gray-200'}`}>
+                    <div className="min-w-[100px]">
+                      <div className="font-bold text-base text-gray-800 flex items-center gap-1">
+                        <span className="text-lg">{parseInt(denom) === 100 || parseInt(denom) === 500 ? '🪙' : '💵'}</span>
                         ${formatNumber(parseInt(denom))}
                       </div>
                       {tipo === 'retiro' && (
-                        <div className={`text-xs font-semibold mt-1 ${isLowStock ? 'text-orange-600' : 'text-gray-500'}`}>
-                          {isLowStock && '⚠️ '} Disponible: {disponible}
+                        <div className={`text-[10px] font-semibold ${isLowStock ? 'text-orange-600' : 'text-gray-500'}`}>
+                          {isLowStock && '⚠️ '} Disp: {disponible}
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => setBilletes(prev => ({ 
                           ...prev, 
                           [denom]: Math.max(0, prev[denom as keyof typeof billetes] - 1) 
                         }))}
-                        className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xl transition-all duration-200 ${
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-lg transition-all duration-200 ${
                           tipo === 'ingreso' 
                             ? 'bg-green-100 hover:bg-green-200 text-green-700 active:scale-95' 
                             : 'bg-red-100 hover:bg-red-200 text-red-700 active:scale-95'
@@ -1471,7 +1477,7 @@ function ModalMovimientoCaja({
                             [denom]: Math.max(0, Math.min(valor, maximo))
                           }))
                         }}
-                        className="w-24 px-4 py-2.5 text-center text-xl font-bold border-2 border-gray-300 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all duration-200 outline-none"
+                        className="w-16 px-2 py-1.5 text-center text-base font-bold border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 outline-none"
                       />
                       <button
                         type="button"
@@ -1483,7 +1489,7 @@ function ModalMovimientoCaja({
                           }))
                         }}
                         disabled={tipo === 'retiro' && cantidad >= disponible}
-                        className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xl transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${
                           tipo === 'ingreso' 
                             ? 'bg-green-100 hover:bg-green-200 text-green-700 active:scale-95' 
                             : 'bg-red-100 hover:bg-red-200 text-red-700 active:scale-95'
@@ -1493,7 +1499,7 @@ function ModalMovimientoCaja({
                       </button>
                     </div>
                     <div className="flex-1 text-right">
-                      <span className={`text-xl font-bold ${subtotal > 0 ? (tipo === 'ingreso' ? 'text-green-700' : 'text-red-700') : 'text-gray-400'}`}>
+                      <span className={`text-base font-bold ${subtotal > 0 ? (tipo === 'ingreso' ? 'text-green-700' : 'text-red-700') : 'text-gray-400'}`}>
                         = ${formatNumber(subtotal)}
                       </span>
                     </div>
@@ -1504,40 +1510,40 @@ function ModalMovimientoCaja({
           </div>
 
           {/* Total mejorado con animación */}
-          <div className={`relative overflow-hidden p-5 rounded-2xl border-2 shadow-lg ${
+          <div className={`relative overflow-hidden p-3 rounded-xl border-2 shadow-md ${
             tipo === 'ingreso' 
               ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300' 
               : 'bg-gradient-to-br from-red-50 to-rose-50 border-red-300'
           }`}>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">
+                <div className="text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">
                   Total a {tipo === 'ingreso' ? 'ingresar' : 'retirar'}
                 </div>
-                <div className={`text-5xl font-bold ${tipo === 'ingreso' ? 'text-green-700' : 'text-red-700'} transition-all duration-300`}>
+                <div className={`text-3xl font-bold ${tipo === 'ingreso' ? 'text-green-700' : 'text-red-700'} transition-all duration-300`}>
                   ${formatNumber(total)}
                 </div>
               </div>
               {total > 0 && (
-                <div className="text-6xl animate-bounce">{tipo === 'ingreso' ? '💰' : '💸'}</div>
+                <div className="text-4xl animate-bounce">{tipo === 'ingreso' ? '💰' : '💸'}</div>
               )}
             </div>
           </div>
         </div>
 
         {/* Footer con botones mejorados */}
-        <div className="p-5 bg-gray-50 border-t-2 border-gray-200">
-          <div className="flex gap-4">
+        <div className="p-3 bg-gray-50 border-t-2 border-gray-200">
+          <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 py-4 px-6 bg-white border-2 border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-100 hover:border-gray-400 transition-all duration-200 text-lg shadow-sm hover:shadow-md active:scale-95"
+              className="flex-1 py-3 px-4 bg-white border-2 border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-100 hover:border-gray-400 transition-all duration-200 text-sm shadow-sm hover:shadow active:scale-95"
             >
               Cancelar
             </button>
             <button
               onClick={handleConfirmar}
               disabled={total <= 0}
-              className={`flex-1 py-4 px-6 text-white font-bold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-lg shadow-lg hover:shadow-xl active:scale-95 ${
+              className={`flex-1 py-3 px-4 text-white font-bold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-md hover:shadow-lg active:scale-95 ${
                 tipo === 'ingreso' 
                   ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700' 
                   : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700'

@@ -1,17 +1,31 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
 import { exportToCSV, exportToExcel, prepareDataForExport } from '@/lib/exportUtils';
+import ReportHeader from '@/components/ReportHeader';
+import { Shirt } from 'lucide-react';
+
+type VentaDetalle = {
+  venta_id: number;
+  fecha: string;
+  variante_id: number;
+  cantidad: number;
+};
+
+type VarianteInfo = {
+  variante_id: number;
+  diseno: string;
+  tipo_prenda: string;
+  color: string;
+};
 
 type Row = {
-  producto: string;
-  total_unidades: number;
-  total_monto: number;
-  fecha: string;
+  diseno: string;
+  tipo_prenda: string;
+  color: string;
+  cantidad: number;
 };
 
 function toMsg(e: unknown): string {
@@ -25,42 +39,83 @@ const COLORS = [
   '#ef4444', '#a855f7', '#06b6d4', '#84cc16'
 ];
 
+type Modo = 'diseno' | 'disenoTipo';
+
 export default function VentasPorProductoPage() {
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [filtroDiseno, setFiltroDiseno] = useState<string>('');
+  const [modo, setModo] = useState<Modo>('diseno');
 
   const buscar = useCallback(async () => {
     setErrorMsg(null);
     setLoading(true);
     try {
-      let q = supabase
-        .from('ventas_por_producto_view')
-        .select('producto,total_unidades,total_monto,fecha');
+      // 1) Traer ventas con sus detalles dentro del rango
+      let qVentas = supabase
+        .from('ventas')
+        .select('id, fecha, detalle_ventas!inner(variante_id, cantidad)');
 
-      if (desde) q = q.gte('fecha', desde);
-      if (hasta) q = q.lte('fecha', hasta);
+      if (desde) qVentas = qVentas.gte('fecha', desde);
+      if (hasta) qVentas = qVentas.lte('fecha', hasta);
 
-      const { data, error } = await q
-        .order('total_unidades', { ascending: false })
-        .limit(100);
+      const { data: ventasData, error: errVentas } = await qVentas.limit(2000);
+      if (errVentas) throw new Error(errVentas.message);
 
-      if (error) throw new Error(error.message);
+      const detalles: VentaDetalle[] = [];
+      for (const v of (ventasData as any[] | null) ?? []) {
+        const items = Array.isArray(v.detalle_ventas) ? v.detalle_ventas : [];
+        for (const it of items) {
+          detalles.push({
+            venta_id: Number(v.id),
+            fecha: String(v.fecha),
+            variante_id: Number(it.variante_id),
+            cantidad: Number(it.cantidad ?? 1),
+          });
+        }
+      }
 
-      const list = Array.isArray(data) ? data : [];
-      const cleaned: Row[] = list.map((r) => {
-        const rec = r as Record<string, unknown>;
-        return {
-          producto: String(rec.producto ?? ''),
-          total_unidades: Number(rec.total_unidades ?? 0),
-          total_monto: Number(rec.total_monto ?? 0),
-          fecha: String(rec.fecha ?? ''),
-        };
-      });
+      // 2) Obtener info de variantes para esos variante_id
+      const varianteIds = Array.from(new Set(detalles.map(d => d.variante_id))).filter(Boolean);
+      let variantesInfo: VarianteInfo[] = [];
+      if (varianteIds.length) {
+        // Supabase limita 1000 elementos por in; dividir si es necesario
+        const chunkSize = 900;
+        for (let i = 0; i < varianteIds.length; i += chunkSize) {
+          const chunk = varianteIds.slice(i, i + chunkSize);
+          const { data: vdata, error: errV } = await supabase
+            .from('variantes_admin_view')
+            .select('variante_id, diseno, tipo_prenda, color')
+            .in('variante_id', chunk);
+          if (errV) throw new Error(errV.message);
+          const list = Array.isArray(vdata) ? vdata : [];
+          variantesInfo.push(...list.map((r: any) => ({
+            variante_id: Number(r.variante_id),
+            diseno: String(r.diseno ?? ''),
+            tipo_prenda: String(r.tipo_prenda ?? ''),
+            color: String(r.color ?? ''),
+          })));
+        }
+      }
 
-      setRows(cleaned);
+      const infoByVar = new Map<number, VarianteInfo>();
+      for (const vi of variantesInfo) infoByVar.set(vi.variante_id, vi);
+
+      // 3) Agregar por (diseño, tipo, color)
+      const acc = new Map<string, Row>();
+      for (const d of detalles) {
+        const info = infoByVar.get(d.variante_id);
+        if (!info) continue;
+        const key = `${info.diseno}|${info.tipo_prenda}|${info.color}`;
+        const curr = acc.get(key) ?? { diseno: info.diseno, tipo_prenda: info.tipo_prenda, color: info.color, cantidad: 0 };
+        curr.cantidad += d.cantidad;
+        acc.set(key, curr);
+      }
+
+      setRows(Array.from(acc.values()).sort((a, b) => b.cantidad - a.cantidad));
     } catch (e: unknown) {
       setRows([]);
       setErrorMsg(toMsg(e));
@@ -73,25 +128,48 @@ export default function VentasPorProductoPage() {
     buscar();
   }, [buscar]);
 
-  // Datos para el gráfico
+  // Diseños únicos para filtro
+  const disenosUnicos = useMemo(() => {
+    return Array.from(new Set(rows.map(r => r.diseno))).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
+  // Agregaciones para gráficos
   const TOP_N = 12;
-  const topData = rows.slice(0, TOP_N).map((r) => ({
-    producto: r.producto.length > 30 ? r.producto.substring(0, 30) + '...' : r.producto,
-    unidades: r.total_unidades,
-    monto: r.total_monto,
-  }));
+  const dataPorDiseno = useMemo(() => {
+    const acc = new Map<string, number>();
+    for (const r of rows) acc.set(r.diseno, (acc.get(r.diseno) ?? 0) + r.cantidad);
+    return Array.from(acc.entries())
+      .map(([diseno, unidades]) => ({ etiqueta: diseno, unidades }))
+      .sort((a, b) => b.unidades - a.unidades)
+      .slice(0, TOP_N);
+  }, [rows]);
+
+  const dataPorDisenoTipo = useMemo(() => {
+    const acc = new Map<string, number>();
+    for (const r of rows) {
+      const key = `${r.diseno} · ${r.tipo_prenda}`;
+      acc.set(key, (acc.get(key) ?? 0) + r.cantidad);
+    }
+    return Array.from(acc.entries())
+      .map(([combo, unidades]) => ({ etiqueta: combo, unidades }))
+      .sort((a, b) => b.unidades - a.unidades)
+      .slice(0, TOP_N);
+  }, [rows]);
+
+  const chartData = modo === 'diseno' ? dataPorDiseno : dataPorDisenoTipo;
+  const chartTitle = modo === 'diseno' ? `Top ${TOP_N} Diseños más vendidos` : `Top ${TOP_N} Diseños + Tipo más vendidos`;
+  const chartSubtitle = modo === 'diseno' ? 'Unidades por diseño' : 'Unidades por combinación diseño + tipo';
 
   // Estadísticas resumen
-  const totalUnidades = rows.reduce((sum, r) => sum + r.total_unidades, 0);
-  const totalMonto = rows.reduce((sum, r) => sum + r.total_monto, 0);
+  const totalUnidades = rows.reduce((sum, r) => sum + r.cantidad, 0);
 
   // Funciones de exportación
   const handleExportCSV = () => {
     const columnsMap = {
-      producto: 'Producto',
-      total_unidades: 'Unidades Vendidas',
-      total_monto: 'Monto Total ($)',
-      fecha: 'Fecha'
+      diseno: 'Diseño',
+      tipo_prenda: 'Tipo',
+      color: 'Color',
+      cantidad: 'Cantidad'
     };
     const preparedData = prepareDataForExport(rows, columnsMap);
     exportToCSV(preparedData, `ventas_producto_${new Date().toISOString().split('T')[0]}`);
@@ -99,10 +177,10 @@ export default function VentasPorProductoPage() {
 
   const handleExportExcel = () => {
     const columnsMap = {
-      producto: 'Producto',
-      total_unidades: 'Unidades Vendidas',
-      total_monto: 'Monto Total ($)',
-      fecha: 'Fecha'
+      diseno: 'Diseño',
+      tipo_prenda: 'Tipo',
+      color: 'Color',
+      cantidad: 'Cantidad'
     };
     const preparedData = prepareDataForExport(rows, columnsMap);
     exportToExcel(preparedData, `ventas_producto_${new Date().toISOString().split('T')[0]}`);
@@ -110,35 +188,37 @@ export default function VentasPorProductoPage() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* Header Moderno con Gradiente */}
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-6 text-white">
-        <div className="flex items-center gap-3">
-          <button onClick={() => window.history.back()} className="bg-white/20 backdrop-blur-sm p-3 rounded-xl hover:bg-white/30 transition">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
-            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
+      <ReportHeader
+        title="Ventas por Producto"
+        icon={<Shirt className="w-8 h-8" />}
+        subtitle="Ventas por diseño y por tipo"
+        onExportCSV={rows.length ? handleExportCSV : undefined}
+        onExportExcel={rows.length ? handleExportExcel : undefined}
+        actions={(
+          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-1 flex">
+            <button
+              onClick={() => setModo('diseno')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                modo === 'diseno' ? 'bg-white text-purple-600 shadow' : 'text-white/80 hover:bg-white/10'
+              }`}
+            >
+              Diseño
+            </button>
+            <button
+              onClick={() => setModo('disenoTipo')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                modo === 'disenoTipo' ? 'bg-white text-purple-600 shadow' : 'text-white/80 hover:bg-white/10'
+              }`}
+            >
+              Diseño + Tipo
+            </button>
           </div>
-          <div className="flex-1">
-            <h1 className="text-4xl font-bold mb-2">Ventas por Producto</h1>
-            <p className="text-white/90 text-lg">Análisis detallado de productos más vendidos</p>
-          </div>
-          {rows.length > 0 && (
-            <div className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl">
-              <div className="text-sm text-white/80">Total Productos</div>
-              <div className="text-3xl font-bold">{rows.length}</div>
-            </div>
-          )}
-        </div>
-      </div>
+        )}
+      />
 
       {/* Filtros Mejorados */}
       <div className="bg-white rounded-xl shadow-2xl p-6 border border-gray-100 transform hover:scale-[1.01] transition-transform duration-300">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-3">
               <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -191,22 +271,7 @@ export default function VentasPorProductoPage() {
               )}
             </button>
           </div>
-          <div className="flex items-end gap-2">
-            <button
-              onClick={handleExportCSV}
-              className="flex-1 py-3 rounded-xl border-2 border-indigo-300 bg-white text-indigo-700 font-bold hover:bg-indigo-50 hover:border-indigo-400 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              disabled={!rows.length}
-            >
-              📄 CSV
-            </button>
-            <button
-              onClick={handleExportExcel}
-              className="flex-1 py-3 rounded-xl border-2 border-green-300 bg-white text-green-700 font-bold hover:bg-green-50 hover:border-green-400 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              disabled={!rows.length}
-            >
-              📊 Excel
-            </button>
-          </div>
+          <div className="flex items-end" />
         </div>
       </div>
 
@@ -222,89 +287,36 @@ export default function VentasPorProductoPage() {
             <div className="flex-1">
               <h3 className="text-red-800 font-bold text-lg">Error al cargar datos</h3>
               <p className="text-red-700 mt-2">{errorMsg}</p>
-              <p className="text-red-600 text-sm mt-3 bg-red-100 px-3 py-2 rounded-lg">
-                💡 Asegúrate de que la vista <code className="font-mono font-bold">ventas_por_producto_view</code> existe en Supabase
-              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Estadísticas con Diseño 3D */}
+      {/* Estadísticas rápidas */}
       {rows.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl shadow-xl p-6 border border-gray-200 transform hover:scale-105 hover:shadow-2xl transition-all duration-300">
-            <div className="flex items-center gap-4">
-              <div className="bg-gradient-to-br from-gray-500 to-gray-700 p-4 rounded-2xl shadow-lg">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Productos Únicos</div>
-                <div className="text-4xl font-bold text-gray-900 mt-1">{rows.length}</div>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl shadow-xl p-6 border border-blue-200">
+            <div className="text-sm font-semibold text-blue-700 uppercase tracking-wide">Unidades Vendidas</div>
+            <div className="text-4xl font-bold text-blue-600 mt-1">{totalUnidades.toLocaleString()}</div>
           </div>
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl shadow-xl p-6 border border-blue-200 transform hover:scale-105 hover:shadow-2xl transition-all duration-300">
-            <div className="flex items-center gap-4">
-              <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-2xl shadow-lg">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-blue-700 uppercase tracking-wide">Unidades Vendidas</div>
-                <div className="text-4xl font-bold text-blue-600 mt-1">
-                  {totalUnidades.toLocaleString()}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-2xl shadow-xl p-6 border border-green-200 transform hover:scale-105 hover:shadow-2xl transition-all duration-300">
-            <div className="flex items-center gap-4">
-              <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-4 rounded-2xl shadow-lg">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-green-700 uppercase tracking-wide">Monto Total</div>
-                <div className="text-4xl font-bold text-green-600 mt-1">
-                  ${totalMonto.toLocaleString()}
-                </div>
-              </div>
-            </div>
+          <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl shadow-xl p-6 border border-gray-200">
+            <div className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Registros (diseño·tipo·color)</div>
+            <div className="text-4xl font-bold text-gray-900 mt-1">{rows.length}</div>
           </div>
         </div>
       )}
 
-      {/* Gráfico Mejorado con Gradientes */}
-      {topData.length > 0 && (
-        <div className="bg-white rounded-xl shadow-2xl p-8 border border-gray-100 transform hover:scale-[1.01] transition-transform duration-300">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-3 rounded-xl shadow-lg">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                Top {TOP_N} Productos Más Vendidos
-              </h2>
-              <p className="text-gray-600 mt-2">Ranking de productos por unidades vendidas</p>
-            </div>
-          </div>
-          <div className="h-[500px] bg-gradient-to-br from-gray-50 to-slate-100 rounded-xl p-4">
+      {/* Gráfico principal */}
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-xl shadow-2xl p-8 border border-gray-100">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">{chartTitle}</h2>
+          <p className="text-gray-600 mb-6">{chartSubtitle}</p>
+          <div className="h-[420px] bg-gradient-to-br from-gray-50 to-slate-100 rounded-xl p-4">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={topData}
-                layout="vertical"
-                margin={{ top: 10, right: 40, left: 20, bottom: 10 }}
-              >
+              <BarChart data={chartData} layout="vertical" margin={{ top: 10, right: 40, left: 20, bottom: 10 }}>
                 <defs>
-                  {topData.map((entry, index) => (
-                    <linearGradient key={`gradient-${index}`} id={`colorGradient${index}`} x1="0" y1="0" x2="1" y2="0">
+                  {chartData.map((_, index) => (
+                    <linearGradient key={`grad-${index}`} id={`grad-${index}`} x1="0" y1="0" x2="1" y2="0">
                       <stop offset="0%" stopColor={COLORS[index % COLORS.length]} stopOpacity={0.8} />
                       <stop offset="100%" stopColor={COLORS[index % COLORS.length]} stopOpacity={1} />
                     </linearGradient>
@@ -312,33 +324,12 @@ export default function VentasPorProductoPage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={true} vertical={false} />
                 <XAxis type="number" stroke="#6b7280" style={{ fontSize: '14px', fontWeight: 'bold' }} />
-                <YAxis 
-                  type="category" 
-                  dataKey="producto" 
-                  width={220} 
-                  tick={{ fontSize: 13, fill: '#374151', fontWeight: '500' }} 
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#fff', 
-                    border: '2px solid #e5e7eb',
-                    borderRadius: '12px',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-                    padding: '12px'
-                  }}
-                  formatter={(value: number, name: string) => {
-                    if (name === 'unidades') return [value.toLocaleString(), 'Unidades'];
-                    if (name === 'monto') return [`$${value.toLocaleString()}`, 'Monto'];
-                    return [value, name];
-                  }}
-                  labelStyle={{ fontWeight: 'bold', color: '#111827' }}
-                />
+                <YAxis type="category" dataKey="etiqueta" width={modo === 'diseno' ? 220 : 260} tick={{ fontSize: 13, fill: '#374151', fontWeight: '500' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '2px solid #e5e7eb', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', padding: '12px' }}
+                  formatter={(value: number) => [value.toLocaleString(), 'Unidades']} labelStyle={{ fontWeight: 'bold', color: '#111827' }} />
                 <Bar dataKey="unidades" radius={[0, 12, 12, 0]}>
-                  {topData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={`url(#colorGradient${index})`}
-                    />
+                  {chartData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={`url(#grad-${index})`} />
                   ))}
                 </Bar>
               </BarChart>
@@ -346,6 +337,71 @@ export default function VentasPorProductoPage() {
           </div>
         </div>
       )}
+
+      {/* Tabla Detalle con filtro por diseño */}
+      <div className="bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100">
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <span className="text-2xl">📋</span>
+            Detalle de Ventas (Diseño · Tipo · Color)
+          </h2>
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-600" htmlFor="filtro-diseno">Filtro por diseño:</label>
+            <select
+              id="filtro-diseno"
+              className="border-2 border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              value={filtroDiseno}
+              onChange={(e) => setFiltroDiseno(e.target.value)}
+            >
+              <option value="">Todos</option>
+              {disenosUnicos.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="overflow-auto max-h-[560px]">
+          <table className="w-full text-sm">
+            <thead className="bg-gradient-to-r from-indigo-50 to-purple-50 sticky top-0 z-10">
+              <tr>
+                <th className="text-left p-4 font-bold text-gray-700 border-b-2 border-indigo-200">🎨 Diseño</th>
+                <th className="text-left p-4 font-bold text-gray-700 border-b-2 border-indigo-200">👕 Tipo</th>
+                <th className="text-left p-4 font-bold text-gray-700 border-b-2 border-indigo-200">🧵 Color</th>
+                <th className="text-right p-4 font-bold text-gray-700 border-b-2 border-indigo-200">📊 Cantidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows
+                .filter(r => !filtroDiseno || r.diseno === filtroDiseno)
+                .map((r, i) => (
+                  <tr key={`${r.diseno}-${r.tipo_prenda}-${r.color}-${i}`} className="border-b border-gray-100 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200">
+                    <td className="p-4 font-semibold text-gray-800">{r.diseno}</td>
+                    <td className="p-4 text-gray-700">{r.tipo_prenda}</td>
+                    <td className="p-4 text-gray-700">{r.color}</td>
+                    <td className="p-4 text-right">
+                      <span className="inline-flex items-center justify-center min-w-[60px] px-3 py-1.5 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 font-bold rounded-lg">
+                        {r.cantidad}
+                      </span>
+                    </td>
+                  </tr>
+              ))}
+              {!rows.length && !loading && (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center">
+                    <div className="flex flex-col items-center gap-3 text-gray-400">
+                      <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                      </svg>
+                      <span className="text-lg font-semibold">Sin datos</span>
+                      <span className="text-sm">Ajusta los filtros de fecha y vuelve a buscar</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

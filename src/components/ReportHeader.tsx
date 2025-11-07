@@ -7,17 +7,28 @@ import { ChevronLeft, FileDown } from 'lucide-react';
 interface ReportHeaderProps {
   title: string;
   icon: React.ReactNode;
+  subtitle?: string;
+  gradientClass?: string;
+  iconWrapperClass?: string;
   onExportCSV?: () => void;
   onExportExcel?: () => void;
   showExport?: boolean;
+  actions?: React.ReactNode;
 }
 
-export default function ReportHeader({ 
-  title, 
-  icon, 
-  onExportCSV, 
+const DEFAULT_GRADIENT = 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600';
+const DEFAULT_ICON_BG = 'bg-white/20';
+
+export default function ReportHeader({
+  title,
+  icon,
+  subtitle,
+  gradientClass = DEFAULT_GRADIENT,
+  iconWrapperClass = DEFAULT_ICON_BG,
+  onExportCSV,
   onExportExcel,
-  showExport = true 
+  showExport = true,
+  actions,
 }: ReportHeaderProps) {
   const router = useRouter();
   const [fecha, setFecha] = useState('');
@@ -36,8 +47,8 @@ export default function ReportHeader({
   }, []);
 
   return (
-    <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-6 text-white mb-6">
-      <div className="flex items-center justify-between">
+    <div className={`${gradientClass} rounded-2xl shadow-2xl p-6 text-white mb-6`}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => router.back()} 
@@ -45,19 +56,21 @@ export default function ReportHeader({
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
+          <div className={`${iconWrapperClass} backdrop-blur-sm p-3 rounded-xl`}> 
             {icon}
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">{title}</h1>
             <p className="text-white/80 text-sm mt-1">
-              {fecha} · {hora}
+              {subtitle ?? `${fecha} · ${hora}`}
             </p>
           </div>
         </div>
 
-        {showExport && (onExportCSV || onExportExcel) && (
-          <div className="relative">
+        <div className="flex items-center gap-3">
+          {actions}
+          {showExport && (onExportCSV || onExportExcel) && (
+            <div className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
               className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl hover:bg-white/30 transition font-semibold"
@@ -95,7 +108,8 @@ export default function ReportHeader({
               </div>
             )}
           </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
