@@ -1,7 +1,7 @@
 // src/app/(privado)/(admin)/trabajadores/TrabajadoresUI.tsx
 "use client";
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useOptimistic } from 'react';
 import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -33,7 +33,7 @@ interface TrabajadoresUIProps {
 }
 
 export default function TrabajadoresUI({ 
-  usuarios, 
+  usuarios: initialUsuarios, 
   tiendas, 
   currentUserId,
   updateRole, 
@@ -57,29 +57,121 @@ export default function TrabajadoresUI({
     tienda_id: ''
   });
 
+type OptimisticAction =
+  | { type: 'UPDATE_ROLE'; payload: { id: string; rol: Rol } }
+  | { type: 'TOGGLE_ACTIVO'; payload: { id: string; activo: boolean } }
+  | { type: 'UPDATE_TIENDA'; payload: { id: string; tienda_id: number | null } }
+  | { type: 'DELETE_USER'; payload: { id: string } }
+  | { type: 'CREATE_USER'; payload: Usuario };
+
+  // Estado optimista para usuarios
+  const [optimisticUsuarios, setOptimisticUsuarios] = useOptimistic(
+    initialUsuarios,
+    (state, action: OptimisticAction) => {
+      switch (action.type) {
+        case 'UPDATE_ROLE':
+          return state.map(u => 
+            u.id === action.payload.id 
+              ? { ...u, rol: action.payload.rol }
+              : u
+          );
+        case 'TOGGLE_ACTIVO':
+          return state.map(u => 
+            u.id === action.payload.id 
+              ? { ...u, activo: action.payload.activo }
+              : u
+          );
+        case 'UPDATE_TIENDA':
+          const tienda = tiendas.find(t => t.id === action.payload.tienda_id);
+          return state.map(u => 
+            u.id === action.payload.id 
+              ? { ...u, tienda_id: action.payload.tienda_id, tienda_nombre: tienda?.nombre || null }
+              : u
+          );
+        case 'DELETE_USER':
+          return state.filter(u => u.id !== action.payload.id);
+        case 'CREATE_USER':
+          return [...state, action.payload];
+        default:
+          return state;
+      }
+    }
+  );
+
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
-    setTimeout(() => setNotification(null), 5000); // 5 segundos para mejor visibilidad
+    setTimeout(() => setNotification(null), 5000);
   };
 
-  const handleUpdateRole = async (formData: FormData) => {
+  const handleUpdateRole = async (id: string, rol: Rol) => {
     startTransition(async () => {
+      setOptimisticUsuarios({ type: 'UPDATE_ROLE', payload: { id, rol } });
+      
+      const formData = new FormData();
+      formData.append('id', id);
+      formData.append('rol', rol);
+
       const result = await updateRole(formData);
-      showNotification(result.success ? 'success' : 'error', result.message);
+      if (!result.success) {
+        showNotification('error', result.message);
+        // Revertir el cambio optimista
+        const originalUser = initialUsuarios.find(u => u.id === id);
+        if (originalUser?.rol) {
+          setOptimisticUsuarios({ type: 'UPDATE_ROLE', payload: { 
+            id, 
+            rol: originalUser.rol 
+          }});
+        }
+      } else {
+        showNotification('success', result.message);
+      }
     });
   };
 
-  const handleToggleActivo = async (formData: FormData) => {
+  const handleToggleActivo = async (id: string, activo: boolean) => {
     startTransition(async () => {
+      setOptimisticUsuarios({ type: 'TOGGLE_ACTIVO', payload: { id, activo } });
+
+      const formData = new FormData();
+      formData.append('id', id);
+      formData.append('activo', activo.toString());
+
       const result = await toggleActivo(formData);
-      showNotification(result.success ? 'success' : 'error', result.message);
+      if (!result.success) {
+        showNotification('error', result.message);
+        // Revertir el cambio optimista
+        setOptimisticUsuarios({ type: 'TOGGLE_ACTIVO', payload: { 
+          id, 
+          activo: !activo 
+        }});
+      } else {
+        showNotification('success', result.message);
+      }
     });
   };
 
-  const handleUpdateTienda = async (formData: FormData) => {
+  const handleUpdateTienda = async (id: string, tienda_id: number | null) => {
     startTransition(async () => {
+      setOptimisticUsuarios({ type: 'UPDATE_TIENDA', payload: { id, tienda_id } });
+
+      const formData = new FormData();
+      formData.append('id', id);
+      if (tienda_id) {
+        formData.append('tienda_id', tienda_id.toString());
+      }
+
       const result = await updateTienda(formData);
-      showNotification(result.success ? 'success' : 'error', result.message);
+      if (!result.success) {
+        showNotification('error', result.message);
+        // Revertir el cambio optimista
+        const originalUser = initialUsuarios.find(u => u.id === id);
+        setOptimisticUsuarios({ type: 'UPDATE_TIENDA', payload: { 
+          id, 
+          tienda_id: originalUser?.tienda_id || null
+        }});
+      } else {
+        showNotification('success', result.message);
+      }
     });
   };
 
@@ -99,6 +191,8 @@ export default function TrabajadoresUI({
           rol: 'vendedor',
           tienda_id: ''
         });
+        // Recargar la página para obtener el nuevo usuario con ID real
+        window.location.reload();
       } else {
         showNotification('error', result.message);
       }
@@ -106,16 +200,27 @@ export default function TrabajadoresUI({
   };
 
   const handleDeleteUser = async (userId: string) => {
-    const formData = new FormData();
-    formData.append('id', userId);
     startTransition(async () => {
+      setOptimisticUsuarios({ type: 'DELETE_USER', payload: { id: userId } });
+
+      const formData = new FormData();
+      formData.append('id', userId);
       const result = await deleteUser(formData);
-      showNotification(result.success ? 'success' : 'error', result.message);
+      if (!result.success) {
+        showNotification('error', result.message);
+        // Revertir el cambio optimista - agregar de vuelta el usuario
+        const deletedUser = initialUsuarios.find(u => u.id === userId);
+        if (deletedUser) {
+          setOptimisticUsuarios({ type: 'CREATE_USER', payload: deletedUser });
+        }
+      } else {
+        showNotification('success', result.message);
+      }
       setShowDeleteConfirm(null);
     });
   };
 
-  const filteredUsuarios = usuarios.filter(u => 
+  const filteredUsuarios = optimisticUsuarios.filter(u => 
     u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.nombre?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -168,7 +273,7 @@ export default function TrabajadoresUI({
             <div className="flex-1">
               <h1 className="text-3xl font-bold">Gestión de Trabajadores</h1>
               <p className="text-white/80 text-sm mt-1">
-                {usuarios.length} trabajadores registrados
+                {initialUsuarios.length} trabajadores registrados
               </p>
             </div>
             <button
@@ -236,69 +341,47 @@ export default function TrabajadoresUI({
 
                     {/* Rol */}
                     <td className="px-6 py-4">
-                      <form action={handleUpdateRole} className="flex items-center gap-2">
-                        <input type="hidden" name="id" value={u.id} />
-                        <div className="relative">
-                          <select
-                            name="rol"
-                            defaultValue={u.rol || ''}
-                            disabled={u.id === currentUserId}
-                            onChange={(e) => {
-                              const form = e.currentTarget.form;
-                              if (form) {
-                                const formData = new FormData(form);
-                                handleUpdateRole(formData);
-                              }
-                            }}
-                            className={`appearance-none pl-3 pr-10 py-2 rounded-lg border-2 font-semibold transition focus:ring-2 focus:ring-purple-500 outline-none ${
-                              getRolBadgeColor(u.rol)
-                            } ${
-                              u.id === currentUserId ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                            }`}
-                            title={u.id === currentUserId ? 'No puedes cambiar tu propio rol' : ''}
-                          >
-                            <option value="vendedor">Vendedor</option>
-                            <option value="admin">Admin</option>
-                            <option value="desarrollador">Desarrollador</option>
-                          </select>
-                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                            {getRolIcon(u.rol)}
-                          </div>
+                      <div className="relative">
+                        <select
+                          value={u.rol || ''}
+                          disabled={u.id === currentUserId}
+                          onChange={(e) => handleUpdateRole(u.id, e.target.value as Rol)}
+                          className={`appearance-none pl-3 pr-10 py-2 rounded-lg border-2 font-semibold transition focus:ring-2 focus:ring-purple-500 outline-none ${
+                            getRolBadgeColor(u.rol)
+                          } ${
+                            u.id === currentUserId ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                          }`}
+                          title={u.id === currentUserId ? 'No puedes cambiar tu propio rol' : ''}
+                        >
+                          <option value="vendedor">Vendedor</option>
+                          <option value="admin">Admin</option>
+                          <option value="desarrollador">Desarrollador</option>
+                        </select>
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                          {getRolIcon(u.rol)}
                         </div>
-                      </form>
+                      </div>
                     </td>
 
                     {/* Tienda */}
                     <td className="px-6 py-4">
-                      <form action={handleUpdateTienda}>
-                        <input type="hidden" name="id" value={u.id} />
-                        <select
-                          name="tienda_id"
-                          defaultValue={u.tienda_id || ''}
-                          onChange={(e) => {
-                            const form = e.currentTarget.form;
-                            if (form) {
-                              const formData = new FormData(form);
-                              handleUpdateTienda(formData);
-                            }
-                          }}
-                          className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition cursor-pointer"
-                        >
-                          <option value="">Sin asignar</option>
-                          {tiendas.map(t => (
-                            <option key={t.id} value={t.id}>{t.nombre}</option>
-                          ))}
-                        </select>
-                      </form>
+                      <select
+                        value={u.tienda_id || ''}
+                        onChange={(e) => handleUpdateTienda(u.id, e.target.value ? Number(e.target.value) : null)}
+                        className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition cursor-pointer"
+                      >
+                        <option value="">Sin asignar</option>
+                        {tiendas.map(t => (
+                          <option key={t.id} value={t.id}>{t.nombre}</option>
+                        ))}
+                      </select>
                     </td>
 
                     {/* Estado Activo/Inactivo */}
                     <td className="px-6 py-4">
-                      <form action={handleToggleActivo} className="flex items-center gap-3">
-                        <input type="hidden" name="id" value={u.id} />
-                        <input type="hidden" name="activo" value={(!u.activo).toString()} />
+                      <div className="flex items-center gap-3">
                         <button
-                          type="submit"
+                          onClick={() => handleToggleActivo(u.id, !u.activo)}
                           disabled={isPending}
                           className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
                             u.activo ? 'bg-green-500' : 'bg-gray-300'
@@ -315,7 +398,7 @@ export default function TrabajadoresUI({
                         }`}>
                           {u.activo ? 'Activo' : 'Inactivo'}
                         </span>
-                      </form>
+                      </div>
                     </td>
 
                     {/* Fecha de Registro */}
@@ -370,30 +453,20 @@ export default function TrabajadoresUI({
                   {/* Rol */}
                   <div>
                     <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1 block">Rol</label>
-                    <form action={handleUpdateRole}>
-                      <input type="hidden" name="id" value={u.id} />
-                      <select
-                        name="rol"
-                        defaultValue={u.rol || ''}
-                        disabled={u.id === currentUserId}
-                        onChange={(e) => {
-                          const form = e.currentTarget.form;
-                          if (form) {
-                            const formData = new FormData(form);
-                            handleUpdateRole(formData);
-                          }
-                        }}
-                        className={`w-full pl-3 pr-10 py-2 rounded-lg border-2 font-semibold ${
-                          getRolBadgeColor(u.rol)
-                        } ${
-                          u.id === currentUserId ? 'opacity-60 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        <option value="vendedor">Vendedor</option>
-                        <option value="admin">Admin</option>
-                        <option value="desarrollador">Desarrollador</option>
-                      </select>
-                    </form>
+                    <select
+                      value={u.rol || ''}
+                      disabled={u.id === currentUserId}
+                      onChange={(e) => handleUpdateRole(u.id, e.target.value as Rol)}
+                      className={`w-full pl-3 pr-10 py-2 rounded-lg border-2 font-semibold ${
+                        getRolBadgeColor(u.rol)
+                      } ${
+                        u.id === currentUserId ? 'opacity-60 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      <option value="vendedor">Vendedor</option>
+                      <option value="admin">Admin</option>
+                      <option value="desarrollador">Desarrollador</option>
+                    </select>
                     {u.id === currentUserId && (
                       <p className="text-xs text-gray-500 mt-1">No puedes cambiar tu propio rol</p>
                     )}
@@ -402,36 +475,24 @@ export default function TrabajadoresUI({
                   {/* Tienda */}
                   <div>
                     <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1 block">Tienda</label>
-                    <form action={handleUpdateTienda}>
-                      <input type="hidden" name="id" value={u.id} />
-                      <select
-                        name="tienda_id"
-                        defaultValue={u.tienda_id || ''}
-                        onChange={(e) => {
-                          const form = e.currentTarget.form;
-                          if (form) {
-                            const formData = new FormData(form);
-                            handleUpdateTienda(formData);
-                          }
-                        }}
-                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg"
-                      >
-                        <option value="">Sin asignar</option>
-                        {tiendas.map(t => (
-                          <option key={t.id} value={t.id}>{t.nombre}</option>
-                        ))}
-                      </select>
-                    </form>
+                    <select
+                      value={u.tienda_id || ''}
+                      onChange={(e) => handleUpdateTienda(u.id, e.target.value ? Number(e.target.value) : null)}
+                      className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg"
+                    >
+                      <option value="">Sin asignar</option>
+                      {tiendas.map(t => (
+                        <option key={t.id} value={t.id}>{t.nombre}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Estado */}
                   <div className="flex items-center justify-between pt-2">
                     <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Estado</span>
-                    <form action={handleToggleActivo} className="flex items-center gap-2">
-                      <input type="hidden" name="id" value={u.id} />
-                      <input type="hidden" name="activo" value={(!u.activo).toString()} />
+                    <div className="flex items-center gap-2">
                       <button
-                        type="submit"
+                        onClick={() => handleToggleActivo(u.id, !u.activo)}
                         className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all ${
                           u.activo ? 'bg-green-500' : 'bg-gray-300'
                         }`}
@@ -445,7 +506,7 @@ export default function TrabajadoresUI({
                       <span className={`text-sm ${u.activo ? 'text-green-700' : 'text-gray-500'}`}>
                         {u.activo ? 'Activo' : 'Inactivo'}
                       </span>
-                    </form>
+                    </div>
                   </div>
 
                   {/* Botón Eliminar (Mobile) */}

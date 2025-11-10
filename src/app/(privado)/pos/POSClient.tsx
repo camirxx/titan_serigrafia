@@ -28,17 +28,10 @@ type Venta = {
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia'
 
-type VarianteConProducto = {
-  id: number
-  talla: string
-  stock_actual: number
-  productos: {
-    activo: boolean
-    disenos: { nombre: string }[]
-    tipos_prenda: { nombre: string }[]
-    colores: { nombre: string }[]
-    tienda_id: number
-  }[]
+type DatosTalla = {
+  variante_id: number
+  talla: string | null
+  stock_actual: number | null
 }
 
 export default function POSModerno() {
@@ -344,7 +337,7 @@ const cargarVentasDelDia = async () => {
     } catch (err: unknown) {
       console.error('💥 Error completo en iniciarVenta:', err)
       console.error('💥 Error stringificado:', JSON.stringify(err, null, 2))
-      setError(getErrorMessage(err, 'Error al iniciar la venta. Verifica que existe la vista variantes_admin_view'))
+      setError(getErrorMessage(err, 'Error al iniciar la venta. Verifica que las tablas existen'))
       setPaso(0)
     }
   }
@@ -410,34 +403,22 @@ const cargarVentasDelDia = async () => {
 
   const cargarTallasDisponibles = async (color: string) => {
     try {
-      // Consultar directamente la tabla variantes con joins
       const { data, error } = await supabase
-        .from('variantes')
-        .select(`
-          id,
-          talla,
-          stock_actual,
-          productos!inner(
-            activo,
-            disenos!inner(nombre),
-            tipos_prenda!inner(nombre),
-            colores!inner(nombre),
-            tienda_id
-          )
-        `)
-        .eq('productos.disenos.nombre', disenoSel)
-        .eq('productos.tipos_prenda.nombre', tipoSel)
-        .eq('productos.colores.nombre', color)
-        .eq('productos.tienda_id', tiendaId as number)
-        .eq('productos.activo', true)
+        .from('variantes_admin_view')
+        .select('variante_id, talla, stock_actual')
+        .eq('tipo_prenda', tipoSel)
+        .eq('diseno', disenoSel)
+        .eq('color', color)
+        .eq('tienda_id', tiendaId as number)
+        .eq('producto_activo', true)
         .gt('stock_actual', 0)
         .order('talla')
 
       if (error) throw error
 
-      const tallasData = data?.map((d: VarianteConProducto) => ({
+      const tallasData = data?.map((d: DatosTalla) => ({
         talla: d.talla || '',
-        variante_id: d.id,
+        variante_id: d.variante_id,
         stock: d.stock_actual || 0
       })) || []
 

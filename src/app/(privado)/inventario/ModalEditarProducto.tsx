@@ -42,16 +42,17 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
       setColor(producto.color);
       setActivo(producto.activo);
       
-      // Cargar stock real de las variantes desde la base de datos
+      // Cargar stock real solo de las variantes de este producto específico
       const cargarStockReal = async () => {
         const supabase = supabaseBrowser();
         const stockInicial: { [key: string]: number } = {};
         
         try {
+          // Cambiar la consulta para filtrar por producto_id específico en lugar de por diseño/tipo/color
           const { data, error } = await supabase
             .from("variantes")
             .select("id, talla, stock_actual")
-            .eq("producto_id", producto.producto_id);
+            .eq("producto_id", producto.producto_id); // Solo variantes de este producto
           
           if (error) throw error;
           
