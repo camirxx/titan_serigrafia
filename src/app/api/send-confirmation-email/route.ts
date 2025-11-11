@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
               <div class="warning">
                 <p style="margin: 0;"><strong>⚠️ Importante:</strong> Por favor revise su cuenta bancaria para verificar que el depósito haya sido acreditado correctamente.</p>
-                <p style="margin: 10px 0 0 0;">Si no ve el depósito en las próximas 24-48 horas hábiles, o si tiene alguna duda, por favor contáctenos al correo: <strong>dy.soto04@gmail.com</strong></p>
+                <p style="margin: 10px 0 0 0;">Si no ve el depósito en las próximas 24-48 horas hábiles, o si tiene alguna duda, por favor contáctenos al correo: <strong>contacto@titanserigrafia.com</strong></p>
               </div>
 
               <div style="margin-top: 30px; padding: 15px; background: #e7f3ff; border-radius: 4px;">
@@ -128,12 +128,13 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${RESEND_API_KEY}`,
       },
-      body: JSON.stringify({
-        from: 'Titan Serigrafía <delivered@resend.dev>',
-        to: [email],
-        subject: `✅ Reembolso Realizado - Devolución #${devolucionId} - Titan Serigrafía`,
-        html: emailContent,
-      }),
+
+body: JSON.stringify({
+  from: 'Titan Serigrafía <noreply@titanserigrafia.com>', // Tu nuevo dominio
+  to: [email], // Email del cliente
+  subject: `✅ Reembolso Realizado - Devolución #${devolucionId} - Titan Serigrafía`,
+  html: emailContent,
+}),
     });
 
     if (!response.ok) {
