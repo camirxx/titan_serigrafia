@@ -16,7 +16,7 @@ type Row = {
   fecha: string;
 };
 
-type Modo = 'talla' | 'color';
+type Modo = 'talla' | 'color' | 'talla-color';
 
 function toMsg(e: unknown): string {
   return e instanceof Error ? e.message : 'Error cargando reporte';
@@ -129,7 +129,11 @@ export default function VentasTallaColorPage() {
     const acc = new Map<string, number>();
     for (const r of rows) acc.set(r.talla, (acc.get(r.talla) ?? 0) + r.unidades);
     return Array.from(acc.entries())
-      .map(([talla, unidades]) => ({ etiqueta: talla, unidades }))
+      .map(([talla, unidades]) => ({ 
+        etiqueta: talla, 
+        unidades,
+        tipo: 'talla' as const
+      }))
       .sort((a, b) => b.unidades - a.unidades);
   }, [rows]);
 
@@ -137,11 +141,34 @@ export default function VentasTallaColorPage() {
     const acc = new Map<string, number>();
     for (const r of rows) acc.set(r.color, (acc.get(r.color) ?? 0) + r.unidades);
     return Array.from(acc.entries())
-      .map(([color, unidades]) => ({ etiqueta: color, unidades }))
+      .map(([color, unidades]) => ({ 
+        etiqueta: color, 
+        unidades,
+        tipo: 'color' as const
+      }))
       .sort((a, b) => b.unidades - a.unidades);
   }, [rows]);
 
-  const chartData = modo === 'talla' ? dataPorTalla : dataPorColor;
+  const dataPorTallaColor = useMemo(() => {
+    const acc = new Map<string, number>();
+    for (const r of rows) {
+      const key = `${r.talla} - ${r.color}`;
+      acc.set(key, (acc.get(key) ?? 0) + r.unidades);
+    }
+    return Array.from(acc.entries())
+      .map(([combinacion, unidades]) => ({
+        etiqueta: combinacion,
+        unidades,
+        tipo: 'talla-color' as const
+      }))
+      .sort((a, b) => b.unidades - a.unidades);
+  }, [rows]);
+
+  const chartData = useMemo(() => {
+    if (modo === 'talla') return dataPorTalla;
+    if (modo === 'color') return dataPorColor;
+    return dataPorTallaColor;
+  }, [modo, dataPorTalla, dataPorColor, dataPorTallaColor]);
 
   // --- Export CSV ---
   const handleExportCSV = () => {
@@ -181,7 +208,7 @@ export default function VentasTallaColorPage() {
         onExportCSV={rows.length ? handleExportCSV : undefined}
         onExportExcel={rows.length ? handleExportExcel : undefined}
         actions={
-          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-1 flex">
+          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-1 flex flex-wrap gap-1">
             <button
               onClick={() => setModo('talla')}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
@@ -197,6 +224,14 @@ export default function VentasTallaColorPage() {
               }`}
             >
               Por Color
+            </button>
+            <button
+              onClick={() => setModo('talla-color')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                modo === 'talla-color' ? 'bg-white text-purple-600 shadow' : 'text-white/80 hover:bg-white/10'
+              }`}
+            >
+              Talla + Color
             </button>
           </div>
         }
@@ -271,8 +306,14 @@ export default function VentasTallaColorPage() {
       <div className="bg-white rounded-xl shadow-2xl p-4 border border-gray-100 transform hover:scale-[1.01] transition-transform duration-300">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <span className="text-2xl">{modo === 'talla' ? '👕' : '🎨'}</span>
-            Análisis {modo === 'talla' ? 'por Talla' : 'por Color'}
+            <span className="text-2xl">
+              {modo === 'talla' ? '👕' : modo === 'color' ? '🎨' : '📊'}
+            </span>
+            Análisis {
+              modo === 'talla' ? 'por Talla' : 
+              modo === 'color' ? 'por Color' : 
+              'Talla + Color'
+            }
           </h2>
           <div className="bg-gradient-to-r from-indigo-100 to-purple-100 px-4 py-2 rounded-lg">
             <span className="text-sm font-semibold text-indigo-700">
@@ -357,76 +398,6 @@ export default function VentasTallaColorPage() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100">
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <span className="text-2xl">📋</span>
-            Detalle de Ventas
-          </h2>
-        </div>
-        <div className="overflow-auto max-h-[500px]">
-          <table className="w-full text-sm">
-            <thead className="bg-gradient-to-r from-indigo-50 to-purple-50 sticky top-0 z-10">
-              <tr>
-                <th className="text-left p-4 font-bold text-gray-700 border-b-2 border-indigo-200">👕 Talla</th>
-                <th className="text-left p-4 font-bold text-gray-700 border-b-2 border-indigo-200">🎨 Color</th>
-                <th className="text-right p-4 font-bold text-gray-700 border-b-2 border-indigo-200">📊 Unidades</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr 
-                  key={`${r.talla}-${r.color}-${i}`} 
-                  className="border-b border-gray-100 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 cursor-pointer group"
-                >
-                  <td className="p-4">
-                    <span className="font-bold text-gray-800 text-base group-hover:text-indigo-600 transition-colors">
-                      {r.talla}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <span
-                          className="inline-block w-8 h-8 rounded-lg border-2 border-gray-300 shadow-md group-hover:scale-110 group-hover:shadow-lg transition-all duration-200"
-                          style={{ 
-                            backgroundColor: getColorHex(r.color),
-                            boxShadow: `0 4px 6px -1px ${getColorHex(r.color)}40`
-                          }}
-                          title={r.color}
-                        />
-                        {r.color.toUpperCase() === 'BLANCO' && (
-                          <span className="absolute inset-0 rounded-lg border border-gray-400" />
-                        )}
-                      </div>
-                      <span className="font-medium text-gray-700 group-hover:text-gray-900">{r.color}</span>
-                    </div>
-                  </td>
-                  <td className="p-4 text-right">
-                    <span className="inline-flex items-center justify-center min-w-[60px] px-3 py-1.5 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 font-bold rounded-lg group-hover:from-indigo-200 group-hover:to-purple-200 transition-all duration-200">
-                      {r.unidades}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {!rows.length && !loading && (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center">
-                    <div className="flex flex-col items-center gap-3 text-gray-400">
-                      <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                      </svg>
-                      <span className="text-lg font-semibold">Sin datos disponibles</span>
-                      <span className="text-sm">Intenta ajustar los filtros de búsqueda</span>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

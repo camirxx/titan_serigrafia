@@ -71,7 +71,7 @@ export default function ReporteDevolucionesClient() {
   const [detalles, setDetalles] = useState<DevolucionDetalle[]>([]);
   const [loading, setLoading] = useState(false);
   const [, setErrorMsg] = useState<string | null>(null);
-  const [vistaActual, setVistaActual] = useState<'resumen' | 'detalle' | 'transferencias'>('resumen');
+  const [vistaActual, setVistaActual] = useState<'resumen' | 'transferencias'>('resumen');
   const [actualizando, setActualizando] = useState<number | null>(null);
 
   const buscar = useCallback(async () => {
@@ -529,46 +529,32 @@ export default function ReporteDevolucionesClient() {
 
       {/* Toggle Vista */}
       {devoluciones.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex justify-center">
-            <div className="inline-flex rounded-lg border-2 border-purple-300 overflow-hidden">
-              <button
-                onClick={() => setVistaActual('resumen')}
-                className={`px-6 py-2 font-medium transition-colors ${
-                  vistaActual === 'resumen' 
-                    ? 'bg-purple-600 text-white' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                📊 Vista Resumen
-              </button>
-              <button
-                onClick={() => setVistaActual('transferencias')}
-                className={`px-6 py-2 font-medium transition-colors relative ${
-                  vistaActual === 'transferencias' 
-                    ? 'bg-purple-600 text-white' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                🏦 Transferencias
-                {transferenciasPendientes.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {transferenciasPendientes.length}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setVistaActual('detalle')}
-                className={`px-6 py-2 font-medium transition-colors ${
-                  vistaActual === 'detalle' 
-                    ? 'bg-purple-600 text-white' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                📋 Vista Detalle
-              </button>
-            </div>
-          </div>
+        <div className="flex items-center justify-center space-x-2 mb-6">
+          <button
+            onClick={() => setVistaActual('resumen')}
+            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+              vistaActual === 'resumen'
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+            }`}
+          >
+            Resumen
+          </button>
+          <button
+            onClick={() => setVistaActual('transferencias')}
+            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+              vistaActual === 'transferencias'
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+            }`}
+          >
+            Transferencias
+            {transferenciasPendientes.length > 0 && (
+              <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {transferenciasPendientes.length}
+              </span>
+            )}
+          </button>
         </div>
       )}
 
@@ -639,90 +625,6 @@ export default function ReporteDevolucionesClient() {
                 {loading && (
                   <tr>
                     <td colSpan={8} className="px-6 py-12 text-center">
-                      <div className="text-gray-400 text-4xl mb-2 animate-pulse">⏳</div>
-                      <p className="text-gray-500 font-medium">Cargando datos...</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tabla Detalle */}
-      {vistaActual === 'detalle' && (
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">ID Dev.</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Tipo</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Producto</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Talla</th>
-                  <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Cant.</th>
-                  <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Precio</th>
-                  <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Subtotal</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Motivo</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {detalles.map((d, idx) => (
-                  <tr key={`${d.devolucion_id}-${idx}`} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                      #{d.devolucion_id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {new Date(d.fecha_devolucion).toLocaleDateString('es-CL')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                        d.tipo === 'devolucion' 
-                          ? 'bg-red-100 text-red-800' 
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {d.tipo === 'devolucion' ? '📦' : '🔄'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="font-medium text-gray-900">{d.diseno}</div>
-                      <div className="text-xs text-gray-500">
-                        {d.tipo_prenda} {d.color ? `· ${d.color}` : ''}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {d.talla}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
-                      {d.cantidad_devuelta}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600">
-                      ${d.precio_unitario.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-red-600">
-                      ${d.subtotal_item.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-xs text-gray-500">
-                      {d.motivo_descripcion || 'N/A'}
-                    </td>
-                  </tr>
-                ))}
-                {!detalles.length && !loading && (
-                  <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center">
-                      <div className="text-gray-400 text-4xl mb-2">📋</div>
-                      <p className="text-gray-500 font-medium">No hay detalles</p>
-                      <p className="text-gray-400 text-sm mt-1">
-                        Ajusta los filtros para ver resultados
-                      </p>
-                    </td>
-                  </tr>
-                )}
-                {loading && (
-                  <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center">
                       <div className="text-gray-400 text-4xl mb-2 animate-pulse">⏳</div>
                       <p className="text-gray-500 font-medium">Cargando datos...</p>
                     </td>

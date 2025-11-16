@@ -21,6 +21,14 @@ type Usuario = {
   created_at: string | null;
 };
 
+// 👇 Mover la definición del tipo ANTES del componente
+type OptimisticAction =
+  | { type: 'UPDATE_ROLE'; payload: { id: string; rol: Rol } }
+  | { type: 'TOGGLE_ACTIVO'; payload: { id: string; activo: boolean } }
+  | { type: 'UPDATE_TIENDA'; payload: { id: string; tienda_id: number | null } }
+  | { type: 'DELETE_USER'; payload: { id: string } }
+  | { type: 'CREATE_USER'; payload: Usuario };
+
 interface TrabajadoresUIProps {
   usuarios: Usuario[];
   tiendas: Tienda[];
@@ -56,13 +64,6 @@ export default function TrabajadoresUI({
     rol: 'vendedor' as Rol,
     tienda_id: ''
   });
-
-type OptimisticAction =
-  | { type: 'UPDATE_ROLE'; payload: { id: string; rol: Rol } }
-  | { type: 'TOGGLE_ACTIVO'; payload: { id: string; activo: boolean } }
-  | { type: 'UPDATE_TIENDA'; payload: { id: string; tienda_id: number | null } }
-  | { type: 'DELETE_USER'; payload: { id: string } }
-  | { type: 'CREATE_USER'; payload: Usuario };
 
   // Estado optimista para usuarios
   const [optimisticUsuarios, setOptimisticUsuarios] = useOptimistic(
@@ -220,10 +221,18 @@ type OptimisticAction =
     });
   };
 
-  const filteredUsuarios = optimisticUsuarios.filter(u => 
+  // Separar el admin de los demás usuarios
+  const adminUser = optimisticUsuarios.find(u => u.rol === 'admin');
+  const otherUsers = optimisticUsuarios.filter(u => u.rol !== 'admin');
+  
+  // Filtrar usuarios según búsqueda (excepto admin que siempre se muestra)
+  const filteredOtherUsers = otherUsers.filter(u => 
     u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.nombre?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  
+  // Combinar admin con usuarios filtrados
+  const filteredUsuarios = adminUser ? [adminUser, ...filteredOtherUsers] : filteredOtherUsers;
 
   const getRolBadgeColor = (rol: Rol | null) => {
     switch (rol) {
@@ -319,7 +328,9 @@ type OptimisticAction =
                 </tr>
               </thead>
               <tbody>
-                {filteredUsuarios.map((u, idx) => (
+                {filteredUsuarios.map((u, idx) => {
+                  const isAdminUser = u.rol === 'admin';
+                  return (
                   <tr 
                     key={u.id} 
                     className={`border-b hover:bg-purple-50 transition ${
@@ -329,11 +340,18 @@ type OptimisticAction =
                     {/* Info del Trabajador */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                          {u.nombre?.[0]?.toUpperCase() || u.email?.[0]?.toUpperCase() || '?'}
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg ${isAdminUser ? 'bg-gradient-to-br from-yellow-500 to-amber-500' : 'bg-gradient-to-br from-purple-500 to-pink-500'}`}>
+                          {isAdminUser ? '👑' : (u.nombre?.[0]?.toUpperCase() || u.email?.[0]?.toUpperCase() || '?')}
                         </div>
                         <div>
-                          <div className="font-semibold text-gray-900">{u.nombre || 'Sin nombre'}</div>
+                          <div className="font-semibold text-gray-900 flex items-center gap-2">
+                            {u.nombre || 'Sin nombre'}
+                            {isAdminUser && (
+                              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+                                Administrador Principal
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-500">{u.email || 'Sin email'}</div>
                         </div>
                       </div>
@@ -344,14 +362,13 @@ type OptimisticAction =
                       <div className="relative">
                         <select
                           value={u.rol || ''}
-                          disabled={u.id === currentUserId}
+                          disabled={isAdminUser || u.id === currentUserId}
                           onChange={(e) => handleUpdateRole(u.id, e.target.value as Rol)}
                           className={`appearance-none pl-3 pr-10 py-2 rounded-lg border-2 font-semibold transition focus:ring-2 focus:ring-purple-500 outline-none ${
                             getRolBadgeColor(u.rol)
                           } ${
-                            u.id === currentUserId ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                            isAdminUser ? 'opacity-50 cursor-not-allowed' : ''
                           }`}
-                          title={u.id === currentUserId ? 'No puedes cambiar tu propio rol' : ''}
                         >
                           <option value="vendedor">Vendedor</option>
                           <option value="admin">Admin</option>
@@ -366,10 +383,11 @@ type OptimisticAction =
                     {/* Tienda */}
                     <td className="px-6 py-4">
                       <select
-                        value={u.tienda_id || ''}
-                        onChange={(e) => handleUpdateTienda(u.id, e.target.value ? Number(e.target.value) : null)}
-                        className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition cursor-pointer"
-                      >
+                        value={u.tienda_id?.toString() || ''}
+                        onChange={(e) => handleUpdateTienda(u.id, e.target.value ? parseInt(e.target.value) : null)}
+                        className={`px-3 py-1.5 border-2 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent focus:outline-none transition-all ${isAdminUser ? 'bg-gray-100 border-gray-200 text-gray-500' : 'bg-white border-gray-200'}`}
+                        disabled={isAdminUser || u.rol === 'admin'}
+                      >  
                         <option value="">Sin asignar</option>
                         {tiendas.map(t => (
                           <option key={t.id} value={t.id}>{t.nombre}</option>
@@ -382,7 +400,7 @@ type OptimisticAction =
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => handleToggleActivo(u.id, !u.activo)}
-                          disabled={isPending}
+                          disabled={isAdminUser}
                           className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
                             u.activo ? 'bg-green-500' : 'bg-gray-300'
                           }`}
@@ -415,22 +433,35 @@ type OptimisticAction =
                     {/* Acciones */}
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2">
-                        {u.id !== currentUserId && (
+                        {!isAdminUser && (
                           <button
                             onClick={() => setShowDeleteConfirm(u.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            disabled={u.id === currentUserId}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Eliminar usuario"
                           >
                             <Trash2 className="w-5 h-5" />
                           </button>
                         )}
-                        {u.id === currentUserId && (
-                          <span className="text-xs text-gray-400 italic">Tu cuenta</span>
+                        {isAdminUser && (
+                          <button
+                            disabled
+                            className="p-2 text-gray-400 cursor-not-allowed"
+                            title="No se puede eliminar al administrador principal"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
                         )}
-                      </div>
+                      </div>  
+                      {u.id === currentUserId && (
+                        <span className="text-xs text-gray-400 italic">Tu cuenta</span>
+                      )}
                     </td>
                   </tr>
-                ))}
+               
+                  );   
+                  })}  
+
               </tbody>
             </table>
           </div>
@@ -440,11 +471,18 @@ type OptimisticAction =
             {filteredUsuarios.map((u) => (
               <div key={u.id} className="p-6 hover:bg-purple-50 transition">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                    {u.nombre?.[0]?.toUpperCase() || u.email?.[0]?.toUpperCase() || '?'}
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg ${u.rol === 'admin' ? 'bg-gradient-to-br from-yellow-500 to-amber-500' : 'bg-gradient-to-br from-purple-500 to-pink-500'}`}>
+                    {u.rol === 'admin' ? '👑' : (u.nombre?.[0]?.toUpperCase() || u.email?.[0]?.toUpperCase() || '?')}
                   </div>
                   <div className="flex-1">
-                    <div className="font-bold text-gray-900">{u.nombre || 'Sin nombre'}</div>
+                    <div className="font-bold text-gray-900 flex items-center gap-2">
+                      {u.nombre || 'Sin nombre'}
+                      {u.rol === 'admin' && (
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+                          Administrador Principal
+                        </span>
+                      )}
+                    </div>
                     <div className="text-sm text-gray-500">{u.email || 'Sin email'}</div>
                   </div>
                 </div>
@@ -455,13 +493,9 @@ type OptimisticAction =
                     <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1 block">Rol</label>
                     <select
                       value={u.rol || ''}
-                      disabled={u.id === currentUserId}
+                      disabled={u.rol === 'admin' || u.id === currentUserId}
                       onChange={(e) => handleUpdateRole(u.id, e.target.value as Rol)}
-                      className={`w-full pl-3 pr-10 py-2 rounded-lg border-2 font-semibold ${
-                        getRolBadgeColor(u.rol)
-                      } ${
-                        u.id === currentUserId ? 'opacity-60 cursor-not-allowed' : ''
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg border-2 focus:ring-2 focus:ring-opacity-50 focus:outline-none transition-all ${getRolBadgeColor(u.rol)} ${u.rol === 'admin' ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <option value="vendedor">Vendedor</option>
                       <option value="admin">Admin</option>

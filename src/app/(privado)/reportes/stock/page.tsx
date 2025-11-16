@@ -67,9 +67,17 @@ function toMsg(e: unknown): string {
 
 export default function EstadoStockPage() {
   const [critico, setCritico] = useState(5);
+  const [searchTerm, setSearchTerm] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showLowStockNotification, setShowLowStockNotification] = useState(false);
+  const [low, setLow] = useState<Row[]>([]);
+
+  // Actualizar productos con stock bajo cuando cambian las filas o el umbral crítico
+  useEffect(() => {
+    setLow(rows.filter((r) => r.stock_actual <= critico));
+  }, [rows, critico]);
 
   async function cargar() {
     setErrorMsg(null);
@@ -131,8 +139,27 @@ export default function EstadoStockPage() {
       group.totalStock += row.stock_actual;
     }
     
-    return Array.from(groups.values()).sort((a, b) => a.totalStock - b.totalStock);
-  }, [rows]);
+    // Filtrar por término de búsqueda
+    let filtered = Array.from(groups.values());
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(product => 
+        product.diseno.toLowerCase().includes(term) ||
+        product.tipo_prenda.toLowerCase().includes(term) ||
+        product.color.toLowerCase().includes(term)
+      );
+    }
+    
+    return filtered.sort((a, b) => a.totalStock - b.totalStock);
+  }, [rows, searchTerm]);
+  
+  // Verificar si hay stock bajo al cargar la página
+  useEffect(() => {
+    if (low.length > 0) {
+      setShowLowStockNotification(true);
+    }
+  }, [low.length]);
 
   // Obtener todas las tallas únicas ordenadas
   const allSizes = useMemo(() => {
@@ -151,11 +178,6 @@ export default function EstadoStockPage() {
       return a.localeCompare(b);
     });
   }, [rows]);
-
-  const low = useMemo(
-    () => rows.filter((r) => r.stock_actual <= critico),
-    [rows, critico]
-  );
 
   const handleExportCSV = () => {
     const columnsMap = {
@@ -183,6 +205,36 @@ export default function EstadoStockPage() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+      {/* Notificación de stock bajo */}
+      {showLowStockNotification && low.length > 0 && (
+        <div className="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 p-4 rounded-lg shadow-md">
+          <div className="flex justify-between items-start">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">¡Atención! Tienes {low.length} productos con stock bajo</h3>
+                <div className="mt-1 text-sm text-red-700">
+                  <p>Revisa los productos marcados en rojo en la tabla de abajo.</p>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="ml-4 text-red-500 hover:text-red-700 focus:outline-none"
+              onClick={() => setShowLowStockNotification(false)}
+            >
+              <span className="sr-only">Cerrar notificación</span>
+              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
       <ReportHeader
         title="Estado del Stock"
         subtitle="Inventario agrupado por diseño y tallas disponibles"
@@ -194,6 +246,18 @@ export default function EstadoStockPage() {
       {/* Controles y filtros */}
       <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
         <div className="flex flex-wrap items-center gap-4">
+          <div className="flex-1 min-w-[250px]">
+            <label htmlFor="search" className="block text-sm font-semibold text-gray-700 mb-1">🔍 Buscar por diseño, tipo o color</label>
+            <input
+              id="search"
+              type="text"
+              placeholder="Ej: Camiseta, Negro, Manga Corta..."
+              className="w-full border-2 border-gray-200 rounded-lg px-4 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          
           <div className="flex items-center gap-3">
             <label className="text-sm font-semibold text-gray-700">⚠️ Stock Crítico ≤</label>
             <input
@@ -204,14 +268,6 @@ export default function EstadoStockPage() {
             />
           </div>
           
-          <div className="flex items-center gap-2 bg-gradient-to-r from-red-100 to-orange-100 px-4 py-2 rounded-lg">
-              <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm font-bold text-red-700">
-                Alertas: {low.length} / {rows.length}
-              </span>
-            </div>
 
             <div className="ml-auto flex gap-3">
               <button
@@ -244,14 +300,18 @@ export default function EstadoStockPage() {
           </div>
         )}
 
-        {/* Tabla agrupada por diseño */}
+        {/* Tabla de productos */}
         <div className="bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100">
           <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
               <span className="text-2xl">📋</span>
-              Inventario por Diseño
+              {searchTerm ? (
+                <span>Resultados para: <span className="text-indigo-600">{searchTerm}</span></span>
+              ) : (
+                'Inventario por Diseño'
+              )}
               <span className="ml-auto text-sm font-normal text-gray-600">
-                {groupedProducts.length} productos únicos
+                {groupedProducts.length} {groupedProducts.length === 1 ? 'producto' : 'productos'} mostrados
               </span>
             </h2>
           </div>
