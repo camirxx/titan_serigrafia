@@ -68,6 +68,7 @@ export default function InventarioAgrupado() {
   const [busqueda, setBusqueda] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroColor, setFiltroColor] = useState<string>("todos");
+  const [soloConStock, setSoloConStock] = useState(false);
 
   const [fechaDesde, setFechaDesde] = useState(() => {
     const fecha = new Date();
@@ -94,6 +95,22 @@ export default function InventarioAgrupado() {
     
     return [...tallasOrdenadas, ...tallasExtras];
   }, [productos]);
+
+  // Filtrar tallas según la opción seleccionada
+  const tallasAMostrar = useMemo(() => {
+    if (!soloConStock) return todasLasTallas;
+    
+    const tallasConStock = new Set<string>();
+    productos.forEach(prod => {
+      Object.keys(prod.tallas).forEach(talla => {
+        if ((prod.tallas[talla]?.total || 0) > 0) {
+          tallasConStock.add(talla);
+        }
+      });
+    });
+    
+    return [...tallasConStock].sort();
+  }, [productos, todasLasTallas, soloConStock]);
 
   // ---- 1) Declarar primero cargarInventario (useCallback) ----
   const cargarInventario = useCallback(async () => {
@@ -127,25 +144,15 @@ export default function InventarioAgrupado() {
         });
       });
 
-      // 2. Cargar variantes directamente de la tabla (no de la vista)
+      // 2. Cargar TODAS las variantes (sin filtros restrictivos)
       const { data: variantes, error: errVariantes } = await supabase
         .from("variantes")
         .select(`
           id,
           producto_id,
           talla,
-          stock_actual,
-          productos!left(
-            id,
-            activo,
-            disenos(nombre),
-            tipos_prenda(nombre),
-            colores(nombre)
-          )
-        `)
-        .not("productos.activo", "is", null)
-        .not("talla", "is", null)
-        .neq("talla", "");
+          stock_actual
+        `);
 
       if (errVariantes) {
         console.error("Error cargando variantes:", errVariantes);
@@ -154,21 +161,23 @@ export default function InventarioAgrupado() {
 
       // Transformar al formato esperado
       const variantesTransformadas = variantes?.map((v: Record<string, unknown>) => {
-        const variante = v as { id: number; producto_id: number; talla: string; stock_actual: number; productos?: { disenos?: { nombre?: string }; tipos_prenda?: { nombre?: string }; colores?: { nombre?: string }; activo?: boolean } };
+        const variante = v as { id: number; producto_id: number; talla: string; stock_actual: number };
+        const productoInfo = productosUnicos.get(variante.producto_id);
+
         return {
           variante_id: variante.id,
           producto_id: variante.producto_id,
-          talla: variante.talla,
+          talla: variante.talla || "N/A",
           stock_actual: variante.stock_actual,
-          diseno: variante.productos?.disenos?.nombre || "Sin diseño",
-          tipo_prenda: variante.productos?.tipos_prenda?.nombre || "Sin tipo",
-          color: variante.productos?.colores?.nombre || "Sin color",
-          producto_activo: variante.productos?.activo || false
+          diseno: productoInfo?.diseno || "Sin diseño",
+          tipo_prenda: productoInfo?.tipo_prenda || "Sin tipo",
+          color: productoInfo?.color || "Sin color",
+          producto_activo: true // Asumimos activo si tiene variantes
         };
       }) || [];
 
 
-      // 2. Movimientos del período
+      // 2. Movimientos del período (simplificado - solo para referencia)
       const { data: movimientos, error: errMov } = await supabase
         .from("movimientos_inventario")
         .select("variante_id, tipo, cantidad, fecha")
@@ -179,7 +188,7 @@ export default function InventarioAgrupado() {
         throw errMov;
       }
 
-      // 3. Mapear entradas/salidas por variante
+      // 3. Mapear movimientos para mostrar (opcional)
       const movMap = new Map<number, { entrada: number; salida: number }>();
       const movimientosArray = isMovimientoInventarioArray(movimientos)
         ? movimientos
@@ -235,10 +244,10 @@ export default function InventarioAgrupado() {
         }
         
         const talla = v.talla || "N/A";
-        const mov = movMap.get(v.variante_id);
+        // Solo mostrar stock actual, sin cálculos de movimientos que causan confusiones
         agrupados[key].tallas[talla] = {
-          entrada: mov?.entrada || 0,
-          salida: mov?.salida || 0,
+          entrada: 0, // No mostrar movimientos para evitar confusiones
+          salida: 0,
           total: v.stock_actual || 0,
           variante_id: v.variante_id,
         };
@@ -309,6 +318,7 @@ export default function InventarioAgrupado() {
     setBusqueda("");
     setFiltroTipo("todos");
     setFiltroColor("todos");
+    setSoloConStock(false);
   };
 
   // Modales
@@ -502,6 +512,21 @@ export default function InventarioAgrupado() {
               ))}
             </select>
           </div>
+
+          {/* Toggle Solo Con Stock */}
+          <div className="flex items-center">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={soloConStock}
+                onChange={(e) => setSoloConStock(e.target.checked)}
+                className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
+              />
+              <span className="text-sm font-medium text-purple-900">
+                Solo tallas con stock
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Indicadores de filtros activos */}
@@ -510,7 +535,7 @@ export default function InventarioAgrupado() {
             Resultados: {productosFiltrados.length} de {productos.length}
           </span>
 
-          {(busqueda || filtroTipo !== "todos" || filtroColor !== "todos") && (
+          {(busqueda || filtroTipo !== "todos" || filtroColor !== "todos" || soloConStock) && (
             <button
               onClick={limpiarFiltros}
               className="text-sm px-3 py-1 bg-purple-100 text-purple-700 rounded-full hover:bg-purple-200 transition"
@@ -534,6 +559,11 @@ export default function InventarioAgrupado() {
               Color: {filtroColor}
             </span>
           )}
+          {soloConStock && (
+            <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full">
+              Solo con stock
+            </span>
+          )}
         </div>
       </div>
 
@@ -552,12 +582,25 @@ export default function InventarioAgrupado() {
       {/* Tabla principal mejorada */}
       <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
         <div className="bg-gradient-to-r from-gray-50 to-slate-100 px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-            Inventario Detallado
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              Inventario Detallado
+            </h2>
+            <div className="flex items-center gap-4 text-sm text-gray-600">
+              <span className="font-medium">
+                {productosFiltrados.length} productos
+              </span>
+              <span className="text-gray-400">·</span>
+              <span className="font-medium text-emerald-600">
+                Total stock: {productosFiltrados.reduce((total, prod) => 
+                  total + Object.values(prod.tallas).reduce((sum, talla) => sum + (talla.total || 0), 0), 0
+                )}
+              </span>
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -578,7 +621,7 @@ export default function InventarioAgrupado() {
 
                 {/* ENTRADA */}
                 <th
-                  colSpan={todasLasTallas.length}
+                  colSpan={tallasAMostrar.length}
                   className="text-center p-4 font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600"
                 >
                   📥 ENTRADA
@@ -586,18 +629,23 @@ export default function InventarioAgrupado() {
 
                 {/* SALIDA */}
                 <th
-                  colSpan={todasLasTallas.length}
+                  colSpan={tallasAMostrar.length}
                   className="text-center p-4 font-bold text-white bg-gradient-to-r from-orange-500 to-red-600"
                 >
                   📤 SALIDA
                 </th>
 
-                {/* TOTAL */}
+                {/* STOCK ACTUAL */}
                 <th
-                  colSpan={todasLasTallas.length}
-                  className="text-center p-4 font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600"
+                  colSpan={tallasAMostrar.length}
+                  className="text-center p-4 font-bold text-white bg-gradient-to-r from-green-600 to-emerald-600"
                 >
-                  📦 STOCK
+                  📦 STOCK ACTUAL
+                </th>
+
+                {/* TOTAL GENERAL */}
+                <th className="text-center p-4 font-bold text-white bg-gradient-to-r from-emerald-600 to-green-600 min-w-[100px]">
+                  📊 TOTAL STOCK
                 </th>
 
                 {/* ACCIONES */}
@@ -613,7 +661,7 @@ export default function InventarioAgrupado() {
                 <th className="sticky left-[200px] bg-indigo-50/95 z-20"></th>
                 <th></th>
 
-                {todasLasTallas.map((t) => (
+                {tallasAMostrar.map((t) => (
                   <th
                     key={`e-${t}`}
                     className="p-2 text-center text-sm font-bold text-blue-700"
@@ -621,7 +669,7 @@ export default function InventarioAgrupado() {
                     {t}
                   </th>
                 ))}
-                {todasLasTallas.map((t) => (
+                {tallasAMostrar.map((t) => (
                   <th
                     key={`s-${t}`}
                     className="p-2 text-center text-sm font-bold text-red-700"
@@ -629,14 +677,17 @@ export default function InventarioAgrupado() {
                     {t}
                   </th>
                 ))}
-                {todasLasTallas.map((t) => (
+                {tallasAMostrar.map((t) => (
                   <th
                     key={`t-${t}`}
-                    className="p-2 text-center text-sm font-bold text-purple-700"
+                    className="p-2 text-center text-sm font-bold text-green-700"
                   >
                     {t}
                   </th>
                 ))}
+                <th className="p-2 text-center text-sm font-bold text-emerald-700">
+                  Σ Total Stock
+                </th>
                 <th className="sticky right-0 bg-gray-50/95 z-20"></th>
               </tr>
             </thead>
@@ -668,7 +719,7 @@ export default function InventarioAgrupado() {
                   </td>
                   <td className="p-4 text-gray-700 font-medium">{prod.color}</td>
 
-                  {todasLasTallas.map((t) => (
+                  {tallasAMostrar.map((t) => (
                     <td
                       key={`e-${t}`}
                       className="p-2 text-center bg-blue-50/50 text-sm font-semibold"
@@ -676,7 +727,7 @@ export default function InventarioAgrupado() {
                       {prod.tallas[t]?.entrada || 0}
                     </td>
                   ))}
-                  {todasLasTallas.map((t) => (
+                  {tallasAMostrar.map((t) => (
                     <td
                       key={`s-${t}`}
                       className="p-2 text-center bg-red-50/50 text-sm font-semibold"
@@ -684,7 +735,7 @@ export default function InventarioAgrupado() {
                       {prod.tallas[t]?.salida || 0}
                     </td>
                   ))}
-                  {todasLasTallas.map((t) => {
+                  {tallasAMostrar.map((t) => {
                     const stock = prod.tallas[t]?.total || 0;
                     return (
                       <td
@@ -704,6 +755,11 @@ export default function InventarioAgrupado() {
                     );
                   })}
 
+                  {/* TOTAL GENERAL */}
+                  <td className="p-2 text-center font-bold text-lg bg-emerald-50 text-emerald-700">
+                    {Object.values(prod.tallas).reduce((total, talla) => total + (talla.total || 0), 0)}
+                  </td>
+
                   <td className="p-2 sticky right-0 bg-white group-hover:bg-gradient-to-r group-hover:from-indigo-50 group-hover:to-purple-50 z-10">
                     <button
                       onClick={() => abrirModalEditar(prod)}
@@ -718,7 +774,7 @@ export default function InventarioAgrupado() {
 
               {productosFiltrados.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={100} className="p-8 text-center text-gray-500">
+                  <td colSpan={4 + (tallasAMostrar.length * 3) + 2} className="p-8 text-center text-gray-500">
                     {productos.length === 0
                       ? "No hay productos en el inventario para el período seleccionado"
                       : "No se encontraron productos con los filtros aplicados"}

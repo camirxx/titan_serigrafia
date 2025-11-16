@@ -61,6 +61,7 @@ export default function DevolucionesClient() {
       setDisenosFiltrados(disenos);
     }
   }, [tipoPrendaFiltro, disenosPorTipo, disenos, disenoFiltro]);
+  
 
   const [productosVendidos, setProductosVendidos] = useState<ProductoVendido[]>([]);
   const [cantSel, setCantSel] = useState<CantidadesSeleccion>({});
@@ -70,6 +71,19 @@ export default function DevolucionesClient() {
   const [metodoPagoReintegro, setMetodoPagoReintegro] = useState<MetodoPagoReintegro>('efectivo');
   const [montoReintegro, setMontoReintegro] = useState<number>(0);
   const [observacion, setObservacion] = useState('');
+
+  // Estado para panel de cambio (seleccionar producto por reemplazo)
+  const [cambioTipoPrenda, setCambioTipoPrenda] = useState<string>('');
+  const [cambioColor, setCambioColor] = useState<string>('');
+  const [cambioDiseno, setCambioDiseno] = useState<string>('');
+  const [cambioTalla, setCambioTalla] = useState<string>('');
+  const [cambioTallas, setCambioTallas] = useState<string[]>([]);
+  const [cambioSeleccionado, setCambioSeleccionado] = useState<{
+    tipo_prenda?: string;
+    diseno?: string;
+    color?: string | null;
+    talla?: string | null;
+  } | null>(null);
 
   const [montoDiferencia, setMontoDiferencia] = useState<number>(0);
   const [tipoDiferencia, setTipoDiferencia] = useState<'cliente_paga' | 'cliente_recibe' | 'sin_diferencia'>('sin_diferencia');
@@ -91,6 +105,52 @@ export default function DevolucionesClient() {
   const [loading, setLoading] = useState(false);
   const [ok, setOk] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Cargar tallas disponibles para la selección de cambio cuando cambia tipo/diseno/color
+  useEffect(() => {
+    const cargarTallas = async () => {
+      try {
+        // si no hay ningún filtro, limpiar
+        if (!cambioTipoPrenda && !cambioDiseno && !cambioColor) {
+          setCambioTallas([]);
+          setCambioTalla('');
+          return;
+        }
+
+        let query: any = supabase
+          .from('productos')
+          .select('variantes(id, talla, stock_actual, costo_unitario)')
+          .limit(1);
+
+        if (cambioDiseno) query = query.eq('disenos.nombre', cambioDiseno);
+        if (cambioTipoPrenda) query = query.eq('tipos_prenda.nombre', cambioTipoPrenda);
+        if (cambioColor) query = query.eq('color_polera.nombre', cambioColor);
+
+        const { data: prods, error: prodErr } = await query;
+        if (prodErr) {
+          console.warn('Error cargando tallas para cambio:', prodErr);
+          setCambioTallas([]);
+          setCambioTalla('');
+        } else if (prods && prods.length > 0) {
+          const vars: any[] = prods[0].variantes || [];
+          const tallas = Array.from(new Set(vars.map((v) => v.talla).filter(Boolean)));
+          setCambioTallas(tallas);
+          if (!tallas.includes(cambioTalla)) {
+            setCambioTalla('');
+          }
+        } else {
+          setCambioTallas([]);
+          setCambioTalla('');
+        }
+      } catch (err) {
+        console.error('Error cargando tallas de cambio:', err);
+        setCambioTallas([]);
+        setCambioTalla('');
+      }
+    };
+
+    void cargarTallas();
+  }, [cambioTipoPrenda, cambioDiseno, cambioColor]);
 
   const [fecha, setFecha] = useState('');
   const [hora, setHora] = useState('');
@@ -385,10 +445,17 @@ export default function DevolucionesClient() {
       return;
     }
 
+    // Validar que si es cambio de producto, se haya seleccionado el producto de reemplazo
+    if (metodo === 'cambio_producto' && !cambioSeleccionado) {
+      setError('Seleccione el producto de reemplazo en el panel de cambio.');
+      return;
+    }
+
     console.log('📝 [CLIENT] Iniciando creación de devolución:', {
       tipo,
       metodo,
       itemsSeleccionados: itemsSeleccionados.length,
+      cambioSeleccionado,
       usuarioId
     });
 
@@ -453,6 +520,62 @@ export default function DevolucionesClient() {
             }
           }
         }
+
+      // Si es un cambio, intentar buscar una variante disponible que coincida con la selección de reemplazo
+      if (metodo === 'cambio_producto' && cambioSeleccionado) {
+        try {
+          const totalCantidad = (items as any[]).reduce((acc, it) => acc + (it?.cantidad ?? 0), 0);
+
+          // Construir query sobre productos y sus variantes
+          let query = supabase
+            .from('productos')
+            .select(`id, disenos!inner(nombre), tipos_prenda!inner(nombre), color_polera!inner(nombre), variantes(id, talla, stock_actual, costo_unitario)`)
+            .limit(1);
+
+          if (cambioSeleccionado.diseno) {
+            query = query.eq('disenos.nombre', cambioSeleccionado.diseno);
+          }
+          if (cambioSeleccionado.tipo_prenda) {
+            query = query.eq('tipos_prenda.nombre', cambioSeleccionado.tipo_prenda);
+          }
+          if (cambioSeleccionado.color) {
+            query = query.eq('color_polera.nombre', cambioSeleccionado.color);
+          }
+
+          const { data: prods, error: prodErr } = await query;
+          if (prodErr) {
+            console.warn('Error buscando producto de reemplazo:', prodErr);
+          } else if (prods && prods.length > 0) {
+            const prod: any = prods[0];
+            const variantesArr: any[] = prod.variantes || [];
+            // Si el usuario eligió talla, intentar buscar exactamente esa variante (preferir stock>0)
+            let variante: any | undefined;
+            if (cambioSeleccionado.talla) {
+              variante = variantesArr.find((v) => v.talla === cambioSeleccionado.talla && v.stock_actual > 0) || variantesArr.find((v) => v.talla === cambioSeleccionado.talla);
+            }
+            // Si no se encontró por talla, fallback a cualquier variante con stock, o la primera
+            if (!variante) {
+              variante = variantesArr.find((v) => v.stock_actual > 0) || variantesArr[0];
+            }
+            if (variante) {
+              payload.p_items_entregados = [
+                {
+                  variante_id: variante.id,
+                  cantidad: totalCantidad,
+                  precio_unitario: variante.costo_unitario ?? 0,
+                },
+              ];
+              console.log('🔎 Variante encontrada para cambio:', variante.id, 'cantidad:', totalCantidad);
+            } else {
+              console.warn('No se encontraron variantes en el producto de reemplazo.');
+            }
+          } else {
+            console.warn('No se encontró producto que coincida con la selección de reemplazo.');
+          }
+        } catch (err) {
+          console.error('Error buscando variante de reemplazo:', err);
+        }
+      }
 
       console.log('🚀 [CLIENT] Enviando payload a RPC:', payload);
 
@@ -528,6 +651,9 @@ export default function DevolucionesClient() {
     }
 
     let mensajeExito = `✅ ${tipo === 'devolucion' ? 'Devolución' : 'Cambio'} creado correctamente. ID(s): ${resultados.join(', ')}`;
+    if (metodo === 'cambio_producto' && cambioSeleccionado) {
+      mensajeExito += `\n🔁 Cambio solicitado: ${cambioSeleccionado.tipo_prenda ?? '—'} · ${cambioSeleccionado.diseno ?? '—'} · ${cambioSeleccionado.color ?? '—'}`;
+    }
     
     if (metodo === 'cambio_producto' && tipoDiferencia !== 'sin_diferencia') {
       if (tipoDiferencia === 'cliente_paga') {
@@ -993,10 +1119,121 @@ export default function DevolucionesClient() {
                               ℹ️ En un cambio de producto, puede haber diferencia de precio entre los productos
                             </div>
                           </div>
-                        </>
-                      )}
 
-                      <div className="md:col-span-2">
+                          {/* Panel de selección del producto de cambio */}
+                          <div className="md:col-span-2">
+                            <div className="mt-3 rounded-lg bg-white border border-gray-200 p-4">
+                              <h4 className="text-sm font-semibold text-gray-700 mb-2">🔁 Producto de reemplazo</h4>
+                              <p className="text-xs text-gray-500 mb-3">Seleccione el tipo de prenda, diseño y color del producto por el que el cliente desea cambiar.</p>
+
+                              <div className="grid gap-3 md:grid-cols-4">
+                                <div>
+                                  <label className="mb-2 block text-xs font-medium text-gray-700">Tipo de Prenda</label>
+                                  <select
+                                    className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition"
+                                    value={cambioTipoPrenda}
+                                    onChange={(e) => setCambioTipoPrenda(e.target.value)}
+                                  >
+                                    <option value="">Seleccione tipo</option>
+                                    {tiposPrenda.map((t) => (
+                                      <option key={t} value={t}>{t}</option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="mb-2 block text-xs font-medium text-gray-700">Diseño</label>
+                                  <select
+                                    className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition"
+                                    value={cambioDiseno}
+                                    onChange={(e) => setCambioDiseno(e.target.value)}
+                                    disabled={!cambioTipoPrenda && disenos.length === 0}
+                                  >
+                                    <option value="">Seleccione diseño</option>
+                                    {(cambioTipoPrenda ? (disenosPorTipo[cambioTipoPrenda] || []) : disenos).map((d) => (
+                                      <option key={d} value={d}>{d}</option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="mb-2 block text-xs font-medium text-gray-700">Color</label>
+                                  <select
+                                    className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition"
+                                    value={cambioColor}
+                                    onChange={(e) => setCambioColor(e.target.value)}
+                                  >
+                                    <option value="">Seleccione color</option>
+                                    {colores.map((c) => (
+                                      <option key={c} value={c}>{c}</option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="mb-2 block text-xs font-medium text-gray-700">Talla</label>
+                                  <select
+                                    className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition"
+                                    value={cambioTalla}
+                                    onChange={(e) => setCambioTalla(e.target.value)}
+                                    disabled={cambioTallas.length === 0}
+                                  >
+                                    <option value="">Seleccione talla</option>
+                                    {cambioTallas.map((t) => (
+                                      <option key={t} value={t}>{t}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  className="rounded-lg bg-indigo-600 px-4 py-2 text-white text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
+                                  onClick={() => {
+                                    // Guardar la selección localmente
+                                    if (!cambioTipoPrenda && !cambioDiseno && !cambioColor) {
+                                      setError('Seleccione al menos un campo para el producto de cambio.');
+                                      return;
+                                    }
+                                    setCambioSeleccionado({
+                                      tipo_prenda: cambioTipoPrenda || undefined,
+                                      diseno: cambioDiseno || undefined,
+                                      color: cambioColor || null,
+                                      talla: cambioTalla || null,
+                                    });
+                                    setError(null);
+                                  }}
+                                >
+                                  Seleccionar producto de cambio
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 transition"
+                                  onClick={() => {
+                                    setCambioTipoPrenda('');
+                                    setCambioDiseno('');
+                                    setCambioColor('');
+                                    setCambioTalla('');
+                                    setCambioTallas([]);
+                                    setCambioSeleccionado(null);
+                                  }}
+                                >
+                                  Limpiar
+                                </button>
+
+                                {cambioSeleccionado && (
+                                  <div className="ml-auto text-sm text-gray-600">
+                                    <div className="font-medium text-gray-800">Cambio seleccionado:</div>
+                                    <div className="text-xs">{cambioSeleccionado.tipo_prenda ?? '—'} · {cambioSeleccionado.diseno ?? '—'} · {cambioSeleccionado.color ?? '—'}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            </div>
+                          </>)}
+                        <div className="md:col-span-2">
                         <label className="mb-2 block text-sm font-medium text-gray-700">Observaciones</label>
                         <textarea
                           className="w-full rounded-lg border border-gray-300 bg-white p-3 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition resize-none"
@@ -1009,9 +1246,6 @@ export default function DevolucionesClient() {
 
                       {metodo === 'cambio_producto' && (
                         <div className="md:col-span-2">
-                          <label className="mb-3 block text-sm font-semibold text-gray-700">
-                            💱 Diferencia de Precio
-                          </label>
                           <div className="grid gap-3 md:grid-cols-3 bg-white rounded-lg border-2 border-purple-300 p-4">
                             <div>
                               <label className="mb-2 block text-xs font-medium text-gray-600">
