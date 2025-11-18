@@ -20,7 +20,7 @@
     "react-dom": "19.1.0",
     "recharts": "^3.4.1",
     "resend": "^6.5.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "latest"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
