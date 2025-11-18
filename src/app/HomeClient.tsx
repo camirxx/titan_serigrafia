@@ -56,8 +56,8 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 p-4 sm:p-8">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 rounded-3xl bg-white/95 p-4 shadow-2xl backdrop-blur sm:flex-row sm:p-6">
+      <header className="relative z-10 px-4 pt-6 sm:px-8 sm:pt-10">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 rounded-3xl bg-white/95 p-4 shadow-2xl backdrop-blur sm:flex-row sm:p-6">
           <div className="flex w-full flex-col items-center gap-4 sm:w-auto sm:flex-row sm:gap-8">
             <div className="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 px-6 py-3 text-white sm:px-8 sm:py-4">
               <h1 className="text-xl font-bold sm:text-2xl">
@@ -88,17 +88,17 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-12">
-        <div className="min-h-[400px] rounded-3xl bg-white/95 p-6 shadow-2xl backdrop-blur sm:min-h-[500px] sm:p-12">
+      <main className="relative z-10 mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-10">
+        <div className="rounded-3xl bg-white/95 p-5 shadow-2xl backdrop-blur sm:p-10">
           <div
-            className={`mb-8 grid gap-6 sm:mb-12 sm:gap-8 grid-cols-2 ${
+            className={`grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 ${
               isAdmin ? 'lg:grid-cols-3' : ''
             }`}
           >
             {/* VENTAS */}
             <button
               onClick={() => handleNavigation('/pos')}
-              className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
+              className="group min-h-[170px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[210px] sm:p-10"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
                 <div className="text-7xl sm:text-8xl">💰</div>
@@ -111,7 +111,7 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
             {/* INVENTARIO */}
             <button
               onClick={() => handleNavigation('/inventario')}
-              className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
+              className="group min-h-[180px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:translate-y-[-4px] hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[220px] sm:p-10"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
                 <div className="text-7xl sm:text-8xl">📦</div>
@@ -124,7 +124,7 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
             {/* DEVOLUCIONES */}
             <button
               onClick={() => handleNavigation('/devoluciones')}
-              className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
+              className="group min-h-[180px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:translate-y-[-4px] hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[220px] sm:p-10"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
                 <div className="text-7xl sm:text-8xl">🔄</div>
@@ -137,7 +137,7 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
             {/* DASHBOARD */}
             <button
               onClick={() => handleNavigation('/dashboard')}
-              className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
+              className="group min-h-[180px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:translate-y-[-4px] hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[220px] sm:p-10"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
                 <div className="text-7xl sm:text-8xl">📊</div>
@@ -151,7 +151,7 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
             {isAdmin && (
               <button
                 onClick={() => handleNavigation('/reportes')}
-                className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
+                className="group min-h-[170px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duración-300 hover:-translate-y-1 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[210px] sm:p-10"
               >
                 <div className="flex h-full flex-col items-center justify-center gap-4">
                   <div className="text-7xl sm:text-8xl">📈</div>
@@ -166,7 +166,7 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
             {isAdmin && (
               <button
                 onClick={() => handleNavigation('/trabajadores')}
-                className="group min-h-[200px] rounded-2xl border-2 border-gray-200 bg-white p-8 transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[240px] sm:p-12"
+                className="group min-h-[170px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[210px] sm:p-10"
               >
                 <div className="flex h-full flex-col items-center justify-center gap-4">
                   <div className="text-7xl sm:text-8xl">👥</div>

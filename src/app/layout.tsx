@@ -2,6 +2,7 @@
 import "./globals.css";
 import Link from "next/link";
 import SupabaseListener from "@/components/SupabaseListener";
+import ChatbotWidget from "@/components/ChatbotWidget";
 import { getSession } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -41,79 +42,85 @@ export default async function RootLayout({
       >
         <SupabaseListener />
 
-        {/* Navbar mejorado con contraste */}
-        <header className="border-b border-white/20 p-4 flex items-center justify-between bg-gradient-to-r from-purple-900/95 to-purple-800/95 backdrop-blur-md shadow-xl">
-          <Link 
-            href="/" 
-            className="font-bold text-2xl text-white hover:text-purple-200 transition flex items-center gap-2"
-          >
-            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-              <div className="w-7 h-7 bg-purple-900 rounded-full"></div>
-            </div>
-            Inventario & Ventas
-          </Link>
+        <div className="flex min-h-screen flex-col">
+          {/* Navbar mejorado con contraste */}
+          <header className="flex items-center justify-between border-b border-white/20 bg-gradient-to-r from-purple-900/95 to-purple-800/95 p-4 backdrop-blur-md shadow-xl sm:p-6">
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-2xl font-bold text-white transition hover:text-purple-200"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white">
+                <div className="h-7 w-7 rounded-full bg-purple-900" />
+              </div>
+              Inventario & Ventas
+            </Link>
 
-          {logged ? (
-            <nav className="flex items-center gap-5">
-              <Link 
-                href="/pos" 
-                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
-              >
-                POS
-              </Link>
-              
-              <Link 
-                href="/inventario" 
-                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
-              >
-                Inventario
-              </Link>
+            {logged ? (
+              <nav className="flex flex-wrap items-center justify-end gap-3 sm:gap-5">
+                <Link
+                  href="/pos"
+                  className="rounded-lg px-3 py-2 font-medium text-white transition hover:bg-white/10 hover:text-purple-200"
+                >
+                  POS
+                </Link>
 
-              <Link 
-                href="/devoluciones" 
-                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
-              >
-                Devoluciones
-              </Link>
+                <Link
+                  href="/inventario"
+                  className="rounded-lg px-3 py-2 font-medium text-white transition hover:bg-white/10 hover:text-purple-200"
+                >
+                  Inventario
+                </Link>
 
-              <Link 
-                href="/dashboard" 
-                className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
-              >
-                Dashboard
-              </Link>
+                <Link
+                  href="/devoluciones"
+                  className="rounded-lg px-3 py-2 font-medium text-white transition hover:bg-white/10 hover:text-purple-200"
+                >
+                  Devoluciones
+                </Link>
 
-              {rol === "admin" && (
-                <>
-                  <Link 
-                    href="/reportes" 
-                    className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
-                  >
-                    Reportes
-                  </Link>
-                  <Link 
-                    href="/trabajadores" 
-                    className="text-white font-medium hover:text-purple-200 transition px-3 py-2 rounded-lg hover:bg-white/10"
-                  >
-                    Trabajadores
-                  </Link>
-                </>
-              )}
+                <Link
+                  href="/dashboard"
+                  className="rounded-lg px-3 py-2 font-medium text-white transition hover:bg-white/10 hover:text-purple-200"
+                >
+                  Dashboard
+                </Link>
 
-              <span className="text-sm text-purple-200 bg-white/10 px-3 py-1 rounded-full">
-                {email}
-              </span>
+                {rol === "admin" && (
+                  <>
+                    <Link
+                      href="/reportes"
+                      className="rounded-lg px-3 py-2 font-medium text-white transition hover:bg-white/10 hover:text-purple-200"
+                    >
+                      Reportes
+                    </Link>
+                    <Link
+                      href="/trabajadores"
+                      className="rounded-lg px-3 py-2 font-medium text-white transition hover:bg-white/10 hover:text-purple-200"
+                    >
+                      Trabajadores
+                    </Link>
+                  </>
+                )}
 
-              <form action="/api/auth/signout?redirect=/login" method="post">
-                <button className="px-4 py-2 rounded-lg bg-white text-purple-900 font-bold hover:bg-purple-100 transition shadow-lg">
-                  Salir
-                </button>
-              </form>
-            </nav>
-          ) : null}
-        </header>
+                <span className="rounded-full bg-white/10 px-3 py-1 text-sm text-purple-200">
+                  {email}
+                </span>
 
-        <main className="p-6">{children}</main>
+                <form action="/api/auth/signout?redirect=/login" method="post">
+                  <button className="rounded-lg bg-white px-4 py-2 font-bold text-purple-900 shadow-lg transition hover:bg-purple-100">
+                    Salir
+                  </button>
+                </form>
+              </nav>
+            ) : null}
+          </header>
+
+          <main className="flex-1 p-4 pb-24 sm:p-6 sm:pb-28">
+            {children}
+          </main>
+        </div>
+
+        <ChatbotWidget />
       </body>
     </html>
   );
