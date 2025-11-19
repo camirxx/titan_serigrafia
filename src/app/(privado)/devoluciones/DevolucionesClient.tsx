@@ -84,6 +84,7 @@ export default function DevolucionesClient() {
     color?: string | null;
     talla?: string | null;
   } | null>(null);
+  const [precioReemplazoUnitario, setPrecioReemplazoUnitario] = useState<number>(0); // Nuevo estado para precio unitario del reemplazo
 
   const [montoDiferencia, setMontoDiferencia] = useState<number>(0);
   const [tipoDiferencia, setTipoDiferencia] = useState<'cliente_paga' | 'cliente_recibe' | 'sin_diferencia'>('sin_diferencia');
@@ -119,12 +120,17 @@ export default function DevolucionesClient() {
 
         let query: any = supabase
           .from('productos')
-          .select('variantes(id, talla, stock_actual, costo_unitario)')
+          .select(`
+            variantes(id, talla, stock_actual, costo_unitario),
+            disenos!inner(nombre),
+            tipos_prenda!inner(nombre),
+            colores!inner(nombre)
+          `)
           .limit(1);
 
         if (cambioDiseno) query = query.eq('disenos.nombre', cambioDiseno);
         if (cambioTipoPrenda) query = query.eq('tipos_prenda.nombre', cambioTipoPrenda);
-        if (cambioColor) query = query.eq('color_polera.nombre', cambioColor);
+        if (cambioColor) query = query.eq('colores.nombre', cambioColor);
 
         const { data: prods, error: prodErr } = await query;
         if (prodErr) {
@@ -353,6 +359,30 @@ export default function DevolucionesClient() {
     }, 0);
   }, [productosVendidos, cantSel]);
 
+  // Nueva memo para calcular la cantidad total seleccionada (para cambios)
+  const totalCantidadSeleccionada = useMemo(() => {
+    return productosVendidos.reduce((acc, p) => {
+      const q = Number(cantSel[p.detalle_venta_id] ?? 0);
+      return acc + q;
+    }, 0);
+  }, [productosVendidos, cantSel]);
+
+  // Efecto para calcular automáticamente la diferencia cuando cambia el precio del reemplazo o selección
+  useEffect(() => {
+    if (metodo === 'cambio_producto' && precioReemplazoUnitario > 0 && totalCantidadSeleccionada > 0) {
+      const totalNuevo = precioReemplazoUnitario * totalCantidadSeleccionada;
+      const diferencia = totalNuevo - totalSeleccionado;
+      setMontoDiferencia(Math.abs(diferencia));
+      if (diferencia > 0) {
+        setTipoDiferencia('cliente_paga');
+      } else if (diferencia < 0) {
+        setTipoDiferencia('cliente_recibe');
+      } else {
+        setTipoDiferencia('sin_diferencia');
+      }
+    }
+  }, [metodo, precioReemplazoUnitario, totalCantidadSeleccionada, totalSeleccionado]);
+
   const validarEfectivoDisponible = () => {
     if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'efectivo') {
       if (montoReintegro > totalEfectivoCaja) {
@@ -473,7 +503,7 @@ export default function DevolucionesClient() {
       const resultados: number[] = [];
       for (const [ventaId, items] of porVenta) {
         // Payload base
-        const payload: Record<string, unknown> = {
+        const innerPayload: Record<string, unknown> = {
           p_venta_id: ventaId,
           p_tipo: tipo,
           p_metodo_resolucion: metodo,
@@ -491,32 +521,32 @@ export default function DevolucionesClient() {
 
         // Agregar datos de transferencia como parámetros individuales
         if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'transferencia') {
-          payload.p_metodo_pago_reintegro = 'transferencia';
-          payload.p_transferencia_rut = datosTransferencia.rut;
-          payload.p_transferencia_nombre = datosTransferencia.nombre;
-          payload.p_transferencia_banco = datosTransferencia.banco;
-          payload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
-          payload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
-          payload.p_transferencia_email = datosTransferencia.email || null;
+          innerPayload.p_metodo_pago_reintegro = 'transferencia';
+          innerPayload.p_transferencia_rut = datosTransferencia.rut;
+          innerPayload.p_transferencia_nombre = datosTransferencia.nombre;
+          innerPayload.p_transferencia_banco = datosTransferencia.banco;
+          innerPayload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
+          innerPayload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
+          innerPayload.p_transferencia_email = datosTransferencia.email || null;
         } else if (metodo === 'reintegro_efectivo') {
-          payload.p_metodo_pago_reintegro = 'efectivo';
+          innerPayload.p_metodo_pago_reintegro = 'efectivo';
         }
 
         // Manejo de diferencia en cambios
         if (metodo === 'cambio_producto') {
-          payload.p_tipo_diferencia = tipoDiferencia;
-          payload.p_monto_diferencia = montoDiferencia;
+          innerPayload.p_tipo_diferencia = tipoDiferencia;
+          innerPayload.p_monto_diferencia = montoDiferencia;
         
           if (tipoDiferencia !== 'sin_diferencia') {
-            payload.p_metodo_pago_diferencia = metodoPagoDiferencia;
+            innerPayload.p_metodo_pago_diferencia = metodoPagoDiferencia;
             
             if (tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia') {
-              payload.p_transferencia_rut = datosTransferencia.rut;
-              payload.p_transferencia_nombre = datosTransferencia.nombre;
-              payload.p_transferencia_banco = datosTransferencia.banco;
-              payload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
-              payload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
-              payload.p_transferencia_email = datosTransferencia.email || null;
+              innerPayload.p_transferencia_rut = datosTransferencia.rut;
+              innerPayload.p_transferencia_nombre = datosTransferencia.nombre;
+              innerPayload.p_transferencia_banco = datosTransferencia.banco;
+              innerPayload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
+              innerPayload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
+              innerPayload.p_transferencia_email = datosTransferencia.email || null;
             }
           }
         }
@@ -529,7 +559,7 @@ export default function DevolucionesClient() {
           // Construir query sobre productos y sus variantes
           let query = supabase
             .from('productos')
-            .select(`id, disenos!inner(nombre), tipos_prenda!inner(nombre), color_polera!inner(nombre), variantes(id, talla, stock_actual, costo_unitario)`)
+            .select(`id, disenos!inner(nombre), tipos_prenda!inner(nombre), colores!inner(nombre), variantes(id, talla, stock_actual, costo_unitario)`)
             .limit(1);
 
           if (cambioSeleccionado.diseno) {
@@ -539,7 +569,7 @@ export default function DevolucionesClient() {
             query = query.eq('tipos_prenda.nombre', cambioSeleccionado.tipo_prenda);
           }
           if (cambioSeleccionado.color) {
-            query = query.eq('color_polera.nombre', cambioSeleccionado.color);
+            query = query.eq('colores.nombre', cambioSeleccionado.color);
           }
 
           const { data: prods, error: prodErr } = await query;
@@ -558,11 +588,11 @@ export default function DevolucionesClient() {
               variante = variantesArr.find((v) => v.stock_actual > 0) || variantesArr[0];
             }
             if (variante) {
-              payload.p_items_entregados = [
+              innerPayload.p_items_entregados = [
                 {
                   variante_id: variante.id,
                   cantidad: totalCantidad,
-                  precio_unitario: variante.costo_unitario ?? 0,
+                  precio_unitario: variante.costo_unitario ?? 0, // Asumimos que costo_unitario es el precio de venta; si no, ajusta esto
                 },
               ];
               console.log('🔎 Variante encontrada para cambio:', variante.id, 'cantidad:', totalCantidad);
@@ -577,9 +607,9 @@ export default function DevolucionesClient() {
         }
       }
 
-      console.log('🚀 [CLIENT] Enviando payload a RPC:', payload);
+      console.log('🚀 [CLIENT] Enviando payload a RPC:', innerPayload);
 
-      const { data, error: rpcError } = await supabase.rpc('crear_devolucion_json', payload);
+      const { data, error: rpcError } = await supabase.rpc('crear_devolucion_json', { payload: innerPayload });
 
       console.log('📥 [CLIENT] Respuesta RPC:', { data, error: rpcError });
 
@@ -706,6 +736,7 @@ export default function DevolucionesClient() {
       email: '',
     });
     setProductosVendidos([]);
+    setPrecioReemplazoUnitario(0); // Resetear precio de reemplazo
     
     await cargarDineroCaja();
   } catch (err) {
@@ -715,6 +746,68 @@ export default function DevolucionesClient() {
     setLoading(false);
   }
 };
+
+  // Nueva función async para seleccionar el producto de cambio y calcular precio
+  const seleccionarProductoCambio = async () => {
+    if (!cambioTipoPrenda && !cambioDiseno && !cambioColor) {
+      setError('Seleccione al menos un campo para el producto de cambio.');
+      return;
+    }
+
+    try {
+      // Construir query similar a la de confirmar
+      let query = supabase
+        .from('productos')
+        .select(`id, disenos!inner(nombre), tipos_prenda!inner(nombre), colores!inner(nombre), variantes(id, talla, stock_actual, costo_unitario)`)
+        .limit(1);
+
+      if (cambioDiseno) {
+        query = query.eq('disenos.nombre', cambioDiseno);
+      }
+      if (cambioTipoPrenda) {
+        query = query.eq('tipos_prenda.nombre', cambioTipoPrenda);
+      }
+      if (cambioColor) {
+        query = query.eq('colores.nombre', cambioColor);
+      }
+
+      const { data: prods, error: prodErr } = await query;
+      if (prodErr) {
+        throw prodErr;
+      }
+      if (!prods || prods.length === 0) {
+        setError('No se encontró un producto que coincida con la selección de reemplazo.');
+        return;
+      }
+
+      const prod: any = prods[0];
+      const variantesArr: any[] = prod.variantes || [];
+      let variante: any | undefined;
+      if (cambioTalla) {
+        variante = variantesArr.find((v) => v.talla === cambioTalla && v.stock_actual > 0) || variantesArr.find((v) => v.talla === cambioTalla);
+      }
+      if (!variante) {
+        variante = variantesArr.find((v) => v.stock_actual > 0) || variantesArr[0];
+      }
+      if (!variante) {
+        setError('No se encontraron variantes disponibles para el producto de reemplazo.');
+        return;
+      }
+
+      // Guardar selección y precio unitario (asumiendo costo_unitario como precio de venta; ajusta si es necesario)
+      setCambioSeleccionado({
+        tipo_prenda: cambioTipoPrenda || undefined,
+        diseno: cambioDiseno || undefined,
+        color: cambioColor || null,
+        talla: cambioTalla || null,
+      });
+      setPrecioReemplazoUnitario(variante.costo_unitario ?? 0);
+      setError(null);
+    } catch (err) {
+      console.error('Error seleccionando producto de cambio:', err);
+      setError('Error al seleccionar el producto de cambio. Intente nuevamente.');
+    }
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -740,7 +833,7 @@ export default function DevolucionesClient() {
         </div>
       </div>
 
-      <div className="rounded-3xl p-4 shadow-2xl sm:p-6">
+      <div className="rounded-3xl p-4 shadow-2xl sm:p-6 lg:p-8">
 
         {error && (
           <div className="mb-4 rounded-lg border-l-4 border-red-500 bg-red-50 p-4">
@@ -1190,20 +1283,7 @@ export default function DevolucionesClient() {
                                 <button
                                   type="button"
                                   className="rounded-lg bg-indigo-600 px-4 py-2 text-white text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
-                                  onClick={() => {
-                                    // Guardar la selección localmente
-                                    if (!cambioTipoPrenda && !cambioDiseno && !cambioColor) {
-                                      setError('Seleccione al menos un campo para el producto de cambio.');
-                                      return;
-                                    }
-                                    setCambioSeleccionado({
-                                      tipo_prenda: cambioTipoPrenda || undefined,
-                                      diseno: cambioDiseno || undefined,
-                                      color: cambioColor || null,
-                                      talla: cambioTalla || null,
-                                    });
-                                    setError(null);
-                                  }}
+                                  onClick={seleccionarProductoCambio}
                                 >
                                   Seleccionar producto de cambio
                                 </button>
@@ -1218,6 +1298,7 @@ export default function DevolucionesClient() {
                                     setCambioTalla('');
                                     setCambioTallas([]);
                                     setCambioSeleccionado(null);
+                                    setPrecioReemplazoUnitario(0);
                                   }}
                                 >
                                   Limpiar
