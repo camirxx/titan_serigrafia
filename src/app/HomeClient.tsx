@@ -2,41 +2,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
 
 interface HomeClientProps {
   userRole: 'admin' | 'vendedor' | 'desarrollador';
-  userName: string;
 }
 
-export default function HomeClient({ userRole, userName }: HomeClientProps) {
+export default function HomeClient({ userRole }: HomeClientProps) {
   const router = useRouter();
-  const [currentDate, setCurrentDate] = useState('');
-  const [currentTime, setCurrentTime] = useState('');
-
-  useEffect(() => {
-    const updateDateTime = () => {
-      const now = new Date();
-      setCurrentDate(
-        now.toLocaleDateString('es-ES', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        })
-      );
-      setCurrentTime(
-        now.toLocaleTimeString('es-ES', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        })
-      );
-    };
-
-    updateDateTime();
-    const interval = setInterval(updateDateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleNavigation = (path: string) => {
     router.push(path);
@@ -45,139 +17,125 @@ export default function HomeClient({ userRole, userName }: HomeClientProps) {
   const isAdmin = userRole === 'admin' || userRole === 'desarrollador';
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Decorative diagonal stripes */}
-      <div className="pointer-events-none absolute inset-0 opacity-20">
-        <div className="absolute left-0 top-0 h-full w-full">
-          <div className="absolute left-1/4 top-0 h-full w-32 -skew-x-12 transform bg-gradient-to-b from-green-400 to-transparent"></div>
-          <div className="absolute left-1/3 top-0 h-full w-24 -skew-x-12 transform bg-gradient-to-b from-green-500 to-transparent"></div>
-          <div className="absolute right-1/4 top-0 h-full w-32 -skew-x-12 transform bg-gradient-to-b from-green-400 to-transparent"></div>
+    <div className="relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 opacity-10">
+        <div className="absolute inset-0">
+          <div className="absolute left-1/4 top-0 h-full w-32 -skew-x-12 transform bg-gradient-to-b from-indigo-400/60 to-transparent" />
+          <div className="absolute left-[42%] top-0 h-full w-20 -skew-x-12 transform bg-gradient-to-b from-purple-500/50 to-transparent" />
+          <div className="absolute right-1/4 top-0 h-full w-28 -skew-x-12 transform bg-gradient-to-b from-pink-400/60 to-transparent" />
         </div>
       </div>
 
-      {/* Header */}
-      <header className="relative z-10 px-4 pt-6 sm:px-8 sm:pt-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 rounded-3xl bg-white/95 p-4 shadow-2xl backdrop-blur sm:flex-row sm:p-6">
-          <div className="flex w-full flex-col items-center gap-4 sm:w-auto sm:flex-row sm:gap-8">
-            <div className="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 px-6 py-3 text-white sm:px-8 sm:py-4">
-              <h1 className="text-xl font-bold sm:text-2xl">
-                Hola{userName ? `, ${userName}` : ''} 👋
-              </h1>
+      <main className="relative z-10 mx-auto max-w-6xl px-4 py-10 sm:px-8 lg:px-12">
+        <section className="rounded-3xl bg-white/85 p-6 shadow-2xl backdrop-blur-md sm:p-10">
+          <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-indigo-500">Panel principal</p>
+              <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Accesos rápidos</h1>
+              <p className="text-sm text-slate-500">Explora las secciones clave del sistema desde una sola vista.</p>
             </div>
-            <div className="rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 px-6 py-3 text-white sm:px-8 sm:py-4">
-              <h2 className="text-xl font-bold uppercase sm:text-2xl">
-                {userRole}
-              </h2>
-            </div>
-          </div>
+          </header>
 
-          <div className="flex items-center gap-4 sm:gap-6">
-            <div className="text-center sm:text-right">
-              <p className="text-xs text-gray-600 sm:text-sm">{currentDate}</p>
-              <p className="text-base font-semibold sm:text-lg">{currentTime}</p>
-            </div>
-            <div
-              className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-xl sm:h-20 sm:w-20"
-              aria-label="Avatar"
-              title={userName}
-            >
-              <span className="text-2xl sm:text-3xl">👤</span>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="relative z-10 mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-10">
-        <div className="rounded-3xl bg-white/95 p-5 shadow-2xl backdrop-blur sm:p-10">
           <div
             className={`grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 ${
               isAdmin ? 'lg:grid-cols-3' : ''
             }`}
           >
-            {/* VENTAS */}
             <button
               onClick={() => handleNavigation('/pos')}
-              className="group min-h-[170px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[210px] sm:p-10"
+              className="group min-h-[170px] rounded-2xl border-2 border-slate-200 bg-white/90 p-6 text-slate-800 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-400 hover:bg-indigo-50/80 hover:shadow-xl sm:min-h-[210px] sm:p-10"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
-                <div className="text-7xl sm:text-8xl">💰</div>
-                <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
-                  VENTAS
+                <div className="text-6xl sm:text-7xl">💰</div>
+                <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
+                  Punto de Venta
                 </h3>
+                <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
+                  Registra ventas y gestiona cobros en tiempo real.
+                </p>
               </div>
             </button>
 
-            {/* INVENTARIO */}
             <button
               onClick={() => handleNavigation('/inventario')}
-              className="group min-h-[180px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:translate-y-[-4px] hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[220px] sm:p-10"
+              className="group min-h-[170px] rounded-2xl border-2 border-slate-200 bg-white/90 p-6 text-slate-800 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-400 hover:bg-indigo-50/80 hover:shadow-xl sm:min-h-[210px] sm:p-10"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
-                <div className="text-7xl sm:text-8xl">📦</div>
-                <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
-                  INVENTARIO
+                <div className="text-6xl sm:text-7xl">📦</div>
+                <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
+                  Inventario
                 </h3>
+                <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
+                  Controla stock, variaciones y movimientos de productos.
+                </p>
               </div>
             </button>
 
-            {/* DEVOLUCIONES */}
             <button
               onClick={() => handleNavigation('/devoluciones')}
-              className="group min-h-[180px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:translate-y-[-4px] hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[220px] sm:p-10"
+              className="group min-h-[170px] rounded-2xl border-2 border-slate-200 bg-white/90 p-6 text-slate-800 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-400 hover:bg-indigo-50/80 hover:shadow-xl sm:min-h-[210px] sm:p-10"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
-                <div className="text-7xl sm:text-8xl">🔄</div>
-                <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
-                  DEVOLUCIONES
+                <div className="text-6xl sm:text-7xl">🔄</div>
+                <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
+                  Devoluciones
                 </h3>
+                <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
+                  Gestiona cambios, reembolsos y movimientos asociados.
+                </p>
               </div>
             </button>
 
-            {/* DASHBOARD */}
             <button
               onClick={() => handleNavigation('/dashboard')}
-              className="group min-h-[180px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:translate-y-[-4px] hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[220px] sm:p-10"
+              className="group min-h-[170px] rounded-2xl border-2 border-slate-200 bg-white/90 p-6 text-slate-800 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-400 hover:bg-indigo-50/80 hover:shadow-xl sm:min-h-[210px] sm:p-10"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
-                <div className="text-7xl sm:text-8xl">📊</div>
-                <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
-                  DASHBOARD
+                <div className="text-6xl sm:text-7xl">📊</div>
+                <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
+                  Dashboard
                 </h3>
+                <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
+                  Visualiza el desempeño general y métricas clave.
+                </p>
               </div>
             </button>
 
-            {/* REPORTES - Solo Admin */}
             {isAdmin && (
               <button
                 onClick={() => handleNavigation('/reportes')}
-                className="group min-h-[170px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duración-300 hover:-translate-y-1 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[210px] sm:p-10"
+                className="group min-h-[170px] rounded-2xl border-2 border-slate-200 bg-white/90 p-6 text-slate-800 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-400 hover:bg-indigo-50/80 hover:shadow-xl sm:min-h-[210px] sm:p-10"
               >
                 <div className="flex h-full flex-col items-center justify-center gap-4">
-                  <div className="text-7xl sm:text-8xl">📈</div>
-                  <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
-                    REPORTES
+                  <div className="text-6xl sm:text-7xl">📈</div>
+                  <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
+                    Reportes
                   </h3>
+                  <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
+                    Analiza resultados y exporta información detallada.
+                  </p>
                 </div>
               </button>
             )}
 
-            {/* TRABAJADORES - Solo Admin */}
             {isAdmin && (
               <button
                 onClick={() => handleNavigation('/trabajadores')}
-                className="group min-h-[170px] rounded-2xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-purple-400 hover:bg-purple-50 hover:shadow-xl sm:min-h-[210px] sm:p-10"
+                className="group min-h-[170px] rounded-2xl border-2 border-slate-200 bg-white/90 p-6 text-slate-800 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-400 hover:bg-indigo-50/80 hover:shadow-xl sm:min-h-[210px] sm:p-10"
               >
                 <div className="flex h-full flex-col items-center justify-center gap-4">
-                  <div className="text-7xl sm:text-8xl">👥</div>
-                  <h3 className="text-xl font-bold text-gray-800 group-hover:text-purple-600 sm:text-2xl">
-                    TRABAJADORES
+                  <div className="text-6xl sm:text-7xl">👥</div>
+                  <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
+                    Trabajadores
                   </h3>
+                  <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
+                    Administra roles, permisos y disponibilidad del equipo.
+                  </p>
                 </div>
               </button>
             )}
           </div>
-        </div>
+        </section>
       </main>
     </div>
   );

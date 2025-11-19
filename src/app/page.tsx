@@ -2,6 +2,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabaseServer';
+import PrivateAppLayout from '@/components/layout/PrivateAppLayout';
 import HomeClient from './HomeClient';
 
 export default async function Home() {
@@ -24,10 +25,22 @@ export default async function Home() {
     redirect('/acceso-denegado');
   }
 
+  const role = userData.rol as 'admin' | 'vendedor' | 'desarrollador';
+  const userName = userData.nombre || session.user.email || 'Usuario';
+
   return (
-    <HomeClient 
-      userRole={userData.rol} 
-      userName={userData.nombre || session.user.email || 'Usuario'} 
-    />
+    <PrivateAppLayout
+      role={role}
+      user={{
+        name: userName,
+        email: session.user.email ?? '',
+        avatarUrl: (session.user.user_metadata as { avatar_url?: string } | undefined)?.avatar_url ?? null,
+      }}
+    >
+      <HomeClient 
+        userRole={role} 
+        userName={userName} 
+      />
+    </PrivateAppLayout>
   );
 }

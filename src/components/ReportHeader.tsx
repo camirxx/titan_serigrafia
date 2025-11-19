@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ChevronLeft, FileDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ReportHeaderProps {
   title: string;
@@ -14,6 +15,8 @@ interface ReportHeaderProps {
   onExportExcel?: () => void;
   showExport?: boolean;
   actions?: React.ReactNode;
+  className?: string;
+  titleClassName?: string;
 }
 
 const DEFAULT_GRADIENT = 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600';
@@ -29,6 +32,8 @@ export default function ReportHeader({
   onExportExcel,
   showExport = true,
   actions,
+  className,
+  titleClassName,
 }: ReportHeaderProps) {
   const router = useRouter();
   const [fecha, setFecha] = useState('');
@@ -47,7 +52,7 @@ export default function ReportHeader({
   }, []);
 
   return (
-    <div className={`${gradientClass} rounded-2xl shadow-2xl p-6 text-white mb-6`}>
+    <div className={cn(gradientClass, 'rounded-2xl shadow-2xl p-6 text-white mb-6', className)}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
           <button 
@@ -60,7 +65,7 @@ export default function ReportHeader({
             {icon}
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">{title}</h1>
+            <h1 className={cn('text-2xl sm:text-3xl font-bold', titleClassName)}>{title}</h1>
             <p className="text-white/80 text-sm mt-1">
               {subtitle ?? `${fecha} · ${hora}`}
             </p>

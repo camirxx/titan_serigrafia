@@ -1,9 +1,9 @@
 // src/app/(privado)/(admin)/trabajadores/TrabajadoresUI.tsx
 "use client";
 
-import { useState, useTransition, useOptimistic } from 'react';
-import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { useState, useTransition, useOptimistic, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus, Eye, EyeOff, Trash2 } from 'lucide-react';
 
 type Rol = "admin" | "vendedor" | "desarrollador";
 type Tienda = {
@@ -64,6 +64,11 @@ export default function TrabajadoresUI({
     rol: 'vendedor' as Rol,
     tienda_id: ''
   });
+  const [contactInfo, setContactInfo] = useState({
+    phone: '+569 63215728',
+    email: 'c.rua1993@gmail.com',
+  });
+  const [contactDraft, setContactDraft] = useState(contactInfo);
 
   // Estado optimista para usuarios
   const [optimisticUsuarios, setOptimisticUsuarios] = useOptimistic(
@@ -98,6 +103,10 @@ export default function TrabajadoresUI({
       }
     }
   );
+
+  useEffect(() => {
+    setContactDraft(contactInfo);
+  }, [contactInfo]);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -221,6 +230,27 @@ export default function TrabajadoresUI({
     });
   };
 
+  const handleContactSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (
+      contactDraft.phone === contactInfo.phone &&
+      contactDraft.email === contactInfo.email
+    ) {
+      showNotification('error', 'No hay cambios por guardar');
+      return;
+    }
+
+    const confirmed = window.confirm('¿Estás seguro de cambiar los datos de contacto del taller?');
+    if (!confirmed) {
+      showNotification('error', 'Cambios cancelados');
+      setContactDraft(contactInfo);
+      return;
+    }
+
+    setContactInfo(contactDraft);
+    showNotification('success', 'Datos de contacto actualizados correctamente');
+  };
+
   // Separar el admin de los demás usuarios
   const adminUser = optimisticUsuarios.find(u => u.rol === 'admin');
   const otherUsers = optimisticUsuarios.filter(u => u.rol !== 'admin');
@@ -253,7 +283,7 @@ export default function TrabajadoresUI({
   };
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="p-6">
 
       {/* Notificaciones - z-index mayor que el modal */}
       {notification && (
@@ -306,6 +336,76 @@ export default function TrabajadoresUI({
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
             />
+          </div>
+        </div>
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              Datos de contacto del taller
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Modifica la información mostrada en las comunicaciones internas.
+            </p>
+            <form onSubmit={handleContactSubmit} className="mt-4 space-y-4">
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Teléfono</span>
+                <input
+                  type="tel"
+                  value={contactDraft.phone}
+                  onChange={(event) =>
+                    setContactDraft((prev) => ({ ...prev, phone: event.target.value }))
+                  }
+                  className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 shadow-inner focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Correo electrónico</span>
+                <input
+                  type="email"
+                  value={contactDraft.email}
+                  onChange={(event) =>
+                    setContactDraft((prev) => ({ ...prev, email: event.target.value }))
+                  }
+                  className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 shadow-inner focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                  required
+                />
+              </label>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-gray-500">
+                  Se solicitará confirmación antes de guardar los cambios.
+                </div>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:from-purple-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                  disabled={isPending}
+                >
+                  Guardar datos
+                </button>
+              </div>
+            </form>
+          </div>
+          <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl shadow-xl text-white p-6">
+            <h3 className="text-lg font-semibold">Contacto actual</h3>
+            <p className="mt-4 text-sm text-white/90">
+              Esta información se utiliza para notificaciones y soporte interno.
+            </p>
+            <div className="mt-5 space-y-3 text-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-base">📱</span>
+                <div>
+                  <p className="font-semibold">Teléfono del taller</p>
+                  <p className="text-white/80">{contactInfo.phone}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-base">📧</span>
+                <div>
+                  <p className="font-semibold">Correo del taller</p>
+                  <p className="text-white/80 break-all">{contactInfo.email}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </header>

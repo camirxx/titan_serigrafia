@@ -32,6 +32,8 @@ const ORDEN_CATEGORIAS: { [key: string]: number } = {
   'pantalon': 6,
 };
 
+const ITEMS_PER_PAGE = 50;
+
 export default function InventarioAgrupado() {
   const supabase = useMemo(() => supabaseBrowser(), []);
 
@@ -44,15 +46,7 @@ export default function InventarioAgrupado() {
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroColor, setFiltroColor] = useState<string>("todos");
   const [soloConStock, setSoloConStock] = useState(false);
-
-  const [fechaDesde, setFechaDesde] = useState(() => {
-    const fecha = new Date();
-    fecha.setDate(fecha.getDate() - 90);
-    return fecha.toISOString().split("T")[0];
-  });
-  const [fechaHasta, setFechaHasta] = useState(() => {
-    return new Date().toISOString().split("T")[0];
-  });
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Recopilar todas las tallas únicas que existen en el inventario
   const todasLasTallas = useMemo(() => {
@@ -254,7 +248,7 @@ export default function InventarioAgrupado() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, fechaDesde, fechaHasta]);
+  }, [supabase]);
 
   // ---- 2) Luego el useEffect que la invoca ----
   useEffect(() => {
@@ -312,6 +306,30 @@ export default function InventarioAgrupado() {
     setSoloConStock(false);
   };
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [busqueda, filtroTipo, filtroColor, soloConStock]);
+
+  const totalPages = Math.max(1, Math.ceil(productosFiltrados.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedProductos = useMemo(() => {
+    const start = Math.max(0, (currentPage - 1) * ITEMS_PER_PAGE);
+    return productosFiltrados.slice(start, start + ITEMS_PER_PAGE);
+  }, [productosFiltrados, currentPage]);
+
+  const showingStart = productosFiltrados.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const showingEnd = productosFiltrados.length === 0
+    ? 0
+    : Math.min(currentPage * ITEMS_PER_PAGE, productosFiltrados.length);
+  const canGoPrev = currentPage > 1 && productosFiltrados.length > 0;
+  const canGoNext = currentPage < totalPages && productosFiltrados.length > 0;
+
   // Modales
   const [modalDisenoAbierto, setModalDisenoAbierto] = useState(false);
   const [modalStockAbierto, setModalStockAbierto] = useState(false);
@@ -324,126 +342,59 @@ export default function InventarioAgrupado() {
   };
 
   return (
-    <div className="min-h-screen relative">
-      {/* Header estilo POS */}
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white mb-6">
-        <div className="flex items-center gap-3">
-          <button onClick={() => window.history.back()} className="bg-white/20 backdrop-blur-sm p-3 rounded-xl hover:bg-white/30 transition">
-            <ChevronLeft className="w-6 h-6 text-white" />
-          </button>
-          <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold">Inventario</h1>
-            <p className="text-white/80 text-sm mt-1">
-              {(() => {
-                const fecha = new Date();
-                const fechaFormateada = fecha.toLocaleDateString("es-CL", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                });
-                const horaActual = fecha.toLocaleTimeString("es-CL", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                });
-                return `${fechaFormateada} · ${horaActual}`;
-              })()}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Filtros de fecha y acciones mejorados */}
-      <div className="bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100 mb-6">
-        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Período de Movimientos
-          </h3>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="space-y-6">
+      <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 rounded-2xl shadow-2xl p-8 text-white mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => window.history.back()} className="bg-white/20 backdrop-blur-sm p-3 rounded-xl hover:bg-white/30 transition">
+              <ChevronLeft className="w-6 h-6 text-white" />
+            </button>
             <div>
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-3">
-                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Movimientos desde
-              </label>
-              <input
-                type="date"
-                value={fechaDesde}
-                onChange={(e) => setFechaDesde(e.target.value)}
-                className="w-full border-2 border-gray-300 rounded-xl px-4 py-3 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all duration-200 outline-none"
-              />
-            </div>
-            <div>
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-3">
-                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                hasta
-              </label>
-              <input
-                type="date"
-                value={fechaHasta}
-                onChange={(e) => setFechaHasta(e.target.value)}
-                className="w-full border-2 border-gray-300 rounded-xl px-4 py-3 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all duration-200 outline-none"
-              />
-            </div>
-            <div className="flex items-end">
-              <button
-                onClick={cargarInventario}
-                disabled={loading}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Cargando...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Actualizar
-                  </>
-                )}
-              </button>
+              <h1 className="text-3xl font-bold">Inventario</h1>
+              <p className="text-white/80 text-sm mt-1">
+                {(() => {
+                  const fecha = new Date();
+                  const fechaFormateada = fecha.toLocaleDateString("es-CL", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  });
+                  const horaActual = fecha.toLocaleTimeString("es-CL", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  return `${fechaFormateada} · ${horaActual}`;
+                })()}
+              </p>
             </div>
           </div>
-        </div>
 
-        {/* Acciones rápidas mejoradas */}
-        <div className="p-6 bg-gradient-to-r from-gray-50 to-slate-100 border-t-2 border-gray-200">
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M13 5v6h6" />
+              </svg>
+              <span className="text-sm font-semibold">Bodega principal</span>
+            </div>
+
             <button
               onClick={() => setModalDisenoAbierto(true)}
-              className="flex-1 py-4 px-6 bg-white border-2 border-indigo-300 text-indigo-700 font-bold rounded-xl hover:bg-indigo-50 hover:border-indigo-400 shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-purple-700 font-semibold shadow hover:shadow-lg transition"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              <span>AGREGAR NUEVO DISEÑO</span>
+              Agregar nuevo producto
             </button>
+
             <button
               onClick={() => setModalStockAbierto(true)}
-              className="flex-1 py-4 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-purple-700 font-semibold shadow hover:shadow-lg transition"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              <span>AGREGAR PRODUCTOS</span>
+              Agregar stock
             </button>
           </div>
         </div>
@@ -522,10 +473,6 @@ export default function InventarioAgrupado() {
 
         {/* Indicadores de filtros activos */}
         <div className="mt-4 flex items-center gap-3 flex-wrap">
-          <span className="text-sm text-purple-900 font-medium">
-            Resultados: {productosFiltrados.length} de {productos.length}
-          </span>
-
           {(busqueda || filtroTipo !== "todos" || filtroColor !== "todos" || soloConStock) && (
             <button
               onClick={limpiarFiltros}
@@ -570,6 +517,52 @@ export default function InventarioAgrupado() {
         </div>
       )}
 
+      {/* Controles superiores */}
+      <div className="mb-4 rounded-2xl border border-gray-200 bg-white/90 px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-gray-600">
+            {productosFiltrados.length > 0
+              ? `Mostrando ${showingStart} – ${showingEnd} de ${productosFiltrados.length} productos`
+              : "No hay productos para mostrar"}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => canGoPrev && setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={!canGoPrev}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 px-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Página anterior"
+            >
+              ◀
+            </button>
+
+            <select
+              value={Math.min(currentPage, totalPages)}
+              onChange={(event) => setCurrentPage(Number(event.target.value))}
+              className="h-9 rounded-xl border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              aria-label="Seleccionar página"
+            >
+              {Array.from({ length: Math.max(productosFiltrados.length === 0 ? 0 : totalPages, 0) }, (_, index) => (
+                <option key={`page-top-${index + 1}`} value={index + 1}>
+                  Página {index + 1}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => canGoNext && setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={!canGoNext}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 px-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Página siguiente"
+            >
+              ▶
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Tabla principal mejorada */}
       <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
         <div className="bg-gradient-to-r from-gray-50 to-slate-100 px-6 py-4 border-b border-gray-200">
@@ -580,16 +573,25 @@ export default function InventarioAgrupado() {
               </svg>
               Inventario Detallado
             </h2>
-            <div className="flex items-center gap-4 text-sm text-gray-600">
+            <div className="flex flex-col gap-1 text-sm text-gray-600 sm:flex-row sm:items-center sm:gap-4">
               <span className="font-medium">
-                {productosFiltrados.length} productos
+                {productosFiltrados.length > 0
+                  ? `Mostrando ${showingStart} – ${showingEnd} de ${productosFiltrados.length} productos`
+                  : "Sin productos para mostrar"}
               </span>
-              <span className="text-gray-400">·</span>
-              <span className="font-medium text-emerald-600">
-                Total stock: {productosFiltrados.reduce((total, prod) => 
-                  total + Object.values(prod.tallas).reduce((sum, talla) => sum + (talla.total || 0), 0), 0
-                )}
-              </span>
+              {productosFiltrados.length > 0 && (
+                <span className="font-medium text-emerald-600">
+                  Total stock: {productosFiltrados.reduce(
+                    (total, prod) =>
+                      total +
+                      Object.values(prod.tallas).reduce(
+                        (sum, talla) => sum + (talla.total || 0),
+                        0
+                      ),
+                    0
+                  )}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -686,7 +688,7 @@ export default function InventarioAgrupado() {
             </thead>
 
             <tbody>
-              {productosFiltrados.map((prod, idx) => (
+              {paginatedProductos.map((prod, idx) => (
                 <tr
                   key={idx}
                   className={`border-b border-gray-100 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 group ${
@@ -778,6 +780,51 @@ export default function InventarioAgrupado() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white/90 px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-gray-600">
+            {productosFiltrados.length > 0
+              ? `Mostrando ${showingStart} – ${showingEnd} de ${productosFiltrados.length} productos`
+              : "No hay productos para mostrar"}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => canGoPrev && setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={!canGoPrev}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 px-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Página anterior"
+            >
+              ◀
+            </button>
+
+            <select
+              value={Math.min(currentPage, totalPages)}
+              onChange={(event) => setCurrentPage(Number(event.target.value))}
+              className="h-9 rounded-xl border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              aria-label="Seleccionar página"
+            >
+              {Array.from({ length: Math.max(productosFiltrados.length === 0 ? 0 : totalPages, 0) }, (_, index) => (
+                <option key={`page-${index + 1}`} value={index + 1}>
+                  Página {index + 1}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => canGoNext && setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={!canGoNext}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 px-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Página siguiente"
+            >
+              ▶
+            </button>
+          </div>
         </div>
       </div>
 

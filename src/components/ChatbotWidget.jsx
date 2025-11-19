@@ -1,512 +1,773 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-const MENUS = {
-  main: {
-    title: "🤖 Asistente de Inventario",
-    subtitle: "Selecciona una categoría para continuar:",
-    options: [
-      { label: "📦 Inventario", action: { type: "menu", target: "inventory" } },
-      { label: "🔄 Movimientos", action: { type: "menu", target: "movements" } },
-      { label: "🚨 Alertas", action: { type: "menu", target: "alerts" } },
-      { label: "📊 Resumen del día", action: { type: "menu", target: "summary" } },
-      { label: "🛠 Configuración", action: { type: "menu", target: "settings" } },
-      { label: "❓ Ayuda", action: { type: "menu", target: "help" } },
+const MAX_MESSAGES = 24;
+
+const formatCurrency = (value) => {
+  if (typeof value !== "number") return "Sin datos";
+  return value.toLocaleString("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    minimumFractionDigits: 0,
+  });
+};
+
+const formatNumber = (value) => {
+  if (typeof value !== "number") return "Sin datos";
+  return value.toLocaleString("es-CL");
+};
+
+const formatStockBajo = (payload) => {
+  const items = Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload)
+      ? payload
+      : [];
+
+  if (!items.length) {
+    return {
+      title: "✅ Stock bajo",
+      lines: ["No hay productos críticos actualmente."],
+    };
+  }
+
+  const lines = items.slice(0, 6).map((item) => {
+    const nombre = item?.nombre ?? item?.name ?? "Producto";
+    const sku = item?.sku ? `SKU ${item.sku}` : "sin SKU";
+    const stock = item?.stock ?? item?.cantidad ?? 0;
+    return `• ${nombre} (${sku}) → ${stock} unidades`;
+  });
+
+  if (items.length > 6) {
+    lines.push(`… y ${items.length - 6} productos más en nivel crítico.`);
+  }
+
+  return {
+    title: "🚨 Productos críticos",
+    lines,
+  };
+};
+
+const formatInventarioCompleto = (payload) => {
+  const resumen = payload?.resumen ?? payload;
+  const totalProductos = resumen?.totalProductos ?? resumen?.total_productos;
+  const totalCategorias = resumen?.totalCategorias ?? resumen?.total_categorias;
+  const totalStock = resumen?.stockTotal ?? resumen?.stock_total;
+
+  return {
+    title: "📦 Inventario General",
+    lines: [
+      `• Total de productos: ${formatNumber(totalProductos)}`,
+      `• Categorías activas: ${formatNumber(totalCategorias)}`,
+      `• Unidades en stock: ${formatNumber(totalStock)}`,
+      "Para más detalle ingresa al módulo de Inventario.",
     ],
-  },
-  inventory: {
-    title: "📦 Inventario",
-    subtitle: "Acciones rápidas disponibles:",
-    options: [
-      { label: "📋 Ver inventario completo", action: { type: "api", key: "stockTotal" } },
-      { label: "🔍 Buscar producto", action: { type: "info", title: "🔍 Buscar producto", lines: [
-        "Selecciona un producto de la lista predefinida:",
-        "• Tinta UV Azul — Código TUV-1023",
-        "• Polera Premium Negra — Código POL-NG-210",
-        "• Transfer Textil Blanco — Código TRF-BL-441",
-        "Utiliza las categorías para filtrar resultados rápidamente.",
-      ] } },
-      { label: "🏷️ Ver por categoría", action: { type: "info", title: "🏷️ Categorías", lines: [
-        "• Tintas y Químicos",
-        "• Textiles y Prendas",
-        "• Insumos de Transferencia",
-        "• Promocionales",
-        "Selecciona una categoría para ver destacados en el inventario.",
-      ] } },
-      { label: "❗ Ver stock bajo", action: { type: "api", key: "stockLow" } },
-      { label: "⬅️ Volver", action: { type: "back" } },
-    ],
-  },
-  movements: {
-    title: "🔄 Movimientos",
-    subtitle: "Selecciona la opción que necesitas:",
-    options: [
-      { label: "➕ Registrar ingreso", action: { type: "info", title: "➕ Registrar ingreso", lines: [
-        "1. Ingresa al módulo POS o Inventario.",
-        "2. Selecciona el producto y la cantidad recibida.",
-        "3. Confirma el origen y guarda para actualizar stock.",
-      ] } },
-      { label: "➖ Registrar salida", action: { type: "info", title: "➖ Registrar salida", lines: [
-        "1. Ingresa al detalle del producto.",
-        "2. Registra la cantidad retirada y destino.",
-        "3. Confirma para registrar en el historial.",
-      ] } },
-      { label: "📅 Movimientos del día", action: { type: "api", key: "movementsDay" } },
-      { label: "📆 Movimientos del mes", action: { type: "api", key: "movementsMonth" } },
-      { label: "⬅️ Volver", action: { type: "back" } },
-    ],
-  },
-  alerts: {
-    title: "🚨 Alertas y Notificaciones",
-    subtitle: "Gestiona alertas de stock en segundos:",
-    options: [
-      { label: "🚨 Ver productos críticos", action: { type: "api", key: "criticalProducts" } },
-      { label: "⚠️ Enviar alerta", action: { type: "menu", target: "alertsSend" } },
-      { label: "🛎️ Configurar umbral", action: { type: "info", title: "🛎️ Configurar umbral", lines: [
-        "1. Accede a Configuración > Inventario.",
-        "2. Ajusta el nivel mínimo por producto o categoría.",
-        "3. Guarda para activar alertas automáticas.",
-      ] } },
-      { label: "⬅️ Volver", action: { type: "back" } },
-    ],
-  },
-  alertsSend: {
-    title: "⚠️ Enviar alerta de stock bajo",
-    subtitle: "Selecciona un canal disponible:",
-    options: [
-      { label: "📧 Enviar por correo", action: { type: "api", key: "sendEmail", stay: false } },
-      { label: "📱 Enviar por WhatsApp", action: { type: "api", key: "sendWhatsapp", stay: false } },
-      { label: "⬅️ Volver", action: { type: "back" } },
-    ],
-  },
-  summary: {
+  };
+};
+
+const formatMovimientos = (payload, scope = "día") => {
+  const movimientos = Array.isArray(payload?.movimientos)
+    ? payload.movimientos
+    : Array.isArray(payload)
+      ? payload
+      : [];
+
+  if (!movimientos.length) {
+    return {
+      title: `📅 Movimientos del ${scope}`,
+      lines: ["No se registran movimientos en el periodo seleccionado."],
+    };
+  }
+
+  const lines = movimientos.slice(0, 5).map((movimiento) => {
+    const tipo = movimiento?.tipo ?? movimiento?.movement_type ?? "Movimiento";
+    const producto = movimiento?.producto ?? movimiento?.product ?? "Producto";
+    const cantidad = movimiento?.cantidad ?? movimiento?.quantity ?? 0;
+    return `• ${tipo}: ${producto} (${cantidad})`;
+  });
+
+  if (movimientos.length > 5) {
+    lines.push(`… y ${movimientos.length - 5} movimientos adicionales.`);
+  }
+
+  return {
+    title: `📅 Movimientos del ${scope}`,
+    lines,
+  };
+};
+
+const formatResumenDia = (payload) => {
+  const resumen = payload?.resumen ?? payload ?? {};
+  const totalVendido = resumen?.totalVendido ?? resumen?.total_vendido;
+  const productosVendidos = resumen?.productosVendidos ?? resumen?.productos_vendidos;
+  const ingresos = resumen?.ingresos ?? resumen?.ingresos_registrados;
+  const salidas = resumen?.salidas ?? resumen?.salidas_registradas;
+
+  return {
     title: "📊 Resumen del Día",
-    subtitle: "Información consolidada del día:",
+    lines: [
+      `• Total vendido hoy: ${formatCurrency(totalVendido ?? 0)}`,
+      `• Productos vendidos: ${formatNumber(productosVendidos ?? 0)}`,
+      `• Ingresos registrados: ${formatNumber(ingresos ?? 0)}`,
+      `• Salidas registradas: ${formatNumber(salidas ?? 0)}`,
+    ],
+  };
+};
+
+const formatResumenMes = (payload) => {
+  const resumen = payload?.resumen ?? payload ?? {};
+  const totalVendido = resumen?.totalVendido ?? resumen?.total_vendido;
+  const productosVendidos = resumen?.productosVendidos ?? resumen?.productos_vendidos;
+  const ingresos = resumen?.ingresos ?? resumen?.ingresos_registrados;
+  const salidas = resumen?.salidas ?? resumen?.salidas_registradas;
+
+  return {
+    title: "📅 Resumen del Mes",
+    lines: [
+      `• Total vendido: ${formatCurrency(totalVendido ?? 0)}`,
+      `• Productos vendidos: ${formatNumber(productosVendidos ?? 0)}`,
+      `• Ingresos registrados: ${formatNumber(ingresos ?? 0)}`,
+      `• Salidas registradas: ${formatNumber(salidas ?? 0)}`,
+    ],
+  };
+};
+
+const formatPostResult = (successTitle) => ({
+  title: successTitle,
+  lines: ["Se solicitó la acción correctamente. Revisa el estado en unos momentos."],
+});
+
+const MENU_STRUCTURE = {
+  general: {
+    title: "🤖 Centro de Control de Inventario",
+    subtitle: "Selecciona una categoría:",
     options: [
-      { label: "📅 Ver resumen mensual", action: { type: "api", key: "summaryMonth", stay: true } },
-      { label: "⬅️ Volver", action: { type: "back" } },
+      { id: "menu-inventario", label: "📦 Inventario", type: "submenu", next: "inventario" },
+      { id: "menu-movimientos", label: "🔄 Movimientos", type: "submenu", next: "movimientos" },
+      { id: "menu-alertas", label: "🚨 Alertas y Notificaciones", type: "submenu", next: "alertas" },
+      { id: "menu-resumen", label: "📊 Resumen del Día", type: "submenu", next: "resumenDia" },
+      { id: "menu-configuracion", label: "🛠 Configuración", type: "submenu", next: "configuracion" },
+      { id: "menu-ayuda", label: "❓ Ayuda", type: "submenu", next: "ayuda" },
     ],
   },
-  settings: {
+  inventario: {
+    title: "📦 Inventario",
+    subtitle: "Elige una acción:",
+    options: [
+      {
+        id: "inventario-completo",
+        label: "📋 Ver inventario completo",
+        type: "fetch",
+        method: "GET",
+        endpoint: "/api/stock-total",
+        formatter: formatInventarioCompleto,
+      },
+      {
+        id: "inventario-buscar",
+        label: "🔍 Buscar producto",
+        type: "info",
+        response: {
+          title: "🔍 Buscar producto",
+          lines: [
+            "Ingresa al módulo de Inventario y utiliza el buscador superior.",
+            "Puedes buscar por SKU, nombre o categoría.",
+            "Aplica filtros combinados para afinar resultados.",
+          ],
+        },
+      },
+      {
+        id: "inventario-categoria",
+        label: "🏷️ Ver por categoría",
+        type: "info",
+        response: {
+          title: "🏷️ Ver por categoría",
+          lines: [
+            "Selecciona la pestaña 'Agrupar por categoría' en el módulo de Inventario.",
+            "Ordena por ventas, stock o margen desde la cabecera de la tabla.",
+          ],
+        },
+      },
+      {
+        id: "inventario-stock-bajo",
+        label: "❗ Ver stock bajo",
+        type: "fetch",
+        method: "GET",
+        endpoint: "/api/stock-bajo",
+        formatter: formatStockBajo,
+      },
+      { id: "inventario-volver", label: "⬅️ Volver", type: "back" },
+    ],
+  },
+  movimientos: {
+    title: "🔄 Movimientos",
+    subtitle: "Controla ingresos y salidas:",
+    options: [
+      {
+        id: "movimientos-ingreso",
+        label: "➕ Registrar ingreso",
+        type: "info",
+        response: {
+          title: "➕ Registrar ingreso",
+          lines: [
+            "Abre Movimientos > Registrar ingreso.",
+            "Selecciona el producto, cantidad y almacén.",
+            "Guarda para actualizar el stock al instante.",
+          ],
+        },
+      },
+      {
+        id: "movimientos-salida",
+        label: "➖ Registrar salida",
+        type: "info",
+        response: {
+          title: "➖ Registrar salida",
+          lines: [
+            "Ingresa a Movimientos > Registrar salida.",
+            "Especifica motivo, producto y cantidad.",
+            "Confirma para descontar inventario y dejar trazabilidad.",
+          ],
+        },
+      },
+      {
+        id: "movimientos-dia",
+        label: "📅 Movimientos del día",
+        type: "fetch",
+        method: "GET",
+        endpoint: "/api/movimientos-dia",
+        formatter: (data) => formatMovimientos(data, "día"),
+      },
+      {
+        id: "movimientos-mes",
+        label: "📆 Movimientos del mes",
+        type: "fetch",
+        method: "GET",
+        endpoint: "/api/movimientos-mes",
+        formatter: (data) => formatMovimientos(data, "mes"),
+      },
+      { id: "movimientos-volver", label: "⬅️ Volver", type: "back" },
+    ],
+  },
+  alertas: {
+    title: "🚨 Alertas y Notificaciones",
+    subtitle: "Gestiona las alertas de stock:",
+    options: [
+      {
+        id: "alertas-criticos",
+        label: "🚨 Ver productos críticos",
+        type: "fetch",
+        method: "GET",
+        endpoint: "/api/stock-bajo",
+        formatter: formatStockBajo,
+      },
+      {
+        id: "alertas-enviar",
+        label: "⚠️ Enviar alerta de stock bajo",
+        type: "submenu",
+        next: "alertasEnvio",
+      },
+      {
+        id: "alertas-umbral",
+        label: "🛎️ Configurar umbral de alerta",
+        type: "info",
+        response: {
+          title: "🛎️ Configurar umbral",
+          lines: [
+            "Entra a Configuración > Notificaciones.",
+            "Define el stock mínimo por producto o categoría.",
+            "Activa recordatorios automáticos por correo o WhatsApp.",
+          ],
+        },
+      },
+      { id: "alertas-volver", label: "⬅️ Volver", type: "back" },
+    ],
+  },
+  alertasEnvio: {
+    title: "⚠️ Enviar alerta de stock bajo",
+    subtitle: "Selecciona el medio de envío:",
+    options: [
+      {
+        id: "alertas-correo",
+        label: "📧 Enviar a correo",
+        type: "post",
+        method: "POST",
+        endpoint: "/api/enviar-correo-stock-bajo",
+        formatter: () => formatPostResult("📧 Alerta enviada por correo"),
+      },
+      {
+        id: "alertas-whatsapp",
+        label: "📱 Enviar a WhatsApp",
+        type: "post",
+        method: "POST",
+        endpoint: "/api/enviar-whatsapp-stock-bajo",
+        formatter: () => formatPostResult("📱 Alerta enviada por WhatsApp"),
+      },
+      { id: "alertas-envio-volver", label: "⬅️ Volver", type: "back" },
+    ],
+  },
+  resumenDia: {
+    title: "📊 Resumen del Día",
+    subtitle: "Revisa los indicadores principales:",
+    autoFetch: {
+      method: "GET",
+      endpoint: "/api/resumen-dia",
+      formatter: formatResumenDia,
+    },
+    options: [
+      {
+        id: "resumen-mes",
+        label: "📅 Ver resumen del mes",
+        type: "fetch",
+        method: "GET",
+        endpoint: "/api/resumen-mes",
+        formatter: formatResumenMes,
+      },
+      { id: "resumen-volver", label: "⬅️ Volver", type: "back" },
+    ],
+  },
+  configuracion: {
     title: "🛠 Configuración",
-    subtitle: "Accesos directos de ajustes:",
+    subtitle: "Ajustes rápidos:",
     options: [
-      { label: "🌙 Alternar modo oscuro", action: { type: "toggleTheme" } },
-      { label: "📱 Actualizar WhatsApp", action: { type: "info", title: "📱 Actualizar WhatsApp", lines: [
-        "1. Ve a Configuración > Notificaciones.",
-        "2. Ingresa el nuevo número autorizado.",
-        "3. Guarda para activar el envío de alertas.",
-      ] } },
-      { label: "📧 Actualizar correo", action: { type: "info", title: "📧 Actualizar correo", lines: [
-        "1. Ve a Configuración > Contacto.",
-        "2. Ingresa el nuevo correo y confirma.",
-        "3. Verifica el mensaje de confirmación enviado.",
-      ] } },
-      { label: "⬅️ Volver", action: { type: "back" } },
+      {
+        id: "configuracion-modo",
+        label: "🌙 Modo oscuro/claro",
+        type: "info",
+        response: {
+          title: "🌙 Modo oscuro/claro",
+          lines: [
+            "Ve a Configuración > Apariencia.",
+            "Activa el modo que prefieras y guarda los cambios.",
+            "El ajuste se aplica a toda la cuenta inmediatamente.",
+          ],
+        },
+      },
+      {
+        id: "configuracion-whatsapp",
+        label: "📱 Cambiar número de WhatsApp",
+        type: "info",
+        response: {
+          title: "📱 Cambiar número de WhatsApp",
+          lines: [
+            "En Configuración > Notificaciones agrega el nuevo número.",
+            "Verifica el código enviado para habilitar alertas.",
+          ],
+        },
+      },
+      {
+        id: "configuracion-correo",
+        label: "📧 Cambiar correo del taller",
+        type: "info",
+        response: {
+          title: "📧 Cambiar correo",
+          lines: [
+            "En Configuración > Contacto actualiza el correo principal.",
+            "Confirma desde la bandeja de entrada para activar la nueva dirección.",
+          ],
+        },
+      },
+      { id: "configuracion-volver", label: "⬅️ Volver", type: "back" },
     ],
   },
-  help: {
+  ayuda: {
     title: "❓ Ayuda",
-    subtitle: "Guías rápidas paso a paso:",
+    subtitle: "Preguntas frecuentes:",
     options: [
-      { label: "¿Cómo registrar entrada?", action: { type: "info", title: "Registrar entrada", lines: [
-        "1. Abre Inventario > Registrar ingreso.",
-        "2. Selecciona producto y cantidades.",
-        "3. Confirma el origen y guarda.",
-      ] } },
-      { label: "¿Cómo ver stock bajo?", action: { type: "info", title: "Ver stock bajo", lines: [
-        "Usa Inventario > Stock bajo para revisar productos críticos.",
-        "Activa alertas automáticas para recibir notificaciones.",
-      ] } },
-      { label: "¿Cómo enviar alerta?", action: { type: "info", title: "Enviar alertas", lines: [
-        "1. Ve a Alertas y Notificaciones.",
-        "2. Selecciona Enviar alerta de stock bajo.",
-        "3. Elige correo o WhatsApp y confirma.",
-      ] } },
-      { label: "¿Cómo buscar producto?", action: { type: "info", title: "Buscar producto", lines: [
-        "1. Ingresa a Inventario > Buscar producto.",
-        "2. Filtra por categoría o estado.",
-        "3. Visualiza stock disponible y ubicación.",
-      ] } },
-      { label: "⬅️ Volver", action: { type: "back" } },
+      {
+        id: "ayuda-entrada",
+        label: "¿Cómo registrar entrada?",
+        type: "info",
+        response: {
+          title: "¿Cómo registrar entrada?",
+          lines: [
+            "Ingresa a Movimientos > Registrar ingreso.",
+            "Completa producto, cantidad y almacén.",
+            "Guarda para sumar stock y generar comprobante.",
+          ],
+        },
+      },
+      {
+        id: "ayuda-stock",
+        label: "¿Cómo ver stock bajo?",
+        type: "info",
+        response: {
+          title: "¿Cómo ver stock bajo?",
+          lines: [
+            "Desde Inventario selecciona la vista 'Stock bajo'.",
+            "Activa alertas automáticas para recibir avisos diarios.",
+          ],
+        },
+      },
+      {
+        id: "ayuda-alerta",
+        label: "¿Cómo enviar alerta?",
+        type: "info",
+        response: {
+          title: "¿Cómo enviar alerta?",
+          lines: [
+            "Dirígete a Alertas > Enviar alerta de stock bajo.",
+            "Elige correo o WhatsApp y confirma.",
+          ],
+        },
+      },
+      {
+        id: "ayuda-buscar",
+        label: "¿Cómo buscar un producto?",
+        type: "info",
+        response: {
+          title: "¿Cómo buscar un producto?",
+          lines: [
+            "Usa el buscador del módulo de Inventario.",
+            "Aplica filtros por categoría, proveedor o etiquetas.",
+          ],
+        },
+      },
+      { id: "ayuda-volver", label: "⬅️ Volver", type: "back" },
     ],
   },
 };
 
-const API_ACTIONS = {
-  stockTotal: {
-    endpoint: "/api/stock-total",
-    method: "GET",
-    format: (data) => ({
-      title: "📋 Inventario completo",
-      lines: [
-        `Total de productos: ${data.totalProducts}`,
-        ...data.items.map((item) => `• ${item.name} (${item.category}) — ${item.stock} u. [${item.location}]`),
-        `Actualizado: ${new Intl.DateTimeFormat("es-CL", {
-          dateStyle: "short",
-          timeStyle: "short",
-        }).format(new Date(data.updatedAt))}`,
-      ],
-    }),
-  },
-  stockLow: {
-    endpoint: "/api/stock-bajo",
-    method: "GET",
-    format: (data) => ({
-      title: "❗ Productos con stock bajo",
-      lines: data.items.length
-        ? data.items.map((item) => `• ${item.name} — ${item.stock} u. (mínimo ${item.minimum})`)
-        : ["No hay productos críticos en este momento."],
-    }),
-  },
-  movementsDay: {
-    endpoint: "/api/movimientos-dia",
-    method: "GET",
-    format: (data) => ({
-      title: "📅 Movimientos del día",
-      lines: [
-        `Ingresos registrados: ${data.resumen.ingresosRegistrados}`,
-        ...data.ingresos.map((item) => `➕ ${item.producto} — ${item.cantidad} u. (${item.hora})`),
-        `Salidas registradas: ${data.resumen.salidasRegistradas}`,
-        ...data.salidas.map((item) => `➖ ${item.producto} — ${item.cantidad} u. (${item.hora})`),
-      ],
-    }),
-  },
-  movementsMonth: {
-    endpoint: "/api/movimientos-mes",
-    method: "GET",
-    format: (data) => ({
-      title: "📆 Movimientos del mes",
-      lines: [
-        `Total ingresos: ${data.ingresosTotales}`,
-        `Total salidas: ${data.salidasTotales}`,
-        "Productos destacados:",
-        ...data.destacados.map((item) => `• ${item.producto} — ${item.movimientos} movimientos`),
-      ],
-    }),
-  },
-  criticalProducts: {
-    endpoint: "/api/stock-bajo",
-    method: "GET",
-    format: (data) => ({
-      title: "🚨 Productos críticos",
-      lines: data.items.length
-        ? data.items.map((item) => `• ${item.name} — ${item.stock} u. (mínimo ${item.minimum})`)
-        : ["No se registran productos críticos."],
-    }),
-  },
-  sendEmail: {
-    endpoint: "/api/enviar-correo-stock-bajo",
-    method: "POST",
-    body: {
-      message: "Alerta: existen productos con stock bajo en el inventario.",
-    },
-    format: (data) => ({
-      title: "📧 Alerta enviada",
-      lines: [data.message ?? "Correo enviado correctamente."],
-    }),
-  },
-  sendWhatsapp: {
-    endpoint: "/api/enviar-whatsapp-stock-bajo",
-    method: "POST",
-    body: {
-      message: "⚠️ Alerta de inventario: hay productos con stock bajo.",
-    },
-    format: (data) => ({
-      title: "📱 Alerta enviada",
-      lines: [data.message ?? "Mensaje enviado correctamente."],
-    }),
-  },
-  summaryDay: {
-    endpoint: "/api/resumen-dia",
-    method: "GET",
-    onSuccess: (data, helpers) => {
-      helpers.setSummaryCard(data);
-      return {
-        title: "📊 Resumen del día",
-        lines: [
-          `Total vendido hoy: ${helpers.currency(data.totalVendido)}`,
-          `Productos vendidos: ${data.productosVendidos}`,
-          `Ingresos registrados: ${data.ingresosRegistrados}`,
-          `Salidas registradas: ${data.salidasRegistradas}`,
-        ],
-      };
-    },
-    stay: true,
-  },
-  summaryMonth: {
-    endpoint: "/api/resumen-mes",
-    method: "GET",
-    onSuccess: (data, helpers) => ({
-      title: "📅 Resumen del mes",
-      lines: [
-        `Mes: ${data.mes}`,
-        `Total vendido: ${helpers.currency(data.totalVendido)}`,
-        `Productos vendidos: ${data.productosVendidos}`,
-        `Ingresos registrados: ${data.ingresosRegistrados}`,
-        `Salidas registradas: ${data.salidasRegistradas}`,
-      ],
-    }),
-    stay: true,
-  },
+const parseOptionLabel = (label = "") => {
+  const trimmed = label.trim();
+  if (!trimmed) return { icon: null, text: "" };
+  const parts = trimmed.split(" ");
+  if (parts.length > 1 && parts[0].length <= 3) {
+    return { icon: parts[0], text: parts.slice(1).join(" ") };
+  }
+  return { icon: null, text: trimmed };
 };
 
-function generateId() {
+const generateId = (prefix = "msg") => {
   if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
   }
-  return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 export default function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const [menuStack, setMenuStack] = useState(["main"]);
   const [messages, setMessages] = useState([
     {
       id: "welcome",
-      title: "👋 Hola",
-      lines: ["Selecciona una opción para comenzar."],
+      role: "bot",
+      title: "Hola 👋",
+      lines: [
+        "¡Bienvenido! ¿En qué puedo ayudarte hoy?",
+        "Selecciona una de las opciones disponibles o escríbenos tu consulta.",
+      ],
     },
   ]);
-  const [loading, setLoading] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [summaryCard, setSummaryCard] = useState(null);
+  const [inputValue, setInputValue] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [menuStack, setMenuStack] = useState(["general"]);
+  const endOfMessagesRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const lastAnnouncedMenuRef = useRef(null);
 
   const currentMenuKey = menuStack[menuStack.length - 1];
-  const currentMenu = MENUS[currentMenuKey];
+  const currentMenu = MENU_STRUCTURE[currentMenuKey] ?? MENU_STRUCTURE.general;
+  const availableOptions = currentMenu?.options ?? MENU_STRUCTURE.general.options;
 
   useEffect(() => {
-    if (currentMenuKey === "summary") {
-      handleApiAction({ key: "summaryDay", stay: true });
-    } else {
-      setSummaryCard(null);
+    endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isTyping]);
+
+  useEffect(() => () => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMenuKey]);
+  }, []);
 
-  const themes = {
-    panel: darkMode ? "bg-slate-900 text-slate-100" : "bg-white text-slate-900",
-    surface: darkMode ? "bg-slate-800 text-slate-100" : "bg-slate-50 text-slate-700",
-    button: darkMode
-      ? "bg-slate-800 hover:bg-slate-700 text-slate-100"
-      : "bg-slate-100 hover:bg-slate-200 text-slate-900",
-    backButton: darkMode
-      ? "bg-slate-700 hover:bg-slate-600 text-slate-100"
-      : "bg-slate-200 hover:bg-slate-300 text-slate-900",
-  };
-
-  const pushMessage = (message) => {
+  const appendMessage = useCallback((message) => {
     setMessages((prev) => {
       const next = [...prev, { id: generateId(), ...message }];
-      return next.slice(-8);
+      return next.slice(-MAX_MESSAGES);
     });
-  };
+  }, []);
 
-  const currency = (value) => {
-    try {
-      return new Intl.NumberFormat("es-CL", {
-        style: "currency",
-        currency: "CLP",
-        minimumFractionDigits: 0,
-      }).format(value ?? 0);
-    } catch (error) {
-      return `$${value ?? 0}`;
+  const handleMenuAnnouncement = useCallback((menuKey) => {
+    if (menuKey === "general") return;
+    const menu = MENU_STRUCTURE[menuKey];
+    if (!menu) return;
+
+    const lines = [];
+    if (menu.subtitle) {
+      lines.push(menu.subtitle);
     }
-  };
+    if (Array.isArray(menu.options) && menu.options.length > 0) {
+      menu.options.forEach((option) => {
+        if (option?.label) {
+          lines.push(option.label);
+        }
+      });
+    }
 
-  const handleApiAction = async ({ key, stay }) => {
-    const config = API_ACTIONS[key];
-    if (!config) return;
+    appendMessage({
+      role: "bot",
+      title: menu.title,
+      lines: lines.length ? lines : undefined,
+    });
+  }, [appendMessage]);
 
-    setLoading(true);
+  const fetchAndDisplay = useCallback(async ({ method = "GET", endpoint, formatter, body }) => {
+    if (!endpoint) return;
+    setIsTyping(true);
+
     try {
-      const response = await fetch(config.endpoint, {
-        method: config.method ?? "GET",
-        headers:
-          (config.method ?? "GET") === "POST"
-            ? { "Content-Type": "application/json" }
-            : undefined,
-        body:
-          (config.method ?? "GET") === "POST" && config.body
-            ? JSON.stringify(config.body)
-            : undefined,
-        cache: "no-store",
+      const response = await fetch(endpoint, {
+        method,
+        headers: method === "POST" ? { "Content-Type": "application/json" } : undefined,
+        body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
       });
 
-      if (!response.ok) throw new Error("Request failed");
+      if (!response.ok) {
+        throw new Error("No se pudo obtener información en este momento.");
+      }
 
       const data = await response.json();
-      const helpers = { setSummaryCard, currency };
-      const message = config.onSuccess
-        ? config.onSuccess(data, helpers)
-        : config.format
-        ? config.format(data, helpers)
-        : null;
+      const formatted = formatter ? formatter(data) : { lines: ["Acción completada."] };
 
-      if (message) {
-        pushMessage(message);
-      }
+      appendMessage({
+        role: "bot",
+        ...formatted,
+      });
     } catch (error) {
-      pushMessage({
+      appendMessage({
+        role: "bot",
         title: "⚠️ Error",
-        lines: ["No fue posible completar la acción. Intenta nuevamente."],
+        lines: [error?.message ?? "No se pudo completar la acción."],
       });
     } finally {
-      setLoading(false);
-      const shouldStay = stay ?? config.stay ?? false;
-      if (!shouldStay) {
-        setMenuStack(["main"]);
+      setIsTyping(false);
+    }
+  }, [appendMessage]);
+
+  useEffect(() => {
+    if (!currentMenu) return;
+    if (lastAnnouncedMenuRef.current !== currentMenuKey) {
+      lastAnnouncedMenuRef.current = currentMenuKey;
+      handleMenuAnnouncement(currentMenuKey);
+
+      if (currentMenu.autoFetch) {
+        fetchAndDisplay(currentMenu.autoFetch);
       }
     }
+  }, [currentMenuKey, currentMenu, handleMenuAnnouncement, fetchAndDisplay]);
+
+  const handleOptionSelect = (option) => {
+    if (!option || isTyping) return;
+
+    appendMessage({
+      role: "user",
+      lines: [option.label],
+    });
+
+    if (option.type === "submenu" && option.next) {
+      lastAnnouncedMenuRef.current = null;
+      setMenuStack((prev) => [...prev, option.next]);
+      return;
+    }
+
+    if (option.type === "back") {
+      if (menuStack.length > 1) {
+        lastAnnouncedMenuRef.current = null;
+        setMenuStack((prev) => prev.slice(0, -1));
+      }
+      return;
+    }
+
+    if (option.type === "info" && option.response) {
+      appendMessage({
+        role: "bot",
+        ...option.response,
+      });
+      return;
+    }
+
+    if ((option.type === "fetch" || option.type === "post") && option.endpoint) {
+      fetchAndDisplay({
+        method: option.method ?? (option.type === "post" ? "POST" : "GET"),
+        endpoint: option.endpoint,
+        formatter: option.formatter,
+        body: option.body,
+      });
+      return;
+    }
   };
 
-  const handleOption = (option) => {
-    const { action } = option;
-    if (!action) return;
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    const trimmed = inputValue.trim();
+    if (!trimmed) return;
 
-    if (action.type === "menu") {
-      setMenuStack((prev) => [...prev, action.target]);
-      return;
+    appendMessage({
+      role: "user",
+      lines: [trimmed],
+    });
+    setInputValue("");
+
+    setIsTyping(true);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
     }
 
-    if (action.type === "back") {
-      setMenuStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : ["main"]));
-      return;
-    }
-
-    if (action.type === "toggleTheme") {
-      setDarkMode((prev) => !prev);
-      pushMessage({
-        title: "🌙 Preferencias",
-        lines: [`Modo ${!darkMode ? "oscuro" : "claro"} activado en el asistente.`],
+    typingTimeoutRef.current = setTimeout(() => {
+      appendMessage({
+        role: "bot",
+        title: "Recibimos tu mensaje",
+        lines: [
+          "Un especialista revisará tu consulta y te responderá a la brevedad.",
+          "Mientras tanto, puedes seguir navegando por las categorías rápidas.",
+        ],
       });
-      setMenuStack(["main"]);
-      return;
-    }
-
-    if (action.type === "info") {
-      pushMessage({
-        title: action.title ?? currentMenu.title,
-        lines: action.lines ?? [],
-      });
-      setMenuStack(["main"]);
-      return;
-    }
-
-    if (action.type === "api") {
-      handleApiAction(action);
-    }
+      setIsTyping(false);
+    }, 600);
   };
-
-  const renderedMessages = useMemo(
-    () =>
-      messages.map((message) => (
-        <div
-          key={message.id}
-          className={`${themes.surface} rounded-xl border border-black/5 p-3 shadow-sm`}
-        >
-          <p className="text-sm font-semibold">{message.title}</p>
-          <ul className="mt-1 space-y-1 text-xs leading-relaxed">
-            {message.lines?.map((line, index) => (
-              <li key={`${message.id}-${index}`}>{line}</li>
-            ))}
-          </ul>
-        </div>
-      )),
-    [messages, themes.surface]
-  );
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[1200]">
-      <div className="flex h-full w-full items-end justify-end p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6">
-        <div className="pointer-events-auto flex flex-col items-end gap-3">
-          {isOpen && (
-            <div
-              className={`${themes.panel} w-full max-w-sm sm:max-w-md rounded-3xl border border-black/5 shadow-2xl transition-transform`}
-              style={{ maxHeight: "min(540px, 80vh)" }}
-            >
-              <div className="flex items-center justify-between border-b border-black/5 px-4 py-3">
+    <>
+      <div className="fixed bottom-6 right-6 z-[99999] pointer-events-none">
+        <div
+          className={`absolute bottom-16 right-0 w-[90vw] max-h-[80vh] sm:w-[380px] transition-all duration-300 transform origin-bottom ${
+            isOpen
+              ? "pointer-events-auto translate-y-0 opacity-100"
+              : "pointer-events-none translate-y-4 opacity-0"
+          }`}
+        >
+          <div className="flex max-h-[80vh] flex-col overflow-hidden rounded-[24px] bg-white text-slate-900 shadow-[0_18px_40px_rgba(79,70,229,0.25)] ring-1 ring-black/5">
+            <header className="flex items-center justify-between gap-3 rounded-t-[24px] bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-4 py-4 text-white shadow-inner">
+              <div className="flex items-center gap-3">
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-white/20 text-2xl">
+                  🤖
+                </span>
                 <div>
-                  <p className="text-sm font-semibold">Centro de Control</p>
-                  <p className="text-xs opacity-60">Flujo guiado sin texto libre</p>
+                  <p className="text-sm font-semibold">TitanBot</p>
+                  <p className="text-xs text-white/80">En línea • tiempo de respuesta rápido</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-lg hover:bg-black/10"
-                  aria-label="Cerrar asistente"
-                >
-                  ×
-                </button>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-lg transition hover:bg-white/25"
+                aria-label="Cerrar chat"
+              >
+                ×
+              </button>
+            </header>
 
-              <div className="flex max-h-[calc(80vh-5rem)] flex-col gap-3 overflow-y-auto px-4 py-4">
-                <div className="rounded-2xl border border-black/5 p-3 text-sm">
-                  <p className="font-semibold">{currentMenu.title}</p>
-                  <p className="text-xs opacity-70">{currentMenu.subtitle}</p>
-                </div>
-
-                {summaryCard && (
-                  <div className={`${themes.surface} rounded-2xl border border-black/5 p-4`}>
-                    <p className="text-sm font-semibold">📊 Resumen del Día</p>
-                    <ul className="mt-2 space-y-1 text-xs">
-                      <li>Total vendido hoy: {currency(summaryCard.totalVendido)}</li>
-                      <li>Productos vendidos: {summaryCard.productosVendidos}</li>
-                      <li>Ingresos registrados: {summaryCard.ingresosRegistrados}</li>
-                      <li>Salidas registradas: {summaryCard.salidasRegistradas}</li>
-                    </ul>
-                  </div>
-                )}
-
-                <div className={`${themes.surface} rounded-2xl border border-black/5 p-3 space-y-2 max-h-40 overflow-y-auto`}>
-                  {renderedMessages}
-                  {loading && (
-                    <div className="flex items-center gap-2 text-xs opacity-70">
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-                      Procesando solicitud...
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2 pb-2">
-                  {currentMenu.options.map((option) => (
-                    <button
-                      key={option.label}
-                      type="button"
-                      onClick={() => handleOption(option)}
-                      className={`rounded-2xl px-4 py-3 text-left text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                        option.action.type === "back" ? themes.backButton : themes.button
+            <div className="flex flex-1 flex-col gap-4 bg-slate-50/70 px-4 pb-4 pt-5">
+              <div className="flex-1 space-y-3 overflow-y-auto pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-slate-300/80">
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${
+                      message.role === "user" ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[78%] rounded-3xl px-4 py-3 text-sm leading-relaxed shadow-sm transition ${
+                        message.role === "user"
+                          ? "bg-indigo-500 text-white"
+                          : "bg-white text-slate-800 ring-1 ring-slate-100"
                       }`}
                     >
-                      {option.label}
+                      {message.title ? (
+                        <p className="mb-1 text-sm font-semibold">{message.title}</p>
+                      ) : null}
+                      {message.lines?.map((line, idx) => (
+                        <p key={`${message.id}-line-${idx}`} className="text-sm">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {isTyping ? (
+                  <div className="flex justify-start">
+                    <div className="flex items-center gap-2 rounded-full bg-white/80 px-3 py-2 text-xs text-slate-500 shadow-sm ring-1 ring-slate-200">
+                      <span className="flex gap-1">
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-indigo-400" />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:120ms]" />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-indigo-400 [animation-delay:240ms]" />
+                      </span>
+                      TitanBot está escribiendo…
+                    </div>
+                  </div>
+                ) : null}
+
+                <span ref={endOfMessagesRef} />
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Temas rápidos
+                </p>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {availableOptions.map((option) => (
+                    <button
+                      key={option.id ?? option.label ?? option.next}
+                      type="button"
+                      onClick={() => handleOptionSelect(option)}
+                      disabled={isTyping && option.type !== "back"}
+                      className={`group flex items-center justify-between rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-left text-sm font-semibold text-slate-700 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                        isTyping && option.type !== "back"
+                          ? "cursor-not-allowed opacity-60"
+                          : "hover:-translate-y-[2px] hover:border-transparent hover:bg-gradient-to-r hover:from-indigo-500/90 hover:to-fuchsia-500/90 hover:text-white"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {(() => {
+                          const { icon, text } = parseOptionLabel(option.label ?? "");
+                          return (
+                            <>
+                              {icon ? <span className="text-lg">{icon}</span> : null}
+                              <span>{text}</span>
+                            </>
+                          );
+                        })()}
+                      </span>
+                      <span className="text-base text-slate-300 transition group-hover:text-white">
+                        ↗
+                      </span>
                     </button>
                   ))}
-
-                  {currentMenuKey !== "main" && (
-                    <button
-                      type="button"
-                      onClick={() => setMenuStack(["main"])}
-                      className={`${themes.backButton} rounded-2xl px-4 py-2 text-xs font-semibold uppercase tracking-wide transition`}
-                    >
-                      🏠 Menú General
-                    </button>
-                  )}
                 </div>
               </div>
-            </div>
-          )}
 
-          <button
-            type="button"
-            onClick={() => setIsOpen((prev) => !prev)}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-600 text-3xl text-white shadow-2xl transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-300"
-            aria-label={isOpen ? "Cerrar asistente" : "Abrir asistente"}
-          >
-            {isOpen ? "–" : "🤖"}
-          </button>
+              <form
+                onSubmit={handleSubmit}
+                className="flex items-center gap-2 rounded-[18px] bg-white p-2 shadow-inner ring-1 ring-slate-200"
+              >
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(event) => setInputValue(event.target.value)}
+                  placeholder="Escribe aquí tu consulta"
+                  className="h-10 flex-1 rounded-2xl border-none bg-transparent px-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-[16px] bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-3 text-sm font-semibold text-white shadow-sm transition hover:from-indigo-500/90 hover:to-fuchsia-500/90 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  aria-label="Enviar mensaje"
+                >
+                  ➤
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="fixed bottom-6 right-6 z-[99999] flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-200"
+        aria-label={isOpen ? "Cerrar asistente" : "Abrir asistente"}
+      >
+        <span className="text-lg">🤖</span>
+        {isOpen ? "Cerrar" : "Chat de Ayuda"}
+      </button>
+    </>
   );
 }

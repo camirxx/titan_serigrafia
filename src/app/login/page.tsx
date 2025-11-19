@@ -90,7 +90,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center p-6">
+    <div className="min-h-full grid place-items-center p-6">
       <form
         onSubmit={onSubmit}
         className="w-full max-w-sm space-y-4 p-6 rounded-2xl shadow bg-white"
