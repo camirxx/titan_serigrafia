@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       message,
       sentAt: new Date().toISOString(),
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { success: false, message: "No se pudo procesar la alerta" },
       { status: 500 }

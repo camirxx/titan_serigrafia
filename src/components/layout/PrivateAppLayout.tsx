@@ -73,11 +73,9 @@ export default function PrivateAppLayout({ children, user, role }: PrivateAppLay
       />
 
       <Sidebar
-        isCollapsed={sidebar.isCollapsed}
         isMobile={sidebar.isMobile}
         isMobileOpen={sidebar.isMobileOpen}
         sidebarWidth={sidebar.sidebarWidth}
-        role={role}
         user={user}
         onClose={sidebar.closeSidebar}
         onMouseEnter={sidebar.handleMouseEnter}

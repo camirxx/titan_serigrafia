@@ -14,6 +14,15 @@ type VentaDetalle = {
   cantidad: number;
 };
 
+type VentaData = {
+  id: number;
+  fecha: string;
+  detalle_ventas: {
+    variante_id: number;
+    cantidad: number;
+  }[];
+};
+
 type VarianteInfo = {
   variante_id: number;
   diseno: string;
@@ -66,7 +75,7 @@ export default function VentasPorProductoPage() {
       if (errVentas) throw new Error(errVentas.message);
 
       const detalles: VentaDetalle[] = [];
-      for (const v of (ventasData as any[] | null) ?? []) {
+      for (const v of (ventasData as VentaData[]) ?? []) {
         const items = Array.isArray(v.detalle_ventas) ? v.detalle_ventas : [];
         for (const it of items) {
           detalles.push({
@@ -80,7 +89,7 @@ export default function VentasPorProductoPage() {
 
       // 2) Obtener info de variantes para esos variante_id
       const varianteIds = Array.from(new Set(detalles.map(d => d.variante_id))).filter(Boolean);
-      let variantesInfo: VarianteInfo[] = [];
+      const variantesInfo: VarianteInfo[] = [];
       if (varianteIds.length) {
         // Supabase limita 1000 elementos por in; dividir si es necesario
         const chunkSize = 900;
@@ -92,7 +101,7 @@ export default function VentasPorProductoPage() {
             .in('variante_id', chunk);
           if (errV) throw new Error(errV.message);
           const list = Array.isArray(vdata) ? vdata : [];
-          variantesInfo.push(...list.map((r: any) => ({
+          variantesInfo.push(...list.map((r: VarianteInfo) => ({
             variante_id: Number(r.variante_id),
             diseno: String(r.diseno ?? ''),
             tipo_prenda: String(r.tipo_prenda ?? ''),

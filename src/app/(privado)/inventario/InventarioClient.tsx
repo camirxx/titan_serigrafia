@@ -23,6 +23,13 @@ type ProductoAgrupado = {
   };
 };
 
+type VarianteInventario = {
+  id: number;
+  producto_id: number;
+  talla: string;
+  stock_actual: number;
+};
+
 const ORDEN_CATEGORIAS: { [key: string]: number } = {
   'polera': 1,
   'poleron': 2,
@@ -114,7 +121,7 @@ export default function InventarioAgrupado() {
       });
 
       // 2. Cargar TODAS las variantes paginando en lotes
-      let allVariantes: any[] = [];
+      let allVariantes: VarianteInventario[] = [];
       let start = 0;
       const batchSize = 1000;
 

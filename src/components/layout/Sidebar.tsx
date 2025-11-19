@@ -23,11 +23,9 @@ const navItems = [
 ];
 
 type SidebarProps = {
-  isCollapsed: boolean;
   isMobile: boolean;
   isMobileOpen: boolean;
   sidebarWidth: number;
-  role: "admin" | "vendedor" | "desarrollador" | null;
   user: {
     name: string;
     email: string;
@@ -39,11 +37,9 @@ type SidebarProps = {
 };
 
 export default function Sidebar({
-  isCollapsed,
   isMobile,
   isMobileOpen,
   sidebarWidth,
-  role,
   user,
   onClose,
   onMouseEnter,

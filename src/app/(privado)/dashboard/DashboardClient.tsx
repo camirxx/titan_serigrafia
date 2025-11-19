@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, ReactNode } from "react";
 import { ChevronLeft, ShoppingCart } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
@@ -396,7 +396,7 @@ type MetricCardProps = {
   title: string;
   value: string;
   change: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   tone: "success" | "info" | "danger";
 };
 

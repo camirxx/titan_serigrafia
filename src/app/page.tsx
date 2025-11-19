@@ -26,20 +26,18 @@ export default async function Home() {
   }
 
   const role = userData.rol as 'admin' | 'vendedor' | 'desarrollador';
-  const userName = userData.nombre || session.user.email || 'Usuario';
 
   return (
     <PrivateAppLayout
       role={role}
       user={{
-        name: userName,
+        name: userData.nombre || session.user.email || 'Usuario',
         email: session.user.email ?? '',
         avatarUrl: (session.user.user_metadata as { avatar_url?: string } | undefined)?.avatar_url ?? null,
       }}
     >
       <HomeClient 
         userRole={role} 
-        userName={userName} 
       />
     </PrivateAppLayout>
   );

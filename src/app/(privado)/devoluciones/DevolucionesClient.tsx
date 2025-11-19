@@ -33,26 +33,24 @@ type ProductoVendido = {
 
 type CantidadesSeleccion = Record<number, number>;
 
-type VarianteProducto = {
-  id: number;
-  talla: string | null;
-  stock_actual: number | null;
-  costo_unitario: number | null;
-};
-
 type ProductoConVariantes = {
-  id?: number;
-  variantes: VarianteProducto[] | null;
-  disenos?: { nombre: string | null } | null;
-  tipos_prenda?: { nombre: string | null } | null;
-  colores?: { nombre: string | null } | null;
+  id: number;
+  disenos: { nombre: string }[];
+  tipos_prenda: { nombre: string }[];
+  colores: { nombre: string }[];
+  variantes: {
+    id: number;
+    talla: string;
+    stock_actual: number;
+    costo_unitario: number;
+  }[];
 };
 
-type ItemSeleccionado = {
-  detalle_venta_id: number;
-  variante_id: number;
-  cantidad: number;
-  venta_id: number;
+type Variante = {
+  id: number;
+  talla: string;
+  stock_actual: number;
+  costo_unitario: number;
 };
 
 export default function DevolucionesClient() {
@@ -142,7 +140,7 @@ export default function DevolucionesClient() {
 
         let query = supabase
           .from('productos')
-          .select<ProductoConVariantes>(`
+          .select(`
             variantes(id, talla, stock_actual, costo_unitario),
             disenos!inner(nombre),
             tipos_prenda!inner(nombre),
@@ -160,9 +158,8 @@ export default function DevolucionesClient() {
           setCambioTallas([]);
           setCambioTalla('');
         } else if (prods && prods.length > 0) {
-          const producto = prods[0];
-          const vars: VarianteProducto[] = producto?.variantes ?? [];
-          const tallas = Array.from(new Set(vars.map((v) => v.talla).filter((t): t is string => Boolean(t))));
+          const vars: Variante[] = prods[0].variantes || [];
+          const tallas = Array.from(new Set(vars.map((v) => v.talla).filter(Boolean)));
           setCambioTallas(tallas);
           if (!tallas.includes(cambioTalla)) {
             setCambioTalla('');
@@ -302,10 +299,6 @@ export default function DevolucionesClient() {
       .from('v_venta_detalle_devolucion')
       .select('*');
 
-    const fechaLimite = new Date();
-    fechaLimite.setDate(fechaLimite.getDate() - 14);
-    query = query.gte('fecha', fechaLimite.toISOString());
-
     // Aplicar filtros
     if (disenoFiltro) {
       query = query.ilike('diseno', `%${disenoFiltro}%`);
@@ -433,18 +426,20 @@ export default function DevolucionesClient() {
       return;
     }
 
-    const itemsSeleccionados = productosVendidos.reduce<ItemSeleccionado[]>((acc, p) => {
-      const cantidad = Number(cantSel[p.detalle_venta_id] ?? 0);
-      if (cantidad > 0) {
-        acc.push({
-          detalle_venta_id: p.detalle_venta_id,
-          variante_id: p.variante_id,
-          cantidad,
-          venta_id: p.venta_id,
-        });
-      }
-      return acc;
-    }, []);
+    const itemsSeleccionados = productosVendidos
+      .map((p) => {
+        const q = Number(cantSel[p.detalle_venta_id] ?? 0);
+        if (q > 0) {
+          return {
+            detalle_venta_id: p.detalle_venta_id,
+            variante_id: p.variante_id,
+            cantidad: q,
+            venta_id: p.venta_id,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
 
     if (itemsSeleccionados.length === 0) {
       setError('Selecciona al menos un producto para devolver/cambiar.');
@@ -516,7 +511,7 @@ export default function DevolucionesClient() {
 
     setLoading(true);
     try {
-      const porVenta = new Map<number, ItemSeleccionado[]>();
+      const porVenta = new Map<number, typeof itemsSeleccionados>();
       itemsSeleccionados.forEach((item) => {
         if (!item) return;
         if (!porVenta.has(item.venta_id)) {
@@ -531,41 +526,291 @@ export default function DevolucionesClient() {
         const innerPayload: Record<string, unknown> = {
           p_venta_id: ventaId,
           p_tipo: tipo,
-  }
-}
+          p_metodo_resolucion: metodo,
+          p_monto_reintegro: metodo === 'cambio_producto' ? 0 : Number(montoReintegro || 0),
+          p_observacion: observacion?.trim() || null,
+          p_usuario_id: usuarioId,
+          p_items: items.map((it) => ({
+            detalle_venta_id: it!.detalle_venta_id,
+            variante_id: it!.variante_id,
+            cantidad: it!.cantidad,
+            motivo_id: null,
+            observacion: null
+          })),
+        };
 
-// ... (rest of the code remains the same)
+        // Agregar datos de transferencia como parámetros individuales
+        if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'transferencia') {
+          innerPayload.p_metodo_pago_reintegro = 'transferencia';
+          innerPayload.p_transferencia_rut = datosTransferencia.rut;
+          innerPayload.p_transferencia_nombre = datosTransferencia.nombre;
+          innerPayload.p_transferencia_banco = datosTransferencia.banco;
+          innerPayload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
+          innerPayload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
+          innerPayload.p_transferencia_email = datosTransferencia.email || null;
+        } else if (metodo === 'reintegro_efectivo') {
+          innerPayload.p_metodo_pago_reintegro = 'efectivo';
+        }
 
-const { data: prods, error: prodErr } = await query;
-if (prodErr) {
-  throw prodErr;
-} else if (prods && prods.length > 0) {
-  const prod = prods[0];
-  const variantesArr: VarianteProducto[] = prod.variantes ?? [];
-  let variante: VarianteProducto | undefined;
-  if (cambioTalla) {
-    variante = variantesArr.find((v) => v.talla === cambioTalla && (v.stock_actual ?? 0) > 0) || variantesArr.find((v) => v.talla === cambioTalla);
-  }
-  if (!variante) {
-    variante = variantesArr.find((v) => (v.stock_actual ?? 0) > 0) || variantesArr[0];
-  }
-  if (!variante) {
-    setError('No se encontraron variantes disponibles para el producto de reemplazo.');
-    return;
-  }
+        // Manejo de diferencia en cambios
+        if (metodo === 'cambio_producto') {
+          innerPayload.p_tipo_diferencia = tipoDiferencia;
+          innerPayload.p_monto_diferencia = montoDiferencia;
+        
+          if (tipoDiferencia !== 'sin_diferencia') {
+            innerPayload.p_metodo_pago_diferencia = metodoPagoDiferencia;
+            
+            if (tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia') {
+              innerPayload.p_transferencia_rut = datosTransferencia.rut;
+              innerPayload.p_transferencia_nombre = datosTransferencia.nombre;
+              innerPayload.p_transferencia_banco = datosTransferencia.banco;
+              innerPayload.p_transferencia_tipo_cuenta = datosTransferencia.tipoCuenta;
+              innerPayload.p_transferencia_numero_cuenta = datosTransferencia.numeroCuenta;
+              innerPayload.p_transferencia_email = datosTransferencia.email || null;
+            }
+          }
+        }
 
-  // Guardar selección y precio unitario (asumiendo costo_unitario como precio de venta; ajusta si es necesario)
-  setCambioSeleccionado({
-    tipo_prenda: cambioTipoPrenda || undefined,
-    diseno: cambioDiseno || undefined,
-    color: cambioColor || null,
-    talla: cambioTalla || null,
-  });
-  setPrecioReemplazoUnitario(variante.costo_unitario ?? 0);
-  setError(null);
-}
+      // Si es un cambio, intentar buscar una variante disponible que coincida con la selección de reemplazo
+      if (metodo === 'cambio_producto' && cambioSeleccionado) {
+        try {
+          const totalCantidad = items.reduce((acc, it) => acc + (it?.cantidad ?? 0), 0);
 
-// ... (rest of the code remains the same)
+          // Construir query sobre productos y sus variantes
+          let query = supabase
+            .from('productos')
+            .select(`id, disenos!inner(nombre), tipos_prenda!inner(nombre), colores!inner(nombre), variantes(id, talla, stock_actual, costo_unitario)`)
+            .limit(1);
+
+          if (cambioSeleccionado.diseno) {
+            query = query.eq('disenos.nombre', cambioSeleccionado.diseno);
+          }
+          if (cambioSeleccionado.tipo_prenda) {
+            query = query.eq('tipos_prenda.nombre', cambioSeleccionado.tipo_prenda);
+          }
+          if (cambioSeleccionado.color) {
+            query = query.eq('colores.nombre', cambioSeleccionado.color);
+          }
+
+          const { data: prods, error: prodErr } = await query;
+          if (prodErr) {
+            console.warn('Error buscando producto de reemplazo:', prodErr);
+          } else if (prods && prods.length > 0) {
+            const prod: ProductoConVariantes = prods[0];
+            const variantesArr: Variante[] = prod.variantes || [];
+            // Si el usuario eligió talla, intentar buscar exactamente esa variante (preferir stock>0)
+            let variante: Variante | undefined;
+            if (cambioSeleccionado.talla) {
+              variante = variantesArr.find((v) => v.talla === cambioSeleccionado.talla && v.stock_actual > 0) || variantesArr.find((v) => v.talla === cambioSeleccionado.talla);
+            }
+            // Si no se encontró por talla, fallback a cualquier variante con stock, o la primera
+            if (!variante) {
+              variante = variantesArr.find((v) => v.stock_actual > 0) || variantesArr[0];
+            }
+            if (variante) {
+              innerPayload.p_items_entregados = [
+                {
+                  variante_id: variante.id,
+                  cantidad: totalCantidad,
+                  precio_unitario: variante.costo_unitario ?? 0, // Asumimos que costo_unitario es el precio de venta; si no, ajusta esto
+                },
+              ];
+              console.log('🔎 Variante encontrada para cambio:', variante.id, 'cantidad:', totalCantidad);
+            } else {
+              console.warn('No se encontraron variantes en el producto de reemplazo.');
+            }
+          } else {
+            console.warn('No se encontró producto que coincida con la selección de reemplazo.');
+          }
+        } catch (err) {
+          console.error('Error buscando variante de reemplazo:', err);
+        }
+      }
+
+      console.log('🚀 [CLIENT] Enviando payload a RPC:', innerPayload);
+
+      const { data, error: rpcError } = await supabase.rpc('crear_devolucion_json', { payload: innerPayload });
+
+      console.log('📥 [CLIENT] Respuesta RPC:', { data, error: rpcError });
+
+      if (rpcError) {
+        console.error('❌ [CLIENT] Error RPC completo:', rpcError);
+        throw new Error(`Error en RPC: ${rpcError.message} (${rpcError.code})`);
+      }
+
+      if (!data) {
+        console.error('❌ [CLIENT] RPC no devolvió ID de devolución');
+        throw new Error('La función RPC no devolvió un ID de devolución');
+      }
+
+      console.log('✅ [CLIENT] Devolución creada con ID:', data);
+      resultados.push(data);
+      
+      // Enviar email de egreso si es reintegro en efectivo
+      if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'efectivo' && montoReintegro > 0) {
+        console.log('💸 [CLIENT] Enviando email de egreso por reintegro:', montoReintegro);
+        try {
+          await fetch('/api/send-caja-egreso-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              monto: montoReintegro,
+              motivo: `Reintegro devolución #${data}`,
+              usuario: 'Sistema', // Por ahora, después podríamos obtener el nombre del usuario
+            }),
+          });
+          console.log('✅ [CLIENT] Email de egreso enviado exitosamente');
+        } catch (emailError) {
+          console.error('❌ [CLIENT] Error al enviar email de egreso:', emailError);
+          // No fallar la operación si el email falla
+        }
+      }
+      
+      // Enviar correo si es transferencia
+      const esTransferencia = (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'transferencia') ||
+                             (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia');
+      
+      if (esTransferencia && datosTransferencia.rut && datosTransferencia.nombre) {
+        console.log('📧 [CLIENT] Enviando correo de transferencia para devolución:', data, '- Monto:', metodo === 'reintegro_efectivo' ? montoReintegro : montoDiferencia);
+        try {
+          await fetch('/api/send-transfer-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              devolucionId: data,
+              rut: datosTransferencia.rut,
+              nombre: datosTransferencia.nombre,
+              banco: datosTransferencia.banco,
+              tipoCuenta: datosTransferencia.tipoCuenta,
+              numeroCuenta: datosTransferencia.numeroCuenta,
+              email: datosTransferencia.email,
+              monto: metodo === 'reintegro_efectivo' ? montoReintegro : montoDiferencia,
+              tipo: tipo,
+            }),
+          });
+          console.log('✅ [CLIENT] Correo de transferencia enviado exitosamente');
+        } catch (emailError) {
+          console.error('❌ [CLIENT] Error al enviar correo:', emailError);
+          // No fallar la operación si el correo falla
+        }
+      }
+    }
+
+    let mensajeExito = `✅ ${tipo === 'devolucion' ? 'Devolución' : 'Cambio'} creado correctamente. ID(s): ${resultados.join(', ')}`;
+    if (metodo === 'cambio_producto' && cambioSeleccionado) {
+      mensajeExito += `\n🔁 Cambio solicitado: ${cambioSeleccionado.tipo_prenda ?? '—'} · ${cambioSeleccionado.diseno ?? '—'} · ${cambioSeleccionado.color ?? '—'}`;
+    }
+    
+    if (metodo === 'cambio_producto' && tipoDiferencia !== 'sin_diferencia') {
+      if (tipoDiferencia === 'cliente_paga') {
+        mensajeExito += `\n💳 Cliente pagó diferencia de $${montoDiferencia.toLocaleString('es-CL')} por ${metodoPagoDiferencia}`;
+      } else {
+        mensajeExito += `\n💰 Se reintegró diferencia de $${montoDiferencia.toLocaleString('es-CL')} al cliente por ${metodoPagoDiferencia}`;
+      }
+    }
+    
+    // Agregar mensaje si se envió correo de transferencia
+    const esTransferenciaFinal = (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'transferencia') ||
+                                 (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia');
+    if (esTransferenciaFinal) {
+      mensajeExito += `\n📧 Se envió notificación por correo con los datos de transferencia`;
+    }
+
+    // Agregar mensaje si se envió email de egreso
+    if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'efectivo' && montoReintegro > 0) {
+      mensajeExito += `\n💸 Se envió notificación por correo de egreso de caja`;
+    }
+
+    setOk(mensajeExito);
+
+    // Remover los productos devueltos de la tabla
+    setProductosVendidos((prevProductos) =>
+      prevProductos.filter((p) => {
+        const cantidadDevuelta = Number(cantSel[p.detalle_venta_id] ?? 0);
+        if (cantidadDevuelta === p.cantidad_vendida) {
+          return false;
+        }
+        if (cantidadDevuelta > 0) {
+          p.cantidad_vendida -= cantidadDevuelta;
+          return true;
+        }
+        return true;
+      })
+    );
+
+    setCantSel({});
+    setMontoReintegro(0);
+    setObservacion('');
+    setMontoDiferencia(0);
+    setTipoDiferencia('sin_diferencia');
+    setDatosTransferencia({
+      rut: '',
+      nombre: '',
+      banco: '',
+      tipoCuenta: 'corriente',
+      numeroCuenta: '',
+      email: '',
+    });
+    setProductosVendidos([]);
+    setPrecioReemplazoUnitario(0); // Resetear precio de reemplazo
+    
+    await cargarDineroCaja();
+  } catch (err) {
+    console.error('Error completo al crear operación:', err);
+    setError(err instanceof Error ? err.message : 'Error al crear la operación.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // Nueva función async para seleccionar el producto de cambio y calcular precio
+  const seleccionarProductoCambio = async () => {
+    if (!cambioTipoPrenda && !cambioDiseno && !cambioColor) {
+      setError('Seleccione al menos un campo para el producto de cambio.');
+      return;
+    }
+
+    try {
+      // Construir query similar a la de confirmar
+      let query = supabase
+        .from('productos')
+        .select(`id, disenos!inner(nombre), tipos_prenda!inner(nombre), colores!inner(nombre), variantes(id, talla, stock_actual, costo_unitario)`)
+        .limit(1);
+
+      if (cambioDiseno) {
+        query = query.eq('disenos.nombre', cambioDiseno);
+      }
+      if (cambioTipoPrenda) {
+        query = query.eq('tipos_prenda.nombre', cambioTipoPrenda);
+      }
+      if (cambioColor) {
+        query = query.eq('colores.nombre', cambioColor);
+      }
+
+      const { data: prods, error: prodErr } = await query;
+      if (prodErr) {
+        throw prodErr;
+      }
+      if (!prods || prods.length === 0) {
+        setError('No se encontró un producto que coincida con la selección de reemplazo.');
+        return;
+      }
+
+      const prod: ProductoConVariantes = prods[0];
+      const variantesArr: Variante[] = prod.variantes || [];
+      let variante: Variante | undefined;
+      if (cambioTalla) {
+        variante = variantesArr.find((v) => v.talla === cambioTalla && v.stock_actual > 0) || variantesArr.find((v) => v.talla === cambioTalla);
+      }
+      if (!variante) {
+        variante = variantesArr.find((v) => v.stock_actual > 0) || variantesArr[0];
+      }
+      if (!variante) {
+        setError('No se encontraron variantes disponibles para el producto de reemplazo.');
         return;
       }
 
@@ -708,12 +953,9 @@ if (prodErr) {
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <p className="text-xs text-gray-500">
-                    Mostrando ventas registradas durante las últimas 2 semanas.
-                  </p>
+                <div className="mt-4 flex gap-3">
                   <button
-                    className="flex-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 font-semibold text-white shadow-md transition hover:from-purple-700 hover:to-indigo-700 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed md:flex-none"
+                    className="flex-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 font-semibold text-white shadow-md transition hover:from-purple-700 hover:to-indigo-700 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={buscarProductos}
                     disabled={loading}
                   >
