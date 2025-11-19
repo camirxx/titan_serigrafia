@@ -23,31 +23,6 @@ type ProductoAgrupado = {
   };
 };
 
-type MovimientoInventario = {
-  variante_id: number;
-  tipo: string;
-  cantidad: number;
-  fecha: string;
-};
-
-const isMovimientoInventarioArray = (
-  data: unknown
-): data is MovimientoInventario[] => {
-  return (
-    Array.isArray(data) &&
-    data.every((item) => {
-      if (!item || typeof item !== "object") return false;
-      const row = item as Record<string, unknown>;
-      return (
-        typeof row.variante_id === "number" &&
-        typeof row.tipo === "string" &&
-        typeof row.cantidad === "number" &&
-        typeof row.fecha === "string"
-      );
-    })
-  );
-};
-
 const ORDEN_CATEGORIAS: { [key: string]: number } = {
   'polera': 1,
   'poleron': 2,
@@ -192,8 +167,8 @@ export default function InventarioAgrupado() {
         };
       });
 
-
-      // 2. Movimientos del período (simplificado - solo para referencia)
+      /*
+      // --- Bloque opcional para mostrar entradas y salidas por período ---
       const { data: movimientos, error: errMov } = await supabase
         .from("movimientos_inventario")
         .select("variante_id, tipo, cantidad, fecha")
@@ -204,32 +179,29 @@ export default function InventarioAgrupado() {
         throw errMov;
       }
 
-      // 3. Mapear movimientos para mostrar (opcional)
       const movMap = new Map<number, { entrada: number; salida: number }>();
-      const movimientosArray = isMovimientoInventarioArray(movimientos)
-        ? movimientos
-        : [];
-
-      movimientosArray.forEach((m) => {
-      if (!movMap.has(m.variante_id)) {
-        movMap.set(m.variante_id, { entrada: 0, salida: 0 });
-      }
-      const mov = movMap.get(m.variante_id)!;
-
-      if (m.tipo === 'entrada' || m.tipo === 'devolucion') {
-        mov.entrada += m.cantidad;
-      } else if (m.tipo === 'venta') {
-        mov.salida += Math.abs(m.cantidad);
-      } else if (m.tipo === 'ajuste') {
-        if (m.cantidad > 0) {
-          mov.entrada += m.cantidad;
-        } else {
-          mov.salida += Math.abs(m.cantidad);
+      (Array.isArray(movimientos) ? movimientos : []).forEach((m) => {
+        if (!movMap.has(m.variante_id)) {
+          movMap.set(m.variante_id, { entrada: 0, salida: 0 });
         }
-      }
-    });
+        const mov = movMap.get(m.variante_id)!;
 
-      // 4. Primero agregar todos los productos únicos (con o sin variantes)
+        if (m.tipo === "entrada" || m.tipo === "devolucion") {
+          mov.entrada += m.cantidad;
+        } else if (m.tipo === "venta") {
+          mov.salida += Math.abs(m.cantidad);
+        } else if (m.tipo === "ajuste") {
+          if (m.cantidad > 0) {
+            mov.entrada += m.cantidad;
+          } else {
+            mov.salida += Math.abs(m.cantidad);
+          }
+        }
+      });
+      // --- Fin bloque opcional ---
+      */
+
+      // 3. Primero agregar todos los productos únicos (con o sin variantes)
       const agrupados: { [key: string]: ProductoAgrupado } = {};
 
       productosUnicos.forEach((info, productoId) => {
@@ -243,7 +215,7 @@ export default function InventarioAgrupado() {
         };
       });
 
-      // 5. Luego agregar las variantes con stock
+      // 4. Luego agregar las variantes con stock
       variantesTransformadas.forEach((v) => {
         const key = `${v.producto_id}`;
         
@@ -260,12 +232,15 @@ export default function InventarioAgrupado() {
         }
         
         const talla = v.talla || "N/A";
-        // Solo mostrar stock actual, sin cálculos de movimientos que causan confusiones
         agrupados[key].tallas[talla] = {
-          entrada: 0, // No mostrar movimientos para evitar confusiones
+          entrada: 0,
           salida: 0,
           total: v.stock_actual || 0,
           variante_id: v.variante_id,
+          /*
+          // Para reactivar movimientos:
+          ...movMap.get(v.variante_id)
+          */
         };
       });
 
@@ -635,7 +610,7 @@ export default function InventarioAgrupado() {
                   Color
                 </th>
 
-                {/* ENTRADA */}
+                {/*
                 <th
                   colSpan={tallasAMostrar.length}
                   className="text-center p-4 font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600"
@@ -643,13 +618,13 @@ export default function InventarioAgrupado() {
                   📥 ENTRADA
                 </th>
 
-                {/* SALIDA */}
                 <th
                   colSpan={tallasAMostrar.length}
                   className="text-center p-4 font-bold text-white bg-gradient-to-r from-orange-500 to-red-600"
                 >
                   📤 SALIDA
                 </th>
+                */}
 
                 {/* STOCK ACTUAL */}
                 <th
@@ -677,6 +652,7 @@ export default function InventarioAgrupado() {
                 <th className="sticky left-[200px] bg-indigo-50/95 z-20"></th>
                 <th></th>
 
+                {/*
                 {tallasAMostrar.map((t) => (
                   <th
                     key={`e-${t}`}
@@ -693,6 +669,7 @@ export default function InventarioAgrupado() {
                     {t}
                   </th>
                 ))}
+                */}
                 {tallasAMostrar.map((t) => (
                   <th
                     key={`t-${t}`}
@@ -735,6 +712,7 @@ export default function InventarioAgrupado() {
                   </td>
                   <td className="p-4 text-gray-700 font-medium">{prod.color}</td>
 
+                  {/*
                   {tallasAMostrar.map((t) => (
                     <td
                       key={`e-${t}`}
@@ -751,6 +729,7 @@ export default function InventarioAgrupado() {
                       {prod.tallas[t]?.salida || 0}
                     </td>
                   ))}
+                  */}
                   {tallasAMostrar.map((t) => {
                     const stock = prod.tallas[t]?.total || 0;
                     return (
