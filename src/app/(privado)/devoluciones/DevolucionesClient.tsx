@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -278,6 +278,10 @@ export default function DevolucionesClient() {
     let query = supabase
       .from('v_venta_detalle_devolucion')
       .select('*');
+
+    const fechaLimite = new Date();
+    fechaLimite.setDate(fechaLimite.getDate() - 14);
+    query = query.gte('fecha', fechaLimite.toISOString());
 
     // Aplicar filtros
     if (disenoFiltro) {
@@ -933,9 +937,12 @@ export default function DevolucionesClient() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex gap-3">
+                <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <p className="text-xs text-gray-500">
+                    Mostrando ventas registradas durante las últimas 2 semanas.
+                  </p>
                   <button
-                    className="flex-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 font-semibold text-white shadow-md transition hover:from-purple-700 hover:to-indigo-700 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 font-semibold text-white shadow-md transition hover:from-purple-700 hover:to-indigo-700 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed md:flex-none"
                     onClick={buscarProductos}
                     disabled={loading}
                   >
@@ -985,7 +992,7 @@ export default function DevolucionesClient() {
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 text-purple-600 font-bold text-sm">
                         2
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-700">Configuración de la Operación</h3>
+                      <h3 className="text-lg font-semibold text-gray-700">Seleccionar Cantidades</h3>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2 bg-gray-50 rounded-xl p-4">
@@ -1593,7 +1600,7 @@ export default function DevolucionesClient() {
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 text-purple-600 font-bold text-sm">
                         3
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-700">Seleccionar Cantidades</h3>
+                      <h3 className="text-lg font-semibold text-gray-700">Configuración de la Operación</h3>
                     </div>
 
                     <div className="overflow-auto rounded-xl border border-gray-200 shadow-sm">
@@ -1710,3 +1717,5 @@ export default function DevolucionesClient() {
   
   );
 }
+
+

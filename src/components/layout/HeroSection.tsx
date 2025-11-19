@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { ReactNode, useEffect, useMemo, useState } from "react";
-import { cn } from "@/lib/utils";
 
 function formatHeroDate(date: Date) {
   return new Intl.DateTimeFormat("es-CL", {
@@ -64,7 +63,7 @@ export default function HeroSection({
   const formattedTime = useMemo(() => formatHeroTime(timestamp), [timestamp]);
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-white/20 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 px-6 py-8 text-white shadow-2xl">
+    <section className="sticky top-24 z-[900] relative overflow-hidden rounded-3xl border border-white/20 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 px-6 py-8 text-white shadow-2xl">
       <div className="absolute -left-10 top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
       <div className="absolute -right-16 bottom-0 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ShoppingCart } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
@@ -156,7 +156,7 @@ export default function DashboardClient() {
   return (
     <div className="pb-16">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white mb-6">
+        <div className="sticky top-24 z-[900] bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white mb-6">
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.back()}
