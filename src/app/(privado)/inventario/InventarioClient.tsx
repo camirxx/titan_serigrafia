@@ -144,23 +144,39 @@ export default function InventarioAgrupado() {
         });
       });
 
-      // 2. Cargar TODAS las variantes (sin filtros restrictivos)
-      const { data: variantes, error: errVariantes } = await supabase
-        .from("variantes")
-        .select(`
-          id,
-          producto_id,
-          talla,
-          stock_actual
-        `);
+      // 2. Cargar TODAS las variantes paginando en lotes
+      let allVariantes: any[] = [];
+      let start = 0;
+      const batchSize = 1000;
 
-      if (errVariantes) {
-        console.error("Error cargando variantes:", errVariantes);
-        throw errVariantes;
+      while (true) {
+        const { data: batch, error } = await supabase
+          .from("variantes")
+          .select("id, producto_id, talla, stock_actual")
+          .order("id", { ascending: true })
+          .range(start, start + batchSize - 1);
+
+        if (error) {
+          console.error("Error cargando batch de variantes:", error);
+          throw error;
+        }
+
+        if (!batch || batch.length === 0) break;
+
+        allVariantes = allVariantes.concat(batch);
+
+        console.log(`Batch cargado: ${start} - ${start + batch.length - 1} (total hasta ahora: ${allVariantes.length})`);
+
+        if (batch.length < batchSize) break;
+
+        start += batchSize;
       }
 
+      const variantes = allVariantes;
+      console.log("TODAS LAS VARIANTES CARGADAS →", variantes.length);
+
       // Transformar al formato esperado
-      const variantesTransformadas = variantes?.map((v: Record<string, unknown>) => {
+      const variantesTransformadas = variantes.map((v: Record<string, unknown>) => {
         const variante = v as { id: number; producto_id: number; talla: string; stock_actual: number };
         const productoInfo = productosUnicos.get(variante.producto_id);
 
@@ -172,9 +188,9 @@ export default function InventarioAgrupado() {
           diseno: productoInfo?.diseno || "Sin diseño",
           tipo_prenda: productoInfo?.tipo_prenda || "Sin tipo",
           color: productoInfo?.color || "Sin color",
-          producto_activo: true // Asumimos activo si tiene variantes
+          producto_activo: true,
         };
-      }) || [];
+      });
 
 
       // 2. Movimientos del período (simplificado - solo para referencia)
