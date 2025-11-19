@@ -94,7 +94,7 @@ export default function PrivateAppLayout({ children, user, role }: PrivateAppLay
       <main
         id="main-content"
         style={mainStyle}
-        className="relative min-h-[calc(100vh-64px)] bg-transparent text-white transition-[margin-left] duration-300 ease-in-out"
+        className="relative bg-transparent text-white transition-[margin-left] duration-300 ease-in-out"
       >
         {children}
       </main>

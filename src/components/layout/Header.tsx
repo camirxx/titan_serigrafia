@@ -206,7 +206,7 @@ export default function Header({
             {isDropdownOpen ? (
               <div
                 role="menu"
-                className="absolute right-0 mt-3 w-56 rounded-2xl border border-slate-800/60 bg-slate-900/95 p-3 text-sm text-slate-200 shadow-xl"
+                className="absolute right-0 mt-3 w-56 rounded-2xl border border-slate-800/60 bg-slate-900/95 p-3 text-sm text-slate-200 shadow-xl z-[1001]"
               >
                 <div className="mb-3 rounded-xl bg-white/5 p-3 text-xs text-slate-300">
                   <p className="font-semibold text-slate-50">{user.name}</p>
