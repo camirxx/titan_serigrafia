@@ -1016,29 +1016,29 @@ function VueltoSelector({
   const restante = vuelto - totalSeleccionado
 
   return (
-    <div className="border-l-2 border-gray-200 pl-8">
-      <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-        <span className="text-2xl">💰</span>
-        Vuelto a entregar
+    <div className="min-w-0">
+      <h3 className="text-base sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
+        <span className="text-xl sm:text-2xl flex-shrink-0">💰</span>
+        <span className="truncate">Vuelto a entregar</span>
       </h3>
 
-      <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 mb-4">
-        <div className="text-lg font-bold text-orange-900">Vuelto requerido: ${formatNumber(vuelto)}</div>
-        <div className={`text-sm font-semibold mt-1 ${totalSeleccionado === vuelto ? 'text-green-600' : restante > 0 ? 'text-red-600' : 'text-blue-600'}`}>
-          {totalSeleccionado === vuelto ? '✓ Monto exacto' : restante > 0 ? `Faltan: ${formatNumber(restante)}` : `Exceso: ${formatNumber(Math.abs(restante))}`}
+      <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-3 sm:p-4 mb-3 sm:mb-4">
+        <div className="text-sm sm:text-lg font-bold text-orange-900 truncate">Vuelto requerido: ${formatNumber(vuelto)}</div>
+        <div className={`text-xs sm:text-sm font-semibold mt-1 ${totalSeleccionado === vuelto ? 'text-green-600' : restante > 0 ? 'text-red-600' : 'text-blue-600'}`}>
+          {totalSeleccionado === vuelto ? '✓ Exacto' : restante > 0 ? `Faltan: ${formatNumber(restante)}` : `Exceso: ${formatNumber(Math.abs(restante))}`}
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2 sm:space-y-3">
         {Object.keys(billetesVuelto).reverse().map((denom) => {
           const cantidad = billetesVuelto[denom as keyof typeof billetesVuelto]
           const disponible = denominacionesDisponibles[parseInt(denom)] || 0
           const subtotal = parseInt(denom) * cantidad
 
           return (
-            <div key={denom} className="flex items-center gap-4">
-              <span className="font-bold text-lg text-gray-700 w-28">${formatNumber(parseInt(denom))}</span>
-              <div className="flex items-center gap-2">
+            <div key={denom} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+              <span className="font-bold text-gray-700 flex-shrink-0">${formatNumber(parseInt(denom))}</span>
+              <div className="flex items-center gap-1 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -1048,7 +1048,7 @@ function VueltoSelector({
                       [denom]: nuevaCantidad 
                     })
                   }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-100 hover:bg-red-200 text-red-700 font-bold text-lg transition"
+                  className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-red-100 hover:bg-red-200 text-red-700 font-bold text-sm sm:text-lg transition"
                   disabled={cantidad <= 0}
                 >
                   −
@@ -1065,7 +1065,7 @@ function VueltoSelector({
                       [denom]: valor 
                     })
                   }}
-                  className="w-20 px-2 py-1 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 outline-none"
+                  className="w-12 sm:w-16 px-1 sm:px-2 py-1 text-center text-xs sm:text-sm font-bold border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 outline-none"
                 />
                 <button
                   type="button"
@@ -1076,23 +1076,23 @@ function VueltoSelector({
                       [denom]: nuevaCantidad 
                     })
                   }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-green-100 hover:bg-green-200 text-green-700 font-bold text-lg transition"
+                  className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-green-100 hover:bg-green-200 text-green-700 font-bold text-sm sm:text-lg transition"
                   disabled={cantidad >= disponible}
                 >
                   +
                 </button>
               </div>
-              <span className="text-gray-600 text-sm">
-                Disponible: {disponible}
+              <span className="text-gray-600 text-xs sm:text-sm flex-shrink-0">
+                Disp: {disponible}
               </span>
-              <span className="text-gray-600 ml-auto">= ${formatNumber(subtotal)}</span>
+              <span className="text-gray-600 text-xs sm:text-sm">= ${formatNumber(subtotal)}</span>
             </div>
           )
         })}
       </div>
 
-      <div className={`p-3 rounded-xl mt-4 ${totalSeleccionado === vuelto ? 'bg-green-50 border-2 border-green-200' : 'bg-gray-50 border-2 border-gray-200'}`}>
-        <div className="text-lg font-bold">Total seleccionado: ${formatNumber(totalSeleccionado)}</div>
+      <div className={`p-2 sm:p-3 rounded-xl mt-3 sm:mt-4 ${totalSeleccionado === vuelto ? 'bg-green-50 border-2 border-green-200' : 'bg-gray-50 border-2 border-gray-200'}`}>
+        <div className="text-sm sm:text-lg font-bold truncate">Total: ${formatNumber(totalSeleccionado)}</div>
       </div>
     </div>
   )

@@ -2,6 +2,7 @@
 import "./globals.css";
 import SupabaseListener from "@/components/SupabaseListener";
 import ChatbotWidget from "@/components/ChatbotWidget";
+import { ThemeProvider } from "@/context/ThemeContext";
 
 export default async function RootLayout({
   children,
@@ -15,12 +16,13 @@ export default async function RootLayout({
         className="min-h-screen bg-cover bg-center"
         style={{ backgroundImage: "url('/fondo.jpeg')" }}
       >
-        <SupabaseListener />
+        <ThemeProvider>
+          <SupabaseListener />
 
-        {children}
+          {children}
 
-        <ChatbotWidget />
-
+          <ChatbotWidget />
+        </ThemeProvider>
       </body>
     </html>
   );

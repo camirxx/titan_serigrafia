@@ -52,7 +52,7 @@ export default function ReportHeader({
   }, []);
 
   return (
-    <div className={cn('sticky top-24 z-[900]', gradientClass, 'rounded-2xl shadow-2xl p-6 text-white mb-6', className)}>
+    <div className={cn('relative z-[900]', gradientClass, 'rounded-2xl shadow-2xl p-6 text-white mb-6', className)}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
           <button 
