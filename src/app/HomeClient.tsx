@@ -32,7 +32,6 @@ export default function HomeClient({ userRole }: HomeClientProps) {
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-indigo-500">Panel principal</p>
               <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Accesos rápidos</h1>
-              <p className="text-sm text-slate-500">Explora las secciones clave del sistema desde una sola vista.</p>
             </div>
           </header>
 

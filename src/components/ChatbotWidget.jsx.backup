@@ -295,7 +295,7 @@ const ChatbotWidget = () => {
         mensaje += `📅 Retiros de hoy: $${data.total_dia?.toLocaleString('es-CL')}\n`;
         mensaje += `📊 Acumulado anterior: $${data.total_acumulado_anterior?.toLocaleString('es-CL')}\n\n`;
         
-        mensaje += `📝 Detalle de hoy:\n`;
+        mensaje += `� Detalle de hoy:\n`;
         data.retiros_dia.forEach((retiro, index) => {
           mensaje += `${index + 1}. $${retiro.monto?.toLocaleString('es-CL')} - ${retiro.motivo} (${retiro.hora})\n`;
         });
@@ -515,91 +515,6 @@ const ChatbotWidget = () => {
     } catch (error) {
       addMessage('❌ No pude obtener los retiros.');
     } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenCajaMenu(), 1500);
-    }
-  };
-
-  const handleOptionClick = (optionId) => {
-    // Menú principal
-    if (optionId === 'inventario') {
-      showInventoryMenu();
-    } else if (optionId === 'resumen') {
-      showResumenMenu();
-    } else if (optionId === 'volver-main') {
-      showMainMenu();
-    } 
-    // Inventario
-    else if (optionId === 'inventario-completo') {
-      handleInventarioCompleto();
-    } else if (optionId === 'buscar-producto') {
-      handleBuscarProducto();
-    } else if (optionId === 'stock-bajo') {
-      handleStockBajo();
-    } else if (optionId === 'ver-inventario-stock') {
-      handleInventarioCompleto();
-    } else if (optionId === 'volver-inventario') {
-      showInventoryMenu();
-    }
-    // Resumen - Selección de fecha
-    else if (optionId === 'hoy') {
-      handleFechaHoy();
-    } else if (optionId === 'otra-fecha') {
-      handleOtraFecha();
-    }
-    // Resumen - Submenús
-    else if (optionId === 'resumen-caja') {
-      showResumenCajaMenu();
-    } else if (optionId === 'resumen-productos') {
-      showResumenProductosMenu();
-    } else if (optionId === 'volver-resumen') {
-      showResumenMenu();
-    }
-    // Caja - Usar handlers con fecha dinámica
-    else if (optionId === 'ganancia-dia') {
-      handleGananciaDiaConFecha();
-    } else if (optionId === 'ingreso-caja') {
-      handleIngresoCajaConFecha();
-    } else if (optionId === 'dinero-retirado') {
-      handleDineroRetiradoConFecha();
-    }
-    // Productos
-    else if (optionId === 'total-vendido') {
-      handleTotalVendido();
-    } else if (optionId === 'total-poleras') {
-      handleTotalPoleras();
-    } else if (optionId === 'modelo-mas-vendido') {
-      handleMasVendido();
-    }
-  };
-
-  const handleSendMessage = () => {
-    if (!inputValue.trim() || isLoading) return;
-
-    const userMessage = inputValue.trim();
-    addMessage(userMessage, false);
-    setInputValue('');
-
-    if (conversationState.waitingFor === 'product-name') {
-      searchProduct(userMessage);
-    } else if (conversationState.waitingFor === 'fecha-input') {
-      handleFechaInput(userMessage);
-    } else {
-      addMessage('Selecciona una opción de arriba 👆');
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  return (
-    <div className="fixed bottom-4 right-4 z-50">
-      {!isOpen && (
-        <div className="group relative">
           <button
             onClick={() => setIsOpen(true)}
             className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-4 shadow-lg transition-all duration-300 hover:scale-110"

@@ -3,101 +3,79 @@ import { supabase } from '@/lib/supabaseApi';
 
 export async function GET(request) {
   try {
-    const { data, error } = await supabase
-      .from('productos')
-      .select('id, nombre, stock, precio_venta, umbral_bajo_stock, categoria')
-      .or('stock.lte.umbral_bajo_stock,stock.eq.0')
-      .order('stock', { ascending: true });
+    // Usar la misma estructura que el inventario
+    const { data: productos, error } = await supabase
+      .from("productos")
+      .select(`
+        id,
+        disenos!inner(nombre),
+        tipos_prenda!inner(nombre),
+        colores(nombre),
+        activo
+      `)
+      .eq("activo", true);
 
     if (error) {
-      console.error('Error al obtener stock bajo:', error);
-      
-      // Si hay error, devolver datos de ejemplo como fallback
-      const SAMPLE_LOW_STOCK = [
-        {
-          id: "TUV-1023",
-          name: "Tinta UV Azul",
-          stock: 8,
-          minimum: 15,
-          category: "Tintas y Químicos",
-          precio_venta: 15000
-        },
-        {
-          id: "POL-NG-210",
-          name: "Polera Premium Negra Talla M",
-          stock: 5,
-          minimum: 12,
-          category: "Textiles y Prendas",
-          precio_venta: 25000
-        },
-        {
-          id: "TRF-BL-441",
-          name: "Transfer Textil Blanco",
-          stock: 10,
-          minimum: 25,
-          category: "Insumos de Transferencia",
-          precio_venta: 8000
-        },
-      ];
-
-      return NextResponse.json({
-        items: SAMPLE_LOW_STOCK,
-        generatedAt: new Date().toISOString(),
-        fallback: true
-      });
+      console.error('Error al obtener productos:', error);
+      return NextResponse.json(
+        { error: 'Error al obtener productos' },
+        { status: 500 }
+      );
     }
 
-    const productosConNivel = data.map(producto => ({
-      id: producto.id,
-      name: producto.nombre,
-      stock: producto.stock,
-      minimum: producto.umbral_bajo_stock,
-      category: producto.categoria || 'Sin categoría',
-      precio_venta: producto.precio_venta,
-      nivel: producto.stock === 0 ? 'critico' : 'bajo'
-    }));
+    // Obtener todas las variantes para estos productos
+    const productoIds = productos?.map(p => p.id) || [];
+    const { data: variantes, error: errorVariantes } = await supabase
+      .from("variantes")
+      .select("id, producto_id, talla, stock_actual")
+      .in("producto_id", productoIds);
+
+    if (errorVariantes) {
+      console.error('Error al obtener variantes:', errorVariantes);
+      return NextResponse.json(
+        { error: 'Error al obtener variantes' },
+        { status: 500 }
+      );
+    }
+
+    // Filtrar y agrupar productos con stock bajo (<= 5 unidades o stock = 0)
+    const productosConStockBajo = [];
+    
+    productos?.forEach((producto) => {
+      const productoVariantes = variantes?.filter(v => v.producto_id === producto.id) || [];
+      const stockTotal = productoVariantes.reduce((sum, v) => sum + (v.stock_actual || 0), 0);
+      
+      // Buscar variantes con stock bajo
+      const variantesConStockBajo = productoVariantes.filter(v => v.stock_actual <= 5);
+      
+      if (variantesConStockBajo.length > 0) {
+        productosConStockBajo.push({
+          id: producto.id,
+          nombre: `${producto.disenos?.nombre} ${producto.tipos_prenda?.nombre} ${producto.colores?.nombre || ''}`.trim(),
+          diseno: producto.disenos?.nombre || '',
+          tipo_prenda: producto.tipos_prenda?.nombre || '',
+          color: producto.colores?.nombre || 'Sin color',
+          stock_total: stockTotal,
+          variantes_bajo: variantesConStockBajo.map(v => ({
+            id: v.id,
+            talla: v.talla || 'N/A',
+            stock_actual: v.stock_actual || 0
+          })),
+          total_variantes: productoVariantes.length
+        });
+      }
+    });
 
     return NextResponse.json({
-      items: productosConNivel,
-      generatedAt: new Date().toISOString(),
-      fallback: false
+      productos: productosConStockBajo,
+      total: productosConStockBajo.length,
+      generatedAt: new Date().toISOString()
     });
   } catch (error) {
     console.error('Error en stock bajo:', error);
-    
-    // Datos de ejemplo como fallback en caso de error
-    const SAMPLE_LOW_STOCK = [
-      {
-        id: "TUV-1023",
-        name: "Tinta UV Azul",
-        stock: 8,
-        minimum: 15,
-        category: "Tintas y Químicos",
-        precio_venta: 15000
-      },
-      {
-        id: "POL-NG-210",
-        name: "Polera Premium Negra Talla M",
-        stock: 5,
-        minimum: 12,
-        category: "Textiles y Prendas",
-        precio_venta: 25000
-      },
-      {
-        id: "TRF-BL-441",
-        name: "Transfer Textil Blanco",
-        stock: 10,
-        minimum: 25,
-        category: "Insumos de Transferencia",
-        precio_venta: 8000
-      },
-    ];
-
-    return NextResponse.json({
-      items: SAMPLE_LOW_STOCK,
-      generatedAt: new Date().toISOString(),
-      fallback: true,
-      error: true
-    });
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    );
   }
 }

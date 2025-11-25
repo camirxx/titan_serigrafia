@@ -13,28 +13,97 @@ export async function GET(request) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('productos')
-      .select('*')
-      .ilike('nombre', `%${nombre}%`)
-      .limit(10);
+    // Usar la misma estructura que el inventario
+    const { data: productos, error } = await supabase
+      .from("productos")
+      .select(`
+        id,
+        disenos!inner(nombre),
+        tipos_prenda!inner(nombre),
+        colores(nombre),
+        activo
+      `)
+      .eq("activo", true);
 
     if (error) {
-      console.error('Error al buscar producto:', error);
+      console.error('Error al buscar productos:', error);
       return NextResponse.json(
         { error: 'Error al buscar productos' },
         { status: 500 }
       );
     }
 
-    if (!data || data.length === 0) {
+    // Obtener todas las variantes para estos productos
+    const productoIds = productos?.map(p => p.id) || [];
+    const { data: variantes, error: errorVariantes } = await supabase
+      .from("variantes")
+      .select("id, producto_id, talla, stock_actual")
+      .in("producto_id", productoIds);
+
+    if (errorVariantes) {
+      console.error('Error al obtener variantes:', errorVariantes);
+      return NextResponse.json(
+        { error: 'Error al obtener variantes' },
+        { status: 500 }
+      );
+    }
+
+    // Transformar datos al formato que espera el chatbot
+    const productosFormateados = [];
+    
+    productos?.forEach((producto) => {
+      const productoVariantes = variantes?.filter(v => v.producto_id === producto.id) || [];
+      const stockTotal = productoVariantes.reduce((sum, v) => sum + (v.stock_actual || 0), 0);
+      
+      // Filtrar por búsqueda (case-insensitive)
+      const termino = nombre.toLowerCase();
+      const diseno = producto.disenos?.nombre || '';
+      const tipo = producto.tipos_prenda?.nombre || '';
+      const color = producto.colores?.nombre || '';
+      
+      const coincideBusqueda = 
+        diseno.toLowerCase().includes(termino) ||
+        tipo.toLowerCase().includes(termino) ||
+        color.toLowerCase().includes(termino);
+      
+      if (coincideBusqueda) {
+        productosFormateados.push({
+          id: producto.id,
+          nombre: `${diseno} ${tipo} ${color}`.trim(),
+          diseno: diseno,
+          tipo_prenda: tipo,
+          color: color || 'Sin color',
+          stock_total: stockTotal,
+          todas_las_tallas: productoVariantes.map(v => ({
+            talla: v.talla || 'N/A',
+            stock: v.stock_actual || 0
+          })),
+          tallas_con_stock: productoVariantes
+            .filter(v => v.stock_actual > 0)
+            .map(v => ({
+              talla: v.talla || 'N/A',
+              stock: v.stock_actual || 0
+            })),
+          tallas_sin_stock: productoVariantes
+            .filter(v => v.stock_actual === 0)
+            .map(v => v.talla || 'N/A')
+        });
+      }
+    });
+
+    if (productosFormateados.length === 0) {
       return NextResponse.json(
         { error: 'No se encontraron productos' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(data);
+    // Devolver siempre la lista de productos (múltiples o uno solo)
+    return NextResponse.json({
+      productos: productosFormateados,
+      total: productosFormateados.length,
+      busqueda: nombre
+    });
   } catch (error) {
     console.error('Error en búsqueda de producto:', error);
     return NextResponse.json(
