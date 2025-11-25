@@ -50,9 +50,6 @@ export default function HomeClient({ userRole }: HomeClientProps) {
                 <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
                   Punto de Venta
                 </h3>
-                <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
-                  Registra ventas y gestiona cobros en tiempo real.
-                </p>
               </div>
             </button>
 
@@ -65,9 +62,6 @@ export default function HomeClient({ userRole }: HomeClientProps) {
                 <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
                   Inventario
                 </h3>
-                <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
-                  Controla stock, variaciones y movimientos de productos.
-                </p>
               </div>
             </button>
 
@@ -80,9 +74,6 @@ export default function HomeClient({ userRole }: HomeClientProps) {
                 <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
                   Devoluciones
                 </h3>
-                <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
-                  Gestiona cambios, reembolsos y movimientos asociados.
-                </p>
               </div>
             </button>
 
@@ -95,9 +86,6 @@ export default function HomeClient({ userRole }: HomeClientProps) {
                 <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
                   Dashboard
                 </h3>
-                <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
-                  Visualiza el desempeño general y métricas clave.
-                </p>
               </div>
             </button>
 
@@ -111,9 +99,6 @@ export default function HomeClient({ userRole }: HomeClientProps) {
                   <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
                     Reportes
                   </h3>
-                  <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
-                    Analiza resultados y exporta información detallada.
-                  </p>
                 </div>
               </button>
             )}
@@ -128,9 +113,6 @@ export default function HomeClient({ userRole }: HomeClientProps) {
                   <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
                     Trabajadores
                   </h3>
-                  <p className="text-center text-sm text-slate-500 group-hover:text-indigo-600/90">
-                    Administra roles, permisos y disponibilidad del equipo.
-                  </p>
                 </div>
               </button>
             )}

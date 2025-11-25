@@ -90,10 +90,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-full grid place-items-center p-6">
+    <div className="min-h-screen flex items-center justify-center p-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 p-6 rounded-2xl shadow bg-white"
+        className="w-full max-w-sm space-y-4 p-8 rounded-2xl shadow-xl bg-white border border-gray-100"
       >
         <h1 className="text-2xl font-semibold">Iniciar sesión</h1>
 

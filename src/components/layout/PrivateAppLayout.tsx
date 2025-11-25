@@ -51,6 +51,7 @@ export default function PrivateAppLayout({ children, user, role }: PrivateAppLay
   const mainStyle = useMemo(() => ({
     paddingTop: `${sidebar.headerHeight}px`,
     marginLeft: sidebar.isMobile ? 0 : `${sidebar.sidebarWidth}px`,
+    minHeight: `calc(100vh - ${sidebar.headerHeight}px)`,
   }), [sidebar.headerHeight, sidebar.isMobile, sidebar.sidebarWidth]);
 
   return (
@@ -77,6 +78,7 @@ export default function PrivateAppLayout({ children, user, role }: PrivateAppLay
         isMobileOpen={sidebar.isMobileOpen}
         sidebarWidth={sidebar.sidebarWidth}
         user={user}
+        role={role}
         onClose={sidebar.closeSidebar}
         onMouseEnter={sidebar.handleMouseEnter}
         onMouseLeave={sidebar.handleMouseLeave}

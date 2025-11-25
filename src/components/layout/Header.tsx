@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Menu, X, Bell, ChevronDown } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Menu, X, Bell, LogOut } from "lucide-react";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const HEADER_HEIGHT = 64;
 
@@ -44,12 +46,45 @@ export default function Header({
   user,
   role,
 }: HeaderProps) {
+  const router = useRouter();
   const [currentDate, setCurrentDate] = useState(() => formatDate(new Date()));
   const [currentTime, setCurrentTime] = useState(() => formatTime(new Date()));
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const notificationsRef = useRef<HTMLDivElement | null>(null);
+
+  const handleSignOut = async () => {
+    const confirmed = window.confirm("¿Estás seguro de cerrar sesión?");
+    if (confirmed) {
+      try {
+        console.log("Iniciando cierre de sesión...");
+        
+        // Usar el endpoint API que ya funciona
+        const response = await fetch("/api/auth/signout?redirect=/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+        
+        console.log("Respuesta del API:", response.status, response.url);
+        
+        if (!response.ok) {
+          console.error("Error en la respuesta del API:", response.status);
+          throw new Error("Error al cerrar sesión");
+        }
+        
+        // La respuesta debería ser una redirección, pero si no lo es, forzamos la redirección
+        if (response.redirected) {
+          window.location.href = response.url;
+        } else {
+          window.location.href = "/login";
+        }
+        
+      } catch (error) {
+        console.error("Error al cerrar sesión:", error);
+        // Si hay error, igualmente intentamos redirigir
+        window.location.href = "/login";
+      }
+    }
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -58,20 +93,6 @@ export default function Header({
       setCurrentTime(formatTime(now));
     }, 30_000);
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
-        setIsNotificationsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const breadcrumbsContent = useMemo(() => {
@@ -117,7 +138,7 @@ export default function Header({
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-[10000] h-16 bg-slate-900/95 backdrop-blur-md shadow-[0_2px_8px_rgba(15,23,42,0.45)] border-b border-white/10"
+      className="fixed top-0 left-0 right-0 z-[99999] h-16 bg-slate-900/95 backdrop-blur-md shadow-[0_2px_8px_rgba(15,23,42,0.45)] border-b border-white/10"
       style={{ height: HEADER_HEIGHT }}
     >
       <div className="flex h-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
@@ -167,113 +188,15 @@ export default function Header({
 
         {/* Right */}
         <div className="flex items-center gap-3 md:gap-4">
-          <div className="flex flex-col text-[11px] text-white/75 md:hidden">
-            <span className="font-semibold text-white">{firstName}</span>
-            <span className="capitalize">{roleLabel}</span>
-            <span>{currentDate}</span>
-            <span>{currentTime}</span>
-          </div>
-          <div ref={notificationsRef}>
-            <button
-              type="button"
-              onClick={() => setIsNotificationsOpen((prev) => !prev)}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white"
-              aria-label="Ver notificaciones"
-              aria-haspopup="menu"
-              aria-expanded={isNotificationsOpen}
-            >
-              <Bell className="h-[18px] w-[18px]" />
-              <span className="absolute -top-1 -right-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[11px] font-semibold text-white">
-                3
-              </span>
-            </button>
-
-            {isNotificationsOpen ? (
-              <div
-                role="menu"
-                className="fixed top-20 right-4 sm:right-6 lg:right-8 w-80 rounded-2xl border border-slate-800/60 bg-slate-900/95 p-3 text-sm text-slate-200 shadow-2xl z-[10001]"
-              >
-                <div className="mb-3 font-semibold text-white">Notificaciones</div>
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  <div className="rounded-xl bg-white/5 p-3 hover:bg-white/10 transition cursor-pointer">
-                    <p className="font-medium text-white">Nueva venta registrada</p>
-                    <p className="text-xs text-slate-400 mt-1">Se registró una venta por $45.000</p>
-                    <p className="text-xs text-slate-500 mt-1">Hace 5 minutos</p>
-                  </div>
-                  <div className="rounded-xl bg-white/5 p-3 hover:bg-white/10 transition cursor-pointer">
-                    <p className="font-medium text-white">Stock bajo</p>
-                    <p className="text-xs text-slate-400 mt-1">El producto &quot;Camiseta Básica&quot; tiene bajo stock</p>
-                    <p className="text-xs text-slate-500 mt-1">Hace 1 hora</p>
-                  </div>
-                  <div className="rounded-xl bg-white/5 p-3 hover:bg-white/10 transition cursor-pointer">
-                    <p className="font-medium text-white">Devolución pendiente</p>
-                    <p className="text-xs text-slate-400 mt-1">Hay una devolución pendiente de revisión</p>
-                    <p className="text-xs text-slate-500 mt-1">Hace 2 horas</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="w-full mt-3 rounded-xl px-3 py-2 text-center text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
-                  onClick={() => setIsNotificationsOpen(false)}
-                >
-                  Ver todas las notificaciones
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          <div ref={dropdownRef}>
-            <button
-              type="button"
-              onClick={() => setIsDropdownOpen((prev) => !prev)}
-              className="flex items-center gap-2 rounded-xl bg-white/10 px-2 py-1 text-left text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white"
-              aria-haspopup="menu"
-              aria-expanded={isDropdownOpen}
-            >
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-indigo-500 text-sm font-semibold uppercase text-white">
-                {user.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.avatarUrl} alt={user.name} className="h-full w-full rounded-full object-cover" />
-                ) : (
-                  initials
-                )}
-              </span>
-              <div className="hidden flex-col leading-tight sm:flex">
-                <span className="text-sm font-semibold text-white">{user.name}</span>
-                <span className="text-xs text-slate-300">{user.email}</span>
-              </div>
-              <ChevronDown className="h-4 w-4 text-slate-300" />
-            </button>
-
-            {isDropdownOpen ? (
-              <div
-                role="menu"
-                className="fixed top-20 right-4 sm:right-6 lg:right-8 w-56 rounded-2xl border border-slate-800/60 bg-slate-900/95 p-3 text-sm text-slate-200 shadow-2xl z-[10001]"
-              >
-                <div className="mb-3 rounded-xl bg-white/5 p-3 text-xs text-slate-300">
-                  <p className="font-semibold text-slate-50">{user.name}</p>
-                  <p>{user.email}</p>
-                </div>
-                <Link
-                  href="/configuracion"
-                  role="menuitem"
-                  className="block rounded-xl px-3 py-2 font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
-                  onClick={() => setIsDropdownOpen(false)}
-                >
-                  Configuración
-                </Link>
-                <form action="/api/auth/signout?redirect=/login" method="post" className="mt-2">
-                  <button
-                    type="submit"
-                    role="menuitem"
-                    className="w-full rounded-xl bg-rose-500/10 px-3 py-2 text-left font-semibold text-rose-300 transition hover:bg-rose-500 hover:text-white"
-                  >
-                    Cerrar sesión
-                  </button>
-                </form>
-              </div>
-            ) : null}
-          </div>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white"
+            aria-label="Cerrar sesión"
+            title="Cerrar sesión"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
         </div>
       </div>
     </header>

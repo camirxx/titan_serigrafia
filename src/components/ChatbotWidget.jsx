@@ -375,28 +375,40 @@ const ChatbotWidget = () => {
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {!isOpen && (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all duration-300 hover:scale-110"
-          aria-label="Abrir chatbot"
-        >
-          <MessageCircle size={24} />
-        </button>
+        <div className="group relative">
+          <button
+            onClick={() => setIsOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-4 shadow-lg transition-all duration-300 hover:scale-110"
+            aria-label="Abrir chatbot"
+          >
+            <MessageCircle className="h-6 w-6" />
+          </button>
+          
+          {/* Tooltip */}
+          <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            <div className="bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-lg whitespace-nowrap">
+              ¿Necesitas ayuda?
+              <div className="absolute top-full right-4 -mt-1">
+                <div className="border-4 border-transparent border-t-gray-900"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {isOpen && (
         <div className="bg-white rounded-lg shadow-2xl w-96 h-[600px] flex flex-col overflow-hidden">
-          <div className="bg-blue-600 text-white p-4 flex items-center justify-between">
+          <div className="bg-indigo-600 text-white p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageCircle size={24} />
               <div>
                 <h3 className="font-semibold">Asistente</h3>
-                <p className="text-xs text-blue-100">¿En qué te ayudo?</p>
+                <p className="text-xs text-indigo-100">¿En qué te ayudo?</p>
               </div>
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="hover:bg-blue-700 rounded-full p-1 transition-colors"
+              className="hover:bg-indigo-700 rounded-full p-1 transition-colors"
               aria-label="Cerrar chatbot"
             >
               <X size={20} />
@@ -410,7 +422,7 @@ const ChatbotWidget = () => {
                   className={`max-w-[80%] rounded-lg p-3 ${
                     message.isBot
                       ? 'bg-white text-gray-800 shadow-md'
-                      : 'bg-blue-600 text-white'
+                      : 'bg-indigo-600 text-white'
                   }`}
                 >
                   <p className="whitespace-pre-line text-sm">{message.text}</p>
@@ -421,7 +433,7 @@ const ChatbotWidget = () => {
                         <button
                           key={option.id}
                           onClick={() => handleOptionClick(option.id)}
-                          className="w-full text-left px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md transition-colors text-sm font-medium"
+                          className="w-full text-left px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-md transition-colors text-sm font-medium"
                           disabled={isLoading}
                         >
                           {option.label}
@@ -437,9 +449,9 @@ const ChatbotWidget = () => {
               <div className="flex justify-start">
                 <div className="bg-white rounded-lg p-3 shadow-md">
                   <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                   </div>
                 </div>
               </div>
@@ -456,13 +468,13 @@ const ChatbotWidget = () => {
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Escribe aquí..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 disabled={isLoading}
               />
               <button
                 onClick={handleSendMessage}
                 disabled={isLoading || !inputValue.trim()}
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                 aria-label="Enviar mensaje"
               >
                 <Send size={20} />

@@ -63,6 +63,34 @@ export async function middleware(req: NextRequest) {
 
   const url = req.nextUrl;
 
+  // PRIMERO: Verificar rutas restringidas por rol (antes que cualquier otra cosa)
+  if (user) {
+    // Rutas que solo admin y desarrollador pueden acceder
+    const adminOnlyRoutes = ["/trabajadores", "/reportes"];
+    
+    for (const route of adminOnlyRoutes) {
+      if (url.pathname.startsWith(route)) {
+        const { data, error: roleError } = await supabase
+          .from("usuarios")
+          .select("rol")
+          .eq("id", user.id)
+          .single();
+
+        const rol = data?.rol ?? null;
+        
+        // Si hay error o el rol no está permitido, redirigir
+        if (roleError || (rol !== "admin" && rol !== "desarrollador")) {
+          console.log(`🚫 ACCESO DENEGADO: Rol=${rol} intentó acceder a ${url.pathname}`);
+          return NextResponse.redirect(new URL("/acceso-denegado", url));
+        }
+        
+        // Si el rol es permitido, continuar
+        console.log(`✅ ACCESO PERMITIDO: Rol=${rol} accedió a ${url.pathname}`);
+        break;
+      }
+    }
+  }
+
   // Rutas públicas
   const publicRoutes = [
     "/login",
@@ -92,20 +120,6 @@ export async function middleware(req: NextRequest) {
   // Con usuario y entrando a /login → home
   if (user && url.pathname.startsWith("/login")) {
     return NextResponse.redirect(new URL("/", url));
-  }
-
-  // Gate de rol para /trabajadores (solo admin)
-  if (user && url.pathname.startsWith("/trabajadores")) {
-    const { data, error: roleError } = await supabase
-      .from("usuarios")
-      .select("rol")
-      .eq("id", user.id)
-      .single();
-
-    const rol = data?.rol ?? null;
-    if (roleError || rol !== "admin") {
-      return NextResponse.redirect(new URL("/acceso-denegado", url));
-    }
   }
 
   return res;
