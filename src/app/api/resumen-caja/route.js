@@ -6,64 +6,50 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const fecha = searchParams.get('fecha') || new Date().toISOString().split('T')[0];
 
-    console.log(`📅 Buscando ingresos para fecha: ${fecha}`);
+    console.log(`📅 Buscando resumen de caja para fecha: ${fecha}`);
 
-    // 1. Primero verificar si existe la tabla ventas y tiene metodo_pago
-    const { data: testVentas, error: testVentasError } = await supabase
+    // 1. Obtener ventas en efectivo del día
+    const { data: ventasEfectivo, error: errorVentas } = await supabase
       .from('ventas')
-      .select('id, total, metodo_pago, created_at')
+      .select('total')
       .eq('metodo_pago', 'efectivo')
       .gte('created_at', `${fecha}T00:00:00`)
-      .lte('created_at', `${fecha}T23:59:59`)
-      .limit(5);
+      .lte('created_at', `${fecha}T23:59:59`);
 
-    console.log('🛒 Test ventas efectivo:', { testVentas, testVentasError });
+    console.log('🛒 Ventas efectivo:', { ventasEfectivo, errorVentas });
 
-    // 2. Verificar caja_movimientos
-    const { data: testCaja, error: testCajaError } = await supabase
+    // 2. Obtener ingresos manuales del día
+    console.log('🔍 Buscando ingresos manuales para fecha:', fecha);
+    const { data: ingresosManuales, error: errorManuales } = await supabase
       .from('caja_movimientos')
-      .select('*')
+      .select('monto')
       .eq('tipo', 'ingreso')
-      .gte('created_at', `${fecha}T00:00:00`)
-      .lte('created_at', `${fecha}T23:59:59`)
-      .limit(5);
+      .is('venta_id', null) // Solo ingresos manuales
+      .not('sesion_id', 'is', null) // Con sesión válida
+      .gte('fecha', `${fecha}T00:00:00`)
+      .lte('fecha', `${fecha}T23:59:59`);
 
-    console.log('💰 Test caja movimientos:', { testCaja, testCajaError });
+    console.log('💰 Ingresos manuales encontrados:', { ingresosManuales, errorManuales });
 
-    // 3. Si hay error, intentar consulta más simple
-    let totalEfectivo = 0;
-    let totalVentasEfectivo = 0;
-    let totalManuales = 0;
+    // 3. Calcular totales simples
+    const totalVentasEfectivo = ventasEfectivo?.reduce((sum, venta) => sum + (venta.total || 0), 0) || 0;
+    const totalManuales = ingresosManuales?.reduce((sum, ingreso) => sum + (ingreso.monto || 0), 0) || 0;
+    const totalEfectivo = totalVentasEfectivo + totalManuales;
 
-    if (!testVentasError && testVentas) {
-      totalVentasEfectivo = testVentas.reduce((sum, venta) => sum + (venta.total || 0), 0);
-      console.log(`💰 Ventas efectivo encontradas: ${testVentas.length}, total: $${totalVentasEfectivo}`);
-    }
-
-    if (!testCajaError && testCaja) {
-      totalManuales = testCaja.reduce((sum, mov) => sum + (mov.monto || 0), 0);
-      console.log(`📝 Ingresos manuales encontrados: ${testCaja.length}, total: $${totalManuales}`);
-    }
-
-    totalEfectivo = totalVentasEfectivo + totalManuales;
+    console.log(`💰 Totales calculados: Ventas: $${totalVentasEfectivo}, Manuales: $${totalManuales}, Total: $${totalEfectivo}`);
 
     return NextResponse.json({
       fecha,
       total_efectivo: totalEfectivo,
       total_ventas_efectivo: totalVentasEfectivo,
       total_ingresos_manuales: totalManuales,
-      cantidad_ventas_efectivo: testVentas?.length || 0,
-      cantidad_ingresos_manuales: testCaja?.length || 0,
-      debug: {
-        ventas_encontradas: testVentas?.length || 0,
-        ingresos_manuales_encontrados: testCaja?.length || 0,
-        error_ventas: testVentasError?.message,
-        error_caja: testCajaError?.message
-      }
+      cantidad_ventas_efectivo: ventasEfectivo?.length || 0,
+      cantidad_ingresos_manuales: ingresosManuales?.length || 0
     });
   } catch (error) {
-    console.error('❌ Error general en ingresos de caja:', error);
+    console.error('❌ Error en resumen de caja:', error);
     return NextResponse.json(
+      { error: 'Error interno del servidor' },
       { 
         error: 'Error interno del servidor',
         debug: error.message 

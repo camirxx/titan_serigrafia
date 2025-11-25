@@ -8,44 +8,27 @@ export async function GET(request) {
 
     console.log(`📅 Buscando retiros para fecha: ${fecha}`);
 
-    // 1. Verificar retiros del día
+    // 1. Obtener retiros del día específico
+    console.log('🔍 Buscando retiros para fecha:', fecha);
     const { data: retirosDia, error: errorDia } = await supabase
       .from('caja_movimientos')
-      .select('*')
+      .select('monto, concepto, fecha')
       .eq('tipo', 'egreso')
-      .gte('created_at', `${fecha}T00:00:00`)
-      .lte('created_at', `${fecha}T23:59:59`)
-      .limit(5);
+      .gte('fecha', `${fecha}T00:00:00`)
+      .lte('fecha', `${fecha}T23:59:59`);
 
-    console.log('💸 Test retiros día:', { retirosDia, errorDia });
+    console.log('💸 Retiros del día encontrados:', { retirosDia, errorDia });
 
-    // 2. Verificar retiros acumulados
-    const { data: retirosAnteriores, error: errorAnteriores } = await supabase
-      .from('caja_movimientos')
-      .select('monto')
-      .eq('tipo', 'egreso')
-      .lt('created_at', `${fecha}T00:00:00`)
-      .limit(10);
+    // 2. Calcular total del día
+    const totalDia = retirosDia?.reduce((sum, retiro) => sum + (retiro.monto || 0), 0) || 0;
 
-    console.log('📊 Test retiros anteriores:', { retirosAnteriores, errorAnteriores });
+    console.log(`💸 Total retiros del día: $${totalDia}`);
 
-    let totalDia = 0;
-    let totalAcumulado = 0;
-
-    if (!errorDia && retirosDia) {
-      totalDia = retirosDia.reduce((sum, retiro) => sum + (retiro.monto || 0), 0);
-      console.log(`💸 Retiros del día: ${retirosDia.length}, total: $${totalDia}`);
-    }
-
-    if (!errorAnteriores && retirosAnteriores) {
-      totalAcumulado = retirosAnteriores.reduce((sum, retiro) => sum + (retiro.monto || 0), 0);
-      console.log(`📊 Retiros acumulados: $${totalAcumulado}`);
-    }
-
+    // 3. Formatear detalle simple de retiros
     const retirosFormateados = (retirosDia || []).map(retiro => ({
       monto: retiro.monto,
-      motivo: retiro.concepto || 'No especificado',
-      hora: new Date(retiro.created_at).toLocaleTimeString('es-CL', { 
+      motivo: retiro.concepto || 'Retiro de caja',
+      hora: new Date(retiro.fecha).toLocaleTimeString('es-CL', { 
         hour: '2-digit', 
         minute: '2-digit' 
       })
@@ -53,16 +36,9 @@ export async function GET(request) {
 
     return NextResponse.json({
       fecha,
-      retiros_dia: retirosFormateados,
       total_dia: totalDia,
-      total_acumulado_anterior: totalAcumulado,
       cantidad_retiros_dia: retirosDia?.length || 0,
-      debug: {
-        retiros_encontrados: retirosDia?.length || 0,
-        acumulados_encontrados: retirosAnteriores?.length || 0,
-        error_dia: errorDia?.message,
-        error_anteriores: errorAnteriores?.message
-      }
+      retiros_dia: retirosFormateados
     });
   } catch (error) {
     console.error('❌ Error general en retiros de caja:', error);

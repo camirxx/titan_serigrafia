@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, Send } from 'lucide-react';
+import { MessageCircle, X, Send, Trash2 } from 'lucide-react';
 
 const ChatbotWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -38,7 +38,8 @@ const ChatbotWidget = () => {
       true,
       [
         { id: 'inventario', label: '📦 Inventario' },
-        { id: 'resumen', label: '📊 Resumen del Día' }
+        { id: 'resumen', label: '📊 Resumen del Día' },
+        { id: 'borrar-chat', label: '🗑️ Borrar chat' }
       ]
     );
   };
@@ -92,7 +93,6 @@ const ChatbotWidget = () => {
       true,
       [
         { id: 'total-vendido', label: '🧮 Total vendido del día' },
-        { id: 'total-poleras', label: '👕 Total poleras vendidas' },
         { id: 'modelo-mas-vendido', label: '🏆 Modelo más vendido' },
         { id: 'volver-resumen', label: '⬅️ Volver' }
       ]
@@ -233,82 +233,24 @@ const ChatbotWidget = () => {
     }
   };
 
-  const handleGananciaDia = async () => {
+  const handleGananciaDiaConFecha = async () => {
+    const fecha = conversationState.fecha || new Date().toISOString().split('T')[0];
     setIsLoading(true);
     try {
-      const hoy = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/ganancia-dia?fecha=${hoy}`);
+      const response = await fetch(`/api/ganancia-dia?fecha=${fecha}`);
       const data = await response.json();
 
-      addMessage(
-        `✨ Ganancia de hoy:\n\n` +
-        `$${data.total_ventas?.toLocaleString('es-CL') || 0}\n\n` +
-        `💰 Total de ${data.cantidad_ventas || 0} ventas`
-      );
-    } catch (error) {
-      addMessage('❌ No pude calcular la ganancia.');
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenCajaMenu(), 1500);
-    }
-  };
-
-  const handleIngresoCaja = async () => {
-    setIsLoading(true);
-    try {
-      const hoy = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/resumen-caja?fecha=${hoy}`);
-      const data = await response.json();
-
-      let mensaje = `💵 Ingreso en caja hoy:\n\n`;
-      mensaje += `💰 Total efectivo: $${data.total_efectivo?.toLocaleString('es-CL') || 0}\n\n`;
-      
-      mensaje += `🛒 Ventas en efectivo: $${data.total_ventas_efectivo?.toLocaleString('es-CL') || 0} (${data.cantidad_ventas_efectivo || 0} ventas)\n`;
-      mensaje += `📝 Ingresos manuales: $${data.total_ingresos_manuales?.toLocaleString('es-CL') || 0} (${data.cantidad_ingresos_manuales || 0})\n`;
-      
-      if (data.cantidad_ingresos_manuales > 0) {
-        mensaje += `\n📋 Detalle ingresos manuales:\n`;
-        data.detalle_manuales.forEach(ingreso => {
-          mensaje += `• $${ingreso.monto?.toLocaleString('es-CL')} - ${ingreso.concepto} (${ingreso.hora})\n`;
-        });
-      }
-
-      addMessage(mensaje);
-    } catch (error) {
-      addMessage('❌ No pude obtener el ingreso.');
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenCajaMenu(), 1500);
-    }
-  };
-
-  const handleDineroRetirado = async () => {
-    setIsLoading(true);
-    try {
-      const hoy = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/dinero-retirado?fecha=${hoy}`);
-      const data = await response.json();
-
-      let mensaje = `💸 Retiros de caja:\n\n`;
-      
-      if (data.total_dia > 0) {
-        mensaje += `📅 Retiros de hoy: $${data.total_dia?.toLocaleString('es-CL')}\n`;
-        mensaje += `📊 Acumulado anterior: $${data.total_acumulado_anterior?.toLocaleString('es-CL')}\n\n`;
-        
-        mensaje += `📝 Detalle de hoy:\n`;
-        data.retiros_dia.forEach((retiro, index) => {
-          mensaje += `${index + 1}. $${retiro.monto?.toLocaleString('es-CL')} - ${retiro.motivo} (${retiro.hora})\n`;
-        });
+      if (data && !data.error) {
+        addMessage(
+          `💰 Ganancia del día (${fecha}):\n\n` +
+          `📊 Total ventas: $${data.total_ventas.toLocaleString('es-CL')}\n` +
+          `🛒 Cantidad de ventas: ${data.cantidad_ventas}`
+        );
       } else {
-        mensaje += `✅ No hay retiros hoy\n`;
-        if (data.total_acumulado_anterior > 0) {
-          mensaje += `📊 Total acumulado: $${data.total_acumulado_anterior?.toLocaleString('es-CL')}`;
-        }
+        addMessage('❌ No hay ganancias para esa fecha.');
       }
-
-      addMessage(mensaje);
     } catch (error) {
-      addMessage('❌ No pude obtener los retiros.');
+      addMessage('❌ No pude obtener esa info.');
     } finally {
       setIsLoading(false);
       setTimeout(() => showResumenCajaMenu(), 1500);
@@ -316,16 +258,33 @@ const ChatbotWidget = () => {
   };
 
   const handleTotalVendido = async () => {
+    const fecha = conversationState.fecha || new Date().toISOString().split('T')[0];
     setIsLoading(true);
     try {
-      const hoy = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/total-vendido?fecha=${hoy}`);
+      const response = await fetch(`/api/total-vendido?fecha=${fecha}`);
       const data = await response.json();
 
-      addMessage(
-        `🧮 Total vendido hoy:\n\n` +
-        `$${data.monto_total?.toLocaleString('es-CL') || 0}`
-      );
+      if (data && !data.error) {
+        let mensaje = `🧮 Total vendido (${fecha}):\n\n`;
+        mensaje += `📦 Total productos: ${data.cantidad_total} unidades\n\n`;
+        
+        if (data.categorias && data.categorias.length > 0) {
+          mensaje += `📋 Desglose por categorías:\n`;
+          data.categorias.forEach((cat, index) => {
+            mensaje += `${index + 1}. ${cat.nombre_formateado}: ${cat.cantidad} unidades\n`;
+          });
+          
+          if (data.resumen) {
+            mensaje += `\n🏆 Más vendido: ${data.resumen.categoria_mas_vendida}`;
+          }
+        } else {
+          mensaje += `📋 No hay ventas registradas para esta fecha`;
+        }
+
+        addMessage(mensaje);
+      } else {
+        addMessage('❌ No hay ventas para esa fecha.');
+      }
     } catch (error) {
       addMessage('❌ No pude obtener las ventas.');
     } finally {
@@ -354,20 +313,41 @@ const ChatbotWidget = () => {
   };
 
   const handleMasVendido = async () => {
+    const fecha = conversationState.fecha || new Date().toISOString().split('T')[0];
     setIsLoading(true);
     try {
-      const hoy = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/modelo-mas-vendido?fecha=${hoy}`);
+      const response = await fetch(`/api/modelo-mas-vendido?fecha=${fecha}`);
       const data = await response.json();
 
-      if (data && data.nombre) {
-        addMessage(
-          `🏆 Más vendido hoy:\n\n` +
-          `${data.nombre}\n` +
-          `(${data.cantidad_vendida} vendidos)`
-        );
+      if (data && !data.error) {
+        let mensaje = `🏆 Modelo más vendido (${fecha}):\n\n`;
+        
+        if (data.hay_empate) {
+          mensaje += `🤝 ¡Hay un empate!\n\n`;
+          mensaje += `Varios modelos vendieron ${data.cantidad_vendida} unidades:\n\n`;
+          
+          if (data.modelos_empate && data.modelos_empate.length > 0) {
+            data.modelos_empate.forEach((modelo, index) => {
+              mensaje += `${index + 1}. ${modelo.nombre} (${modelo.tipo_prenda})\n`;
+            });
+          }
+          
+          mensaje += `\n📊 No hay un modelo único más vendido hoy.`;
+        } else if (data.nombre) {
+          mensaje += `🎉 El modelo más vendido es:\n\n`;
+          mensaje += `✨ ${data.nombre}\n`;
+          if (data.diseno && data.diseno !== 'Diseño clásico') {
+            mensaje += `🎨 ${data.diseno}\n`;
+          }
+          mensaje += `📦 ${data.tipo_prenda}\n`;
+          mensaje += `🔢 ${data.cantidad_vendida} unidades vendidas`;
+        } else {
+          mensaje += `📋 ${data.mensaje || 'No hay ventas registradas para esta fecha'}`;
+        }
+
+        addMessage(mensaje);
       } else {
-        addMessage('❌ No hay ventas hoy.');
+        addMessage('❌ No hay ventas para esa fecha.');
       }
     } catch (error) {
       addMessage('❌ No pude obtener esa info.');
@@ -377,18 +357,146 @@ const ChatbotWidget = () => {
     }
   };
 
+  const handleRegistrarIngreso = () => {
+    setConversationState({ waitingFor: 'ingreso-monto' });
+    addMessage('💰 Escribe el monto del ingreso (ejemplo: 5000):');
+  };
+
+  const handleRegistrarRetiro = () => {
+    setConversationState({ waitingFor: 'retiro-monto' });
+    addMessage('💸 Escribe el monto del retiro (ejemplo: 2000):');
+  };
+
+  const handleIngresoInput = async (input) => {
+    const monto = parseInt(input);
+    
+    if (isNaN(monto) || monto <= 0) {
+      addMessage('❌ Monto inválido. Escribe un número mayor a 0 (ejemplo: 5000)');
+      return;
+    }
+
+    setConversationState({ waitingFor: 'ingreso-concepto', monto: monto });
+    addMessage(`💰 Ingreso de $${monto.toLocaleString('es-CL')}\n\n📝 Ahora escribe el concepto (ejemplo: pago cliente, arriendo, etc.):`);
+  };
+
+  const handleRetiroInput = async (input) => {
+    const monto = parseInt(input);
+    
+    if (isNaN(monto) || monto <= 0) {
+      addMessage('❌ Monto inválido. Escribe un número mayor a 0 (ejemplo: 2000)');
+      return;
+    }
+
+    setConversationState({ waitingFor: 'retiro-concepto', monto: monto });
+    addMessage(`💸 Retiro de $${monto.toLocaleString('es-CL')}\n\n📝 Ahora escribe el motivo (ejemplo: compra insumos, gastos, etc.):`);
+  };
+
+  const handleIngresoConcepto = async (concepto) => {
+    const monto = conversationState.monto;
+    
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/registrar-ingreso', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          monto: monto,
+          concepto: concepto
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        addMessage(
+          `✅ Ingreso registrado exitosamente:\n\n` +
+          `💰 Monto: $${monto.toLocaleString('es-CL')}\n` +
+          `📝 Concepto: ${concepto}\n` +
+          `🕐 Hora: ${data.ingreso.hora}\n\n` +
+          `📋 El ingreso ha sido agregado al resumen de caja.`
+        );
+      } else {
+        addMessage(`❌ Error: ${data.error}`);
+      }
+    } catch (error) {
+      addMessage('❌ No pude registrar el ingreso.');
+    } finally {
+      setIsLoading(false);
+      setConversationState({});
+      setTimeout(() => showResumenCajaMenu(), 2000);
+    }
+  };
+
+  const handleRetiroConcepto = async (concepto) => {
+    const monto = conversationState.monto;
+    
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/registrar-retiro', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          monto: monto,
+          concepto: concepto
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        addMessage(
+          `✅ Retiro registrado exitosamente:\n\n` +
+          `💸 Monto: $${monto.toLocaleString('es-CL')}\n` +
+          `📝 Motivo: ${concepto}\n` +
+          `🕐 Hora: ${data.retiro.hora}\n\n` +
+          `📋 El retiro ha sido descontado de la caja.`
+        );
+      } else {
+        addMessage(`❌ Error: ${data.error}`);
+      }
+    } catch (error) {
+      addMessage('❌ No pude registrar el retiro.');
+    } finally {
+      setIsLoading(false);
+      setConversationState({});
+      setTimeout(() => showResumenCajaMenu(), 2000);
+    }
+  };
+
   const handleFechaHoy = () => {
     const hoy = new Date();
     const fechaParaAPI = hoy.toISOString().split('T')[0]; // YYYY-MM-DD
     const fechaFormateada = `${String(hoy.getDate()).padStart(2, '0')}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${hoy.getFullYear()}`; // DD-MM-YYYY
     
+    const nextAction = conversationState.nextAction;
+    
     setConversationState({ fecha: fechaParaAPI });
     addMessage(`📅 Mostrando resumen de hoy (${fechaFormateada})`);
-    setTimeout(() => showResumenOpciones(), 1000);
+    
+    // Ejecutar la acción guardada
+    setTimeout(() => {
+      if (nextAction === 'ganancia-dia') {
+        handleGananciaDiaConFecha();
+      } else if (nextAction === 'ingreso-caja') {
+        handleIngresoCajaConFecha();
+      } else if (nextAction === 'dinero-retirado') {
+        handleDineroRetiradoConFecha();
+      } else {
+        // Si no hay acción guardada, mostrar menú de opciones
+        showResumenOpciones();
+      }
+    }, 1000);
   };
 
   const handleOtraFecha = () => {
-    setConversationState({ waitingFor: 'fecha-input' });
+    setConversationState({ 
+      waitingFor: 'fecha-input',
+      nextAction: conversationState.nextAction 
+    });
     addMessage('📆 Escribe la fecha (formato: DD-MM-YYYY, ejemplo: 15-01-2024):');
   };
 
@@ -424,32 +532,24 @@ const ChatbotWidget = () => {
       return;
     }
 
+    const nextAction = conversationState.nextAction;
+
     setConversationState({ fecha: fechaParaAPI });
     addMessage(`📆 Mostrando resumen de ${fechaInput}`);
-    setTimeout(() => showResumenOpciones(), 1000);
-  };
-
-  const handleGananciaDiaConFecha = async () => {
-    setIsLoading(true);
-    try {
-      const fecha = conversationState.fecha || new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/ganancia-dia?fecha=${fecha}`);
-      const data = await response.json();
-
-      const esHoy = fecha === new Date().toISOString().split('T')[0];
-      const diaTexto = esHoy ? 'hoy' : `el ${fecha}`;
-
-      addMessage(
-        `✨ Ganancia de ${diaTexto}:\n\n` +
-        `$${data.total_ventas?.toLocaleString('es-CL') || 0}\n\n` +
-        `💰 Total de ${data.cantidad_ventas || 0} ventas`
-      );
-    } catch (error) {
-      addMessage('❌ No pude calcular la ganancia.');
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenCajaMenu(), 1500);
-    }
+    
+    // Ejecutar la acción guardada
+    setTimeout(() => {
+      if (nextAction === 'ganancia-dia') {
+        handleGananciaDiaConFecha();
+      } else if (nextAction === 'ingreso-caja') {
+        handleIngresoCajaConFecha();
+      } else if (nextAction === 'dinero-retirado') {
+        handleDineroRetiradoConFecha();
+      } else {
+        // Si no hay acción guardada, mostrar menú de opciones
+        showResumenOpciones();
+      }
+    }, 1000);
   };
 
   const handleIngresoCajaConFecha = async () => {
@@ -468,11 +568,14 @@ const ChatbotWidget = () => {
       mensaje += `🛒 Ventas en efectivo: $${data.total_ventas_efectivo?.toLocaleString('es-CL') || 0} (${data.cantidad_ventas_efectivo || 0} ventas)\n`;
       mensaje += `📝 Ingresos manuales: $${data.total_ingresos_manuales?.toLocaleString('es-CL') || 0} (${data.cantidad_ingresos_manuales || 0})\n`;
       
-      if (data.cantidad_ingresos_manuales > 0) {
+      // Mostrar detalle de ingresos manuales
+      if (data.cantidad_ingresos_manuales > 0 && data.detalle_manuales) {
         mensaje += `\n📋 Detalle ingresos manuales:\n`;
         data.detalle_manuales.forEach(ingreso => {
           mensaje += `• $${ingreso.monto?.toLocaleString('es-CL')} - ${ingreso.concepto} (${ingreso.hora})\n`;
         });
+      } else if (data.cantidad_ingresos_manuales === 0) {
+        mensaje += `\n📋 No hubo ingresos manuales ${diaTexto}\n`;
       }
 
       addMessage(mensaje);
@@ -497,10 +600,11 @@ const ChatbotWidget = () => {
       let mensaje = `💸 Retiros de caja ${diaTexto}:\n\n`;
       
       if (data.total_dia > 0) {
-        mensaje += `📅 Retiros de ${diaTexto}: $${data.total_dia?.toLocaleString('es-CL')}\n`;
-        mensaje += `📊 Acumulado anterior: $${data.total_acumulado_anterior?.toLocaleString('es-CL')}\n\n`;
-        
-        mensaje += `📝 Detalle de ${diaTexto}:\n`;
+        mensaje += `📅 Retiros ${diaTexto}: $${data.total_dia?.toLocaleString('es-CL')}\n`;
+        if (data.total_acumulado_anterior > 0) {
+          mensaje += `📊 Acumulado anterior: $${data.total_acumulado_anterior?.toLocaleString('es-CL')}\n`;
+        }
+        mensaje += `\n📝 Detalle ${diaTexto}:\n`;
         data.retiros_dia.forEach((retiro, index) => {
           mensaje += `${index + 1}. $${retiro.monto?.toLocaleString('es-CL')} - ${retiro.motivo} (${retiro.hora})\n`;
         });
@@ -520,12 +624,31 @@ const ChatbotWidget = () => {
     }
   };
 
+  const handleBorrarChat = () => {
+    // Limpiar todo el estado
+    setMessages([]);
+    setCurrentMenu('main');
+    setConversationState({});
+    setIsLoading(false);
+    setInputValue('');
+    
+    // Mostrar mensaje de confirmación y reiniciar
+    setTimeout(() => {
+      addMessage('✨ Chat borrado exitosamente. ¡Empecemos de nuevo!', true);
+      setTimeout(() => {
+        showMainMenu();
+      }, 1500);
+    }, 500);
+  };
+
   const handleOptionClick = (optionId) => {
     // Menú principal
     if (optionId === 'inventario') {
       showInventoryMenu();
     } else if (optionId === 'resumen') {
       showResumenMenu();
+    } else if (optionId === 'borrar-chat') {
+      handleBorrarChat();
     } else if (optionId === 'volver-main') {
       showMainMenu();
     } 
@@ -555,13 +678,25 @@ const ChatbotWidget = () => {
     } else if (optionId === 'volver-resumen') {
       showResumenMenu();
     }
-    // Caja - Usar handlers con fecha dinámica
-    else if (optionId === 'ganancia-dia') {
-      handleGananciaDiaConFecha();
-    } else if (optionId === 'ingreso-caja') {
-      handleIngresoCajaConFecha();
-    } else if (optionId === 'dinero-retirado') {
-      handleDineroRetiradoConFecha();
+    // Caja - Primero preguntar por fecha si no está definida
+    else if (optionId === 'ganancia-dia' || optionId === 'ingreso-caja' || optionId === 'dinero-retirado') {
+      if (!conversationState.fecha) {
+        // Guardar la opción que quiere ver y preguntar por fecha
+        setConversationState({ 
+          waitingFor: 'resumen-fecha',
+          nextAction: optionId 
+        });
+        showResumenMenu();
+      } else {
+        // Si ya hay fecha, ejecutar la acción directamente
+        if (optionId === 'ganancia-dia') {
+          handleGananciaDiaConFecha();
+        } else if (optionId === 'ingreso-caja') {
+          handleIngresoCajaConFecha();
+        } else if (optionId === 'dinero-retirado') {
+          handleDineroRetiradoConFecha();
+        }
+      }
     }
     // Productos
     else if (optionId === 'total-vendido') {
@@ -695,6 +830,15 @@ const ChatbotWidget = () => {
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 disabled={isLoading}
               />
+              <button
+                onClick={handleBorrarChat}
+                disabled={isLoading}
+                className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-3 py-2 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                aria-label="Borrar chat"
+                title="Borrar todo el historial del chat"
+              >
+                <Trash2 size={20} />
+              </button>
               <button
                 onClick={handleSendMessage}
                 disabled={isLoading || !inputValue.trim()}
