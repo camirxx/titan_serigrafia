@@ -76,7 +76,7 @@ export async function exportToExcel(data: Record<string, unknown>[], filename: s
     // Descargar
     XLSX.writeFile(wb, `${filename}.xlsx`);
   } catch (error) {
-    console.error('Error al exportar a Excel:', error);
+    console.error('Error al exportar a Excel:', error as Error);
     // Fallback a CSV si hay error
     console.warn('Exportando como CSV en su lugar');
     exportToCSV(data, filename);
