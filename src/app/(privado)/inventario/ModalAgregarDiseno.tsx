@@ -114,7 +114,7 @@ export default function ModalAgregarDiseno({
           productosACrear.push({
             diseno_id: disenoId,
             tipo_prenda_id: tipoId,
-            color_polera_id: colorId,
+            color_id: colorId,
             tienda_id: TIENDA_CENTRAL, // 🔥 FIJO
             activo: true,
           });
