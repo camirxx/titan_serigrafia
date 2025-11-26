@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseApi';
 
-export async function GET(request) {
+export async function GET() {
   try {
     // Usar la misma estructura que el inventario
     const { data: productos, error } = await supabase
