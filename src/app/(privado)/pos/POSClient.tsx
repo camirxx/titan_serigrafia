@@ -1236,6 +1236,45 @@ function PanelCaja({ saldoInicial, totalDia, ventas, sesionAbierta, denominacion
               <span>Retirar</span>
             </button>
           </div>
+
+          {/* Detalle de denominaciones en caja */}
+          <div className="mt-6 border-t border-gray-200 pt-6">
+            <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <span className="text-xl">💵</span>
+              Detalle de Efectivo en Caja
+            </h4>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {Object.keys(denominacionesReales).length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No hay efectivo registrado en caja</p>
+              ) : (
+                Object.entries(denominacionesReales)
+                  .sort(([a], [b]) => parseInt(b) - parseInt(a))
+                  .map(([denom, cantidad]) => (
+                    <div key={denom} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-gray-800 min-w-[80px]">
+                          ${formatNumber(parseInt(denom))}
+                        </span>
+                        <span className="text-gray-600">
+                          {cantidad} {cantidad === 1 ? 'billete' : 'billetes'}
+                        </span>
+                      </div>
+                      <span className="font-bold text-green-700">
+                        ${formatNumber(parseInt(denom) * cantidad)}
+                      </span>
+                    </div>
+                  ))
+              )}
+              <div className="mt-4 pt-4 border-t-2 border-gray-300">
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-bold text-gray-800">Total Efectivo:</span>
+                  <span className="text-xl font-bold text-green-700">
+                    ${formatNumber(Object.entries(denominacionesReales).reduce((sum, [denom, cantidad]) => sum + (parseInt(denom) * cantidad), 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-2xl p-8 text-white">
