@@ -18,45 +18,9 @@ type Variante = {
   stock_actual: number;
 };
 
-type VarianteAdminRow = {
-  producto_id: number;
-  diseno: string | null;
-  tipo_prenda: string | null;
-  color: string | null;
-};
-
-type VarianteDetalleRow = {
-  variante_id: number;
-  producto_id: number;
-  talla: string | null;
-  stock_actual: number | null;
-};
-
-const isVarianteAdminArray = (rows: unknown): rows is VarianteAdminRow[] =>
-  Array.isArray(rows) &&
-  rows.every((item) => {
-    if (!item || typeof item !== "object") return false;
-    const row = item as Record<string, unknown>;
-    return (
-      typeof row.producto_id === "number" &&
-      (typeof row.diseno === "string" || row.diseno === null) &&
-      (typeof row.tipo_prenda === "string" || row.tipo_prenda === null) &&
-      (typeof row.color === "string" || row.color === null)
-    );
-  });
-
-const isVarianteDetalleArray = (rows: unknown): rows is VarianteDetalleRow[] =>
-  Array.isArray(rows) &&
-  rows.every((item) => {
-    if (!item || typeof item !== "object") return false;
-    const row = item as Record<string, unknown>;
-    return (
-      typeof row.variante_id === "number" &&
-      typeof row.producto_id === "number" &&
-      (typeof row.talla === "string" || row.talla === null) &&
-      (typeof row.stock_actual === "number" || row.stock_actual === null)
-    );
-  });
+// Tipos eliminados porque ya no se usan (se cambió a consulta directa)
+// type VarianteAdminRow = { ... }
+// type VarianteDetalleRow = { ... }
 
 type ModalAgregarStockProps = {
   isOpen: boolean;
@@ -98,25 +62,39 @@ export default function ModalAgregarStock({
   // ----- CARGA DE PRODUCTOS (memorizada) -----
   const cargarProductos = useCallback(async () => {
     try {
+      // Consulta directa a productos sin filtrar por tienda específica
       const { data, error: err } = await supabase
-        .from("variantes_admin_view")
-        .select("producto_id, diseno, tipo_prenda, color, producto_activo")
-        .eq("producto_activo", true)
-        .order("tipo_prenda", { ascending: true })
-        .order("diseno", { ascending: true });
+        .from("productos")
+        .select(`
+          id,
+          disenos!inner(nombre),
+          tipos_prenda!inner(nombre),
+          colores!inner(nombre),
+          activo
+        `)
+        .eq("activo", true)
+        .order("id", { ascending: true });
 
       if (err) throw err;
 
       const productosUnicos = new Map<number, Producto>();
-      const rows = isVarianteAdminArray(data) ? data : [];
 
-      rows.forEach((v) => {
-        if (!productosUnicos.has(v.producto_id)) {
-          productosUnicos.set(v.producto_id, {
-            producto_id: v.producto_id,
-            diseno: v.diseno || "Sin diseño",
-            tipo_prenda: v.tipo_prenda || "Sin tipo",
-            color: v.color || "Sin color",
+      data?.forEach((p: { 
+  id: number; 
+  disenos: { nombre: string } | { nombre: string }[]; 
+  tipos_prenda: { nombre: string } | { nombre: string }[]; 
+  colores: { nombre: string } | { nombre: string }[]; 
+}) => {
+        const diseno = Array.isArray(p.disenos) ? p.disenos[0]?.nombre : (p.disenos as { nombre: string }).nombre;
+        const tipo = Array.isArray(p.tipos_prenda) ? p.tipos_prenda[0]?.nombre : (p.tipos_prenda as { nombre: string }).nombre;
+        const color = Array.isArray(p.colores) ? p.colores[0]?.nombre : (p.colores as { nombre: string }).nombre;
+
+        if (!productosUnicos.has(p.id)) {
+          productosUnicos.set(p.id, {
+            producto_id: p.id,
+            diseno: diseno || "Sin diseño",
+            tipo_prenda: tipo || "Sin tipo",
+            color: color || "Sin color",
           });
         }
       });
@@ -134,18 +112,17 @@ export default function ModalAgregarStock({
     async (productoId: number) => {
       setError(null);
       try {
+        // Consulta directa a variantes sin usar la vista
         const { data, error } = await supabase
-          .from("variantes_admin_view")
-          .select("variante_id, producto_id, talla, stock_actual")
+          .from("variantes")
+          .select("id, producto_id, talla, stock_actual")
           .eq("producto_id", productoId)
-          .order("variante_id", { ascending: true })
-          .range(0, 500);
+          .order("id", { ascending: true });
 
         if (error) throw error;
 
-        const rows = isVarianteDetalleArray(data) ? data : [];
-        const vs: Variante[] = rows.map((r) => ({
-          id: r.variante_id,
+        const vs: Variante[] = (data || []).map((r: { id: number; producto_id: number; talla: string; stock_actual: number }) => ({
+          id: r.id,
           producto_id: r.producto_id,
           talla: (r.talla ?? "").trim().toUpperCase(),
           stock_actual: Number(r.stock_actual ?? 0),
@@ -354,7 +331,7 @@ export default function ModalAgregarStock({
             </div>
 
             {mostrarLista && busqueda && productosFiltrados.length > 0 && (
-              <div className="absolute z-20 w-full mt-2 bg-white border-2 border-indigo-300 rounded-xl shadow-2xl max-h-80 overflow-y-auto">
+              <div className="absolute z-20 w-full mt-2 bg-white border-2 border-indigo-300 rounded-xl shadow-2xl max-h-96 overflow-y-auto">
                 <div className="p-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-indigo-200 sticky top-0">
                   <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">
                     {productosFiltrados.length} productos encontrados

@@ -45,7 +45,7 @@ export default function POSModerno() {
   const [totalDia, setTotalDia] = useState(0)
   const [saldoInicialCaja, setSaldoInicialCaja] = useState(0)
   const [sesionCajaId, setSesionCajaId] = useState<number | null>(null)
-  const [tiendaId, setTiendaId] = useState<number | null>(null)
+  // const [tiendaId, setTiendaId] = useState<number | null>(null) // Eliminado por no usarse
   
   const [tipos, setTipos] = useState<string[]>([])
   const [disenos, setDisenos] = useState<string[]>([])
@@ -182,39 +182,29 @@ const cargarVentasDelDia = async () => {
   }
 }
   const cargarSesionCaja = async () => {
-    try {
-      const { data: u } = await supabase.auth.getUser()
-      const uid = u.user?.id
-      if (!uid) return
-      
-      const { data: usr, error: eUsr } = await supabase
-        .from('usuarios')
-        .select('tienda_id')
-        .eq('id', uid)
-        .maybeSingle()
-      if (eUsr) throw eUsr
-      
-      const tId = usr?.tienda_id as number | null
-      setTiendaId(tId ?? null)
-      
-      if (!tId) return
-      
-      const { data: ses, error: eSes } = await supabase
-        .from('v_caja_sesion_abierta')
-        .select('id, saldo_inicial')
-        .eq('tienda_id', tId)
-        .maybeSingle()
-      
-      if (eSes) throw eSes
-      
-      setSesionCajaId(ses?.id ?? null)
-      setSaldoInicialCaja(Number(ses?.saldo_inicial || 0))
-    } catch (err) {
-      console.warn('No se pudo cargar sesión de caja', err)
-      setSesionCajaId(null)
-      setSaldoInicialCaja(0)
-    }
+  try {
+    // Ya no necesitamos TIENDA_CENTRAL porque usamos el valor directamente en la consulta
+
+    // Ya no necesitamos leer tienda_id del usuario
+    // setTiendaId(TIENDA_CENTRAL) // Eliminado por no usarse
+
+    const { data: ses, error: eSes } = await supabase
+      .from('v_caja_sesion_abierta')
+      .select('id, saldo_inicial')
+      .eq('tienda_id', 1)
+      .maybeSingle()
+
+    if (eSes) throw eSes
+
+    setSesionCajaId(ses?.id ?? null)
+    setSaldoInicialCaja(Number(ses?.saldo_inicial || 0))
+
+  } catch (err) {
+    console.warn('No se pudo cargar sesión de caja', err)
+    setSesionCajaId(null)
+    setSaldoInicialCaja(0)
   }
+}
 
   const registrarIngresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
     if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
@@ -298,37 +288,45 @@ const cargarVentasDelDia = async () => {
   }
 
   const iniciarVenta = async () => {
-    if (!tiendaId) {
-      setError('No se pudo determinar tu tienda. Verifica tu usuario.')
-      return
-    }
-    
     setPaso(1)
     setError(null)
     
     try {
-      console.log('🔍 Consultando variantes para tienda:', tiendaId)
+      console.log('🔍 Consultando variantes disponibles en inventario')
       
-      const { data, error } = await supabase
+      // OPCIÓN 1: Intentar con variantes_admin_view
+      let data;
+      
+      const result1 = await supabase
         .from('variantes_admin_view')
-        .select('tipo_prenda, stock_actual')
-        .eq('tienda_id', tiendaId)
+        .select('tipo_prenda, stock_actual, diseno, color, talla, variante_id, producto_activo')
+        .eq('tienda_id', 1)
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
-        .not('stock_actual', 'is', null)
 
-      console.log('📊 Respuesta Supabase:', { data, error })
+      console.log('📊 Resultado variantes_admin_view:', result1)
 
-      if (error) {
-        console.error('❌ Error de Supabase:', JSON.stringify(error, null, 2))
-        throw error
+      if (result1.error) {
+        console.log('⚠️ Error en view, intentando con tablas directas...')
+        
+
+      } else {
+        data = result1.data
       }
 
-      const tiposUnicos = [...new Set(data?.map(d => d.tipo_prenda).filter(Boolean))]
+      console.log('✅ Datos finales:', data)
+
+      if (!data || data.length === 0) {
+        setError('No hay productos disponibles con stock en el inventario. Verifica que hayas agregado productos con stock.')
+        setPaso(0)
+        return
+      }
+
+      const tiposUnicos = [...new Set(data?.map((d: { tipo_prenda: string }) => d.tipo_prenda).filter(Boolean))]
       console.log('✅ Tipos únicos encontrados:', tiposUnicos)
       
       if (tiposUnicos.length === 0) {
-        setError('No hay productos disponibles con stock en tu tienda')
+        setError('No hay productos disponibles con stock en el inventario')
         setPaso(0)
         return
       }
@@ -341,7 +339,6 @@ const cargarVentasDelDia = async () => {
       setPaso(0)
     }
   }
-
   const seleccionarTipo = async (tipo: string) => {
     setTipoSel(tipo)
     try {
@@ -349,7 +346,7 @@ const cargarVentasDelDia = async () => {
         .from('variantes_admin_view')
         .select('diseno, stock_actual')
         .eq('tipo_prenda', tipo)
-        .eq('tienda_id', tiendaId as number)
+        .eq('tienda_id', 1)
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
         .not('stock_actual', 'is', null)
@@ -372,30 +369,34 @@ const cargarVentasDelDia = async () => {
   }
 
   const seleccionarDiseno = async (diseno: string) => {
-    setDisenoSel(diseno)
-    setError(null)
+  setDisenoSel(diseno)
+  setError(null)
+
     try {
       const { data, error } = await supabase
         .from('variantes_admin_view')
         .select('color, stock_actual')
         .eq('tipo_prenda', tipoSel)
         .eq('diseno', diseno)
-        .eq('tienda_id', tiendaId as number)
+        .eq('tienda_id', 1)                // 🔥 Forzamos Inventario Central
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
         .not('stock_actual', 'is', null)
 
       if (error) throw error
 
-      const coloresUnicos = [...new Set(data?.map(d => d.color).filter(Boolean))]
-      
+      const coloresUnicos = [
+        ...new Set(data?.map(d => d.color).filter(Boolean))
+      ]
+
       if (coloresUnicos.length === 0) {
         setError('No hay colores disponibles para este diseño')
         return
       }
-      
+
       setColores(coloresUnicos)
       setPaso(3)
+
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error al cargar colores disponibles'))
     }
@@ -409,7 +410,7 @@ const cargarVentasDelDia = async () => {
         .eq('tipo_prenda', tipoSel)
         .eq('diseno', disenoSel)
         .eq('color', color)
-        .eq('tienda_id', tiendaId as number)
+        .eq('tienda_id', 1)
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
         .order('talla')

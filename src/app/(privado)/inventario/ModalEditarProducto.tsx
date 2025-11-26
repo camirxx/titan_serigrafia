@@ -31,9 +31,34 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
   const [tipoPrenda, setTipoPrenda] = useState("");
   const [color, setColor] = useState("");
   const [activo, setActivo] = useState(true);
+  const [tiendaId, setTiendaId] = useState<number>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tallasStock, setTallasStock] = useState<{ [key: string]: number }>({});
+  const [mostrarConfirmacionEliminar, setMostrarConfirmacionEliminar] = useState(false);
+  const [tiendas, setTiendas] = useState<{ id: number; nombre: string }[]>([]);
+
+  // Cargar tiendas disponibles
+  useEffect(() => {
+    const cargarTiendas = async () => {
+      try {
+        const supabase = supabaseBrowser();
+        const { data, error } = await supabase
+          .from("tiendas")
+          .select("id, nombre")
+          .order("id");
+
+        if (error) throw error;
+        setTiendas(data || []);
+      } catch (err) {
+        console.error("Error cargando tiendas:", err);
+      }
+    };
+
+    if (isOpen) {
+      cargarTiendas();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (producto) {
@@ -41,6 +66,26 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
       setTipoPrenda(producto.tipo_prenda);
       setColor(producto.color);
       setActivo(producto.activo);
+      
+      // Cargar tienda_id actual del producto
+      const cargarTiendaProducto = async () => {
+        try {
+          const supabase = supabaseBrowser();
+          const { data, error } = await supabase
+            .from("productos")
+            .select("tienda_id")
+            .eq("id", producto.producto_id)
+            .single();
+
+          if (error) throw error;
+          setTiendaId(data?.tienda_id || 1);
+        } catch (err) {
+          console.error("Error cargando tienda del producto:", err);
+          setTiendaId(1);
+        }
+      };
+
+      cargarTiendaProducto();
       
       // Cargar stock real solo de las variantes de este producto específico
       const cargarStockReal = async () => {
@@ -100,6 +145,51 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
     }
   }, [producto]);
 
+  const handleEliminar = async () => {
+    if (!producto) return;
+    
+    setLoading(true);
+    setError(null);
+
+    try {
+      const supabase = supabaseBrowser();
+
+      // 1. Eliminar primero las variantes del producto
+      const { error: errorVariantes } = await supabase
+        .from("variantes")
+        .delete()
+        .eq("producto_id", producto.producto_id);
+
+      if (errorVariantes) {
+        console.error("Error eliminando variantes:", errorVariantes);
+        throw errorVariantes;
+      }
+
+      // 2. Eliminar el producto
+      const { error: errorProducto } = await supabase
+        .from("productos")
+        .delete()
+        .eq("id", producto.producto_id);
+
+      if (errorProducto) {
+        console.error("Error eliminando producto:", errorProducto);
+        throw errorProducto;
+      }
+
+      // 3. Cerrar el modal de confirmación
+      setMostrarConfirmacionEliminar(false);
+      
+      // 4. Notificar éxito y cerrar modal
+      onSuccess();
+      onClose();
+    } catch (err) {
+      console.error("Error al eliminar:", err);
+      setError(err instanceof Error ? err.message : "Error al eliminar producto");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGuardar = async () => {
     if (!producto) return;
     
@@ -109,12 +199,12 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
     try {
       const supabase = supabaseBrowser();
 
-      // 1. Actualizar solo el estado activo del producto
-      // (no actualizamos diseño, tipo, color porque son IDs en la BD)
+      // 1. Actualizar el estado activo y tienda_id del producto
       const { error: errorProducto } = await supabase
         .from("productos")
         .update({
           activo,
+          tienda_id: tiendaId,
         })
         .eq("id", producto.producto_id);
 
@@ -273,6 +363,25 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
                 </button>
               </div>
             </div>
+            <div>
+              <label className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-3">
+                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                Tienda
+              </label>
+              <select
+                value={tiendaId}
+                onChange={(e) => setTiendaId(Number(e.target.value))}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 outline-none font-medium"
+              >
+                {tiendas.map((tienda) => (
+                  <option key={tienda.id} value={tienda.id}>
+                    {tienda.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Stock por tallas */}
@@ -317,6 +426,13 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
               Cancelar
             </button>
             <button
+              onClick={() => setMostrarConfirmacionEliminar(true)}
+              disabled={loading}
+              className="px-6 py-4 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold rounded-xl hover:from-red-700 hover:to-red-800 shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              🗑️ Eliminar
+            </button>
+            <button
               onClick={handleGuardar}
               disabled={loading || !diseno || !tipoPrenda || !color}
               className="flex-1 py-4 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -326,6 +442,54 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
           </div>
         </div>
       </div>
+
+      {/* Modal de confirmación de eliminación */}
+      {mostrarConfirmacionEliminar && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full animate-slideUp">
+            <div className="p-8">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">¿Eliminar Producto?</h3>
+                <p className="text-gray-600">
+                  Esta acción eliminará permanentemente el producto <strong>{diseno} - {tipoPrenda} - {color}</strong> y todas sus variantes/tallas.
+                </p>
+                <p className="text-red-600 font-semibold mt-2">Esta acción no se puede deshacer.</p>
+              </div>
+
+              {error && (
+                <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 mb-6">
+                  <p className="text-red-700 font-semibold">⚠️ {error}</p>
+                </div>
+              )}
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => {
+                    setMostrarConfirmacionEliminar(false);
+                    setError(null);
+                  }}
+                  disabled={loading}
+                  className="flex-1 py-3 px-6 bg-white border-2 border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-100 transition-all duration-200 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleEliminar}
+                  disabled={loading}
+                  className="flex-1 py-3 px-6 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 disabled:opacity-50"
+                >
+                  {loading ? "Eliminando..." : "🗑️ Eliminar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

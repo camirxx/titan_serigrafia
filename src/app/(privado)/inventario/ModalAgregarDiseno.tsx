@@ -26,16 +26,14 @@ export default function ModalAgregarDiseno({
 
   // form
   const [nombreDiseno, setNombreDiseno] = useState("");
-  const [coloresSeleccionados, setColoresSeleccionados] = useState<number[]>(
-    []
-  );
+  const [coloresSeleccionados, setColoresSeleccionados] = useState<number[]>([]);
   const [tiposSeleccionados, setTiposSeleccionados] = useState<number[]>([]);
 
   // catálogos
   const [coloresDisponibles, setColoresDisponibles] = useState<Color[]>([]);
   const [tiposDisponibles, setTiposDisponibles] = useState<TipoPrenda[]>([]);
 
-  // --- Declarar cargarCatalogos ANTES y memorizado ---
+  // --- cargar catálogos ---
   const cargarCatalogos = useCallback(async () => {
     try {
       const { data: colores, error: e1 } = await supabase
@@ -58,7 +56,7 @@ export default function ModalAgregarDiseno({
     }
   }, [supabase]);
 
-  // --- Effect que reacciona a apertura del modal ---
+  // al abrir modal
   useEffect(() => {
     if (!isOpen) return;
     setOk(null);
@@ -76,19 +74,8 @@ export default function ModalAgregarDiseno({
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
 
-  // 👉 helper: obtiene tienda del usuario autenticado
-  const getTiendaIdActual = async (): Promise<number | null> => {
-    const { data: u } = await supabase.auth.getUser();
-    const uid = u.user?.id;
-    if (!uid) return null;
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("tienda_id")
-      .eq("id", uid)
-      .maybeSingle();
-    if (error) throw error;
-    return data?.tienda_id ?? null;
-  };
+  // 🔥 TIENDA FIJA = 1
+  const TIENDA_CENTRAL = 1;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,14 +97,7 @@ export default function ModalAgregarDiseno({
 
     setLoading(true);
     try {
-      // 0) tienda actual
-      const tiendaId = await getTiendaIdActual();
-      if (!tiendaId)
-        throw new Error(
-          "No se pudo determinar tu tienda. Verifica tu usuario.tienda_id."
-        );
-
-      // 1) UPSERT diseño por nombre
+      // 1) Upsert diseño
       const { data: disenoRow, error: eUpsert } = await supabase
         .from("disenos")
         .upsert({ nombre: nombreDiseno.trim() }, { onConflict: "nombre" })
@@ -126,14 +106,8 @@ export default function ModalAgregarDiseno({
       if (eUpsert) throw eUpsert;
       const disenoId = disenoRow.id as number;
 
-      // 2) Crear productos con tienda_id
-      const productosACrear: Array<{
-        diseno_id: number;
-        tipo_prenda_id: number;
-        color_polera_id: number;
-        tienda_id: number;
-        activo: boolean;
-      }> = [];
+      // 2) Crear productos (siempre tienda_id = 1)
+      const productosACrear = [];
 
       for (const tipoId of tiposSeleccionados) {
         for (const colorId of coloresSeleccionados) {
@@ -141,7 +115,7 @@ export default function ModalAgregarDiseno({
             diseno_id: disenoId,
             tipo_prenda_id: tipoId,
             color_polera_id: colorId,
-            tienda_id: tiendaId,
+            tienda_id: TIENDA_CENTRAL, // 🔥 FIJO
             activo: true,
           });
         }
@@ -151,16 +125,17 @@ export default function ModalAgregarDiseno({
         .from("productos")
         .insert(productosACrear)
         .select("id");
+
       if (eInsProd) throw eInsProd;
 
       const productoIds = (productosNew ?? []).map((p) => p.id as number);
       if (productoIds.length === 0) {
         throw new Error(
-          "No se obtuvieron IDs de productos (revisa RLS de SELECT en productos)."
+          "No se obtuvieron IDs de productos (verifica RLS de SELECT)."
         );
       }
 
-      // 3) Crear variantes para cada producto
+      // 3) variantes
       const tallas = ["S", "M", "L", "XL", "XXL", "XXXL"];
       const variantesACrear: {
         producto_id: number;
@@ -183,10 +158,11 @@ export default function ModalAgregarDiseno({
       const { error: eInsVar } = await supabase
         .from("variantes")
         .insert(variantesACrear);
+
       if (eInsVar) throw eInsVar;
 
       setOk("✅ Diseño y variantes creadas correctamente");
-      onSuccess(); // recarga inventario en el padre
+      onSuccess();
       limpiarFormulario();
       onClose();
     } catch (err: unknown) {
@@ -309,7 +285,8 @@ export default function ModalAgregarDiseno({
                 Se crearán: <b>{tiposSeleccionados.length}</b> ×{" "}
                 <b>{coloresSeleccionados.length}</b> ={" "}
                 <b>
-                  {tiposSeleccionados.length * coloresSeleccionados.length}{" "}
+                  {tiposSeleccionados.length *
+                    coloresSeleccionados.length}{" "}
                   productos
                 </b>{" "}
                 (cada uno con 6 tallas)
