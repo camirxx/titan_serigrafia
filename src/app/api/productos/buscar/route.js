@@ -13,7 +13,7 @@ export async function GET(request) {
       );
     }
 
-    // Usar la misma estructura que el inventario
+    // Usar la misma estructura que el inventario (la que funcionaba antes)
     const { data: productos, error } = await supabase
       .from("productos")
       .select(`
@@ -33,6 +33,8 @@ export async function GET(request) {
       );
     }
 
+    console.log(`📦 Productos base encontrados: ${productos?.length || 0}`);
+
     // Obtener todas las variantes para estos productos
     const productoIds = productos?.map(p => p.id) || [];
     const { data: variantes, error: errorVariantes } = await supabase
@@ -48,6 +50,17 @@ export async function GET(request) {
       );
     }
 
+    console.log(`📋 Variantes encontradas: ${variantes?.length || 0}`);
+    console.log(`🔍 IDs de productos buscados: [${productoIds.join(', ')}]`);
+    
+    // Mostrar algunas variantes de ejemplo
+    if (variantes && variantes.length > 0) {
+      console.log(`📊 Ejemplos de variantes:`);
+      variantes.slice(0, 3).forEach(v => {
+        console.log(`   - Producto ${v.producto_id}, Talla ${v.talla}, Stock ${v.stock_actual}`);
+      });
+    }
+
     // Transformar datos al formato que espera el chatbot
     const productosFormateados = [];
     
@@ -55,16 +68,26 @@ export async function GET(request) {
       const productoVariantes = variantes?.filter(v => v.producto_id === producto.id) || [];
       const stockTotal = productoVariantes.reduce((sum, v) => sum + (v.stock_actual || 0), 0);
       
-      // Filtrar por búsqueda (case-insensitive)
+      // Logging para depuración
+      console.log(`🔍 Producto: ${producto.disenos?.nombre} ${producto.tipos_prenda?.nombre} ${producto.colores?.nombre}`);
+      console.log(`📊 Variantes encontradas: ${productoVariantes.length}`);
+      console.log(`💰 Stock calculado: ${stockTotal}`);
+      productoVariantes.forEach(v => {
+        console.log(`   - Talla ${v.talla}: ${v.stock_actual} unidades`);
+      });
+      
+      // Filtrar por búsqueda (case-insensitive) - MEJORADO
       const termino = nombre.toLowerCase();
       const diseno = producto.disenos?.nombre || '';
       const tipo = producto.tipos_prenda?.nombre || '';
       const color = producto.colores?.nombre || '';
+      const nombreCompleto = `${diseno} ${tipo} ${color}`.toLowerCase();
       
       const coincideBusqueda = 
         diseno.toLowerCase().includes(termino) ||
         tipo.toLowerCase().includes(termino) ||
-        color.toLowerCase().includes(termino);
+        color.toLowerCase().includes(termino) ||
+        nombreCompleto.includes(termino);
       
       if (coincideBusqueda) {
         productosFormateados.push({
@@ -90,6 +113,8 @@ export async function GET(request) {
         });
       }
     });
+
+    console.log(`🔍 Búsqueda: "${nombre}" - Productos encontrados: ${productosFormateados.length}`);
 
     if (productosFormateados.length === 0) {
       return NextResponse.json(
