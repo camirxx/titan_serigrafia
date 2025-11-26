@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const { data, error } = await resend.emails.send({
-        from: 'Taller Serigrafía <noreply@titanserigrafia.cl>',
+        from: 'Taller Serigrafía <noreply@titanserigrafia.com>',
         to: [to],
         subject: subject || '🚨 ALERTA DE STOCK CRÍTICO - Taller',
         html: `
