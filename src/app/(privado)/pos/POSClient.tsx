@@ -85,78 +85,20 @@ export default function POSModerno() {
   const formatNumber = (num: number) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
   }
-
-  const cargarSesionCaja = useCallback(async () => {
-    try {
-      // Obtener el usuario actual
-      const { data: u, error: userError } = await supabase.auth.getUser()
-      if (userError || !u.user?.id) {
-        throw new Error('No se pudo obtener el usuario actual')
-      }
-      
-      // Obtener la tienda del usuario
-      const { data: usuario, error: userDataError } = await supabase
-        .from('usuarios')
-        .select('tienda_id')
-        .eq('id', u.user.id)
-        .single()
-      
-      if (userDataError || !usuario) {
-        throw new Error('No se pudo obtener la información de la tienda')
-      }
-      
-      // Asegurarnos de que tenemos un ID de tienda
-      if (!usuario.tienda_id) {
-        throw new Error('El usuario no tiene una tienda asignada')
-      }
-      
-      const tiendaId = usuario.tienda_id as number
-      setTiendaId(tiendaId)
-      
-      // Obtener la sesión de caja abierta para esta tienda
-      const { data: sesion, error: sesionError } = await supabase
-        .from('v_caja_sesion_abierta')
-        .select('id, saldo_inicial')
-        .eq('tienda_id', tiendaId)
-        .maybeSingle()
-      
-      if (sesionError) {
-        console.warn('No hay sesión de caja abierta o hubo un error:', sesionError)
-      }
-      
-      // Actualizar el estado con los datos de la sesión de caja
-      setSesionCajaId(sesion?.id ?? null)
-      setSaldoInicialCaja(Number(sesion?.saldo_inicial || 0))
-      
-      return tiendaId // Devolvemos el ID de la tienda para usarlo si es necesario
-    } catch (err) {
-      console.error('Error al cargar la sesión de caja:', err)
-      setError(getErrorMessage(err, 'Error al cargar la sesión de caja'))
-      setSesionCajaId(null)
-      setSaldoInicialCaja(0)
-      return null
-    }
-  }, [supabase, setTiendaId, setSesionCajaId, setSaldoInicialCaja, setError])
-
+  
   // --- FUNCIÓN CRÍTICA DE RECARGA DE INVENTARIO (NUEVA) ---
   const cargarInventarioPOS = useCallback(async () => {
-      // Verificar que tenemos un ID de tienda válido
-      const currentTiendaId = tiendaId || (await cargarSesionCaja())
-      
-      if (!currentTiendaId) {
-        setError('No se pudo determinar la tienda. Por favor, inicia sesión nuevamente.')
-        return false;
-      }
+      if (!tiendaId) return false;
       
       setError(null);
       
       try {
-        console.log('🔍 Recargando variantes para POS, tienda:', currentTiendaId)
+        console.log('🔍 Recargando variantes para POS, tienda:', tiendaId)
         
         const { data, error } = await supabase
           .from('variantes_admin_view')
           .select('tipo_prenda, stock_actual')
-          .eq('tienda_id', currentTiendaId)
+          .eq('tienda_id', tiendaId)
           .eq('producto_activo', true)
           // Mostrar todos los productos activos, incluso sin stock
           .not('stock_actual', 'is', null)
@@ -167,7 +109,7 @@ export default function POSModerno() {
         setTipos(tiposUnicos)
         
         if (tiposUnicos.length === 0) {
-          setError('No hay productos disponibles en tu tienda')
+          setError('No hay productos disponibles con stock en tu tienda')
           return false
         }
         
@@ -177,7 +119,7 @@ export default function POSModerno() {
         setError(getErrorMessage(err, 'Error al cargar el inventario del POS.'))
         return false
       }
-  }, [tiendaId, supabase, cargarSesionCaja, setError, setTipos])
+  }, [tiendaId, supabase])
   // -----------------------------------------------------------------
 
   useEffect(() => {
@@ -314,6 +256,40 @@ const cargarVentasDelDia = async () => {
     setError(getErrorMessage(err, 'Error al cargar ventas del día'))
   }
 }
+  const cargarSesionCaja = async () => {
+    try {
+      const { data: u } = await supabase.auth.getUser()
+      const uid = u.user?.id
+      if (!uid) return
+      
+      const { data: usr, error: eUsr } = await supabase
+        .from('usuarios')
+        .select('tienda_id')
+        .eq('id', uid)
+        .maybeSingle()
+      if (eUsr) throw eUsr
+      
+      const tId = usr?.tienda_id as number | null
+      setTiendaId(tId ?? null)
+      
+      if (!tId) return
+      
+      const { data: ses, error: eSes } = await supabase
+        .from('v_caja_sesion_abierta')
+        .select('id, saldo_inicial')
+        .eq('tienda_id', tId)
+        .maybeSingle()
+      
+      if (eSes) throw eSes
+      
+      setSesionCajaId(ses?.id ?? null)
+      setSaldoInicialCaja(Number(ses?.saldo_inicial || 0))
+    } catch (err) {
+      console.warn('No se pudo cargar sesión de caja', err)
+      setSesionCajaId(null)
+      setSaldoInicialCaja(0)
+    }
+  }
 
   const registrarIngresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
     if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
@@ -447,23 +423,15 @@ const cargarVentasDelDia = async () => {
 
   const seleccionarTipo = async (tipo: string) => {
     setTipoSel(tipo)
-    setError(null)
     try {
-      // Asegurarnos de tener un ID de tienda válido
-      const currentTiendaId = tiendaId || (await cargarSesionCaja())
-      if (!currentTiendaId) {
-        throw new Error('No se pudo determinar la tienda')
-      }
-
       const { data, error } = await supabase
         .from('variantes_admin_view')
         .select('diseno, stock_actual')
         .eq('tipo_prenda', tipo)
-        .eq('tienda_id', currentTiendaId)
+        .eq('tienda_id', tiendaId as number)
         .eq('producto_activo', true)
         // Mostrar todos los diseños, incluso sin stock
         .not('stock_actual', 'is', null)
-        .order('diseno')
 
       if (error) throw error
 
@@ -478,7 +446,6 @@ const cargarVentasDelDia = async () => {
       setBusquedaDiseno('')
       setPaso(2)
     } catch (err) {
-      console.error('Error en seleccionarTipo:', err)
       setError(getErrorMessage(err, 'Error al cargar diseños disponibles'))
     }
   }
