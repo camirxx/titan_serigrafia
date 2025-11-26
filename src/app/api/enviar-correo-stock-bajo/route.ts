@@ -24,9 +24,26 @@ interface Variante {
   stock_actual: number | null;
 }
 
+interface ProductoRelaciones {
+  id: string;
+  disenos: Array<{ nombre: string }> | { nombre: string } | null;
+  tipos_prenda: Array<{ nombre: string }> | { nombre: string } | null;
+  colores: Array<{ nombre: string }> | { nombre: string } | null;
+  activo: boolean;
+}
+
 interface EmailAttachment {
   filename: string;
   content: string;
+}
+
+// Helper para obtener nombre de relación (puede ser array o objeto)
+function getNombre(relacion: Array<{ nombre: string }> | { nombre: string } | null): string {
+  if (!relacion) return '';
+  if (Array.isArray(relacion)) {
+    return relacion[0]?.nombre || '';
+  }
+  return relacion.nombre || '';
 }
 
 export async function POST(request: NextRequest) {
@@ -85,7 +102,7 @@ export async function POST(request: NextRequest) {
     // Filtrar productos con stock bajo (<= 5 unidades)
     const productosBajoStock: ProductoConStockBajo[] = [];
     
-    (productos as any[])?.forEach((producto: any) => {
+    (productos as ProductoRelaciones[])?.forEach((producto) => {
       const productoVariantes = (variantes as Variante[])?.filter(v => v.producto_id === producto.id) || [];
       const stockTotal = productoVariantes.reduce((sum, v) => sum + (v.stock_actual ?? 0), 0);
       
@@ -93,12 +110,16 @@ export async function POST(request: NextRequest) {
       const variantesConStockBajo = productoVariantes.filter(v => (v.stock_actual ?? 0) <= 5);
       
       if (variantesConStockBajo.length > 0) {
+        const diseno = getNombre(producto.disenos);
+        const tipo = getNombre(producto.tipos_prenda);
+        const color = getNombre(producto.colores);
+        
         productosBajoStock.push({
-          id: producto.id as string,
-          nombre: `${producto.disenos?.nombre} ${producto.tipos_prenda?.nombre} ${producto.colores?.nombre || ''}`.trim(),
-          diseno: producto.disenos?.nombre || '',
-          tipo_prenda: producto.tipos_prenda?.nombre || '',
-          color: producto.colores?.nombre || 'Sin color',
+          id: producto.id,
+          nombre: `${diseno} ${tipo} ${color || ''}`.trim(),
+          diseno: diseno || '',
+          tipo_prenda: tipo || '',
+          color: color || 'Sin color',
           stock_total: stockTotal,
           variantes_bajo: variantesConStockBajo.map(v => ({
             id: v.id,
