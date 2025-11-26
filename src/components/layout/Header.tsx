@@ -46,6 +46,17 @@ export default function Header({
 }: HeaderProps) {
   const [currentDate, setCurrentDate] = useState(() => formatDate(new Date()));
   const [currentTime, setCurrentTime] = useState(() => formatTime(new Date()));
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const interval = setInterval(() => {
+      const now = new Date();
+      setCurrentDate(formatDate(now));
+      setCurrentTime(formatTime(now));
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSignOut = async () => {
     const confirmed = window.confirm("¿Estás seguro de cerrar sesión?");
@@ -82,15 +93,6 @@ export default function Header({
       }
     }
   };
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
-      setCurrentDate(formatDate(now));
-      setCurrentTime(formatTime(now));
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, []);
 
   const breadcrumbsContent = useMemo(() => {
     if (!breadcrumbs.length) return null;
@@ -177,7 +179,7 @@ export default function Header({
             <div className="flex flex-col text-xs text-white/70 sm:text-sm">
               <span className="font-semibold text-white/90">{roleLabel}</span>
               <span>
-                {currentDate} · {currentTime}
+                {isMounted ? `${currentDate} · ${currentTime}` : 'Cargando...'}
               </span>
             </div>
           </div>
