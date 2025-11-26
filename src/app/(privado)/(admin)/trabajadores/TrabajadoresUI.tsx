@@ -316,15 +316,19 @@ export default function TrabajadoresUI({
           body: JSON.stringify(emailData),
         });
 
+        const responseData = await response.json();
+
         if (response.ok) {
           showNotification('success', 'Alerta de stock enviada correctamente');
           setStockAlertMessage(''); // Limpiar el mensaje
         } else {
-          throw new Error('Error al enviar la alerta');
+          const errorMessage = responseData?.message || 'Error al enviar la alerta';
+          throw new Error(errorMessage);
         }
       } catch (error) {
-        console.error('Error al enviar alerta de stock:', error);
-        showNotification('error', 'Error al enviar la alerta de stock');
+        const errorMessage = error instanceof Error ? error.message : 'Error desconocido al enviar la alerta de stock';
+        console.error('Error al enviar alerta de stock:', errorMessage);
+        showNotification('error', `Error: ${errorMessage}`);
       }
     });
   };

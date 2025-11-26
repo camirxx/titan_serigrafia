@@ -180,9 +180,10 @@ const ChatbotWidget = () => {
 
   const handleStockBajo = async () => {
     setIsLoading(true);
+    let data = null;
     try {
       const response = await fetch('/api/stock-bajo');
-      const data = await response.json();
+      data = await response.json();
 
       if (data.error) {
         addMessage('❌ Hubo un error al verificar el stock.');
@@ -227,7 +228,7 @@ const ChatbotWidget = () => {
       addMessage('❌ Hubo un error al verificar el stock.');
     } finally {
       setIsLoading(false);
-      if (!data?.productos || data.productos.length <= 5) {
+      if (!data?.productos || data?.productos.length <= 5) {
         setTimeout(() => showInventoryMenu(), 2000);
       }
     }

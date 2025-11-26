@@ -2,12 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
-interface Producto {
+interface ProductoConStockBajo {
   id: string;
-  nombre: string | null;
-  stock: number | null;
-  codigo: string | null;
-  precio: number | null;
+  nombre: string;
+  diseno: string;
+  tipo_prenda: string;
+  color: string;
+  stock_total: number;
+  variantes_bajo: Array<{
+    id: string;
+    talla: string;
+    stock_actual: number;
+  }>;
+  total_variantes: number;
+}
+
+interface Variante {
+  id: string;
+  producto_id: string;
+  talla: string | null;
+  stock_actual: number | null;
 }
 
 interface EmailAttachment {
@@ -33,12 +47,17 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Obtener productos con stock bajo (stock < 10)
-    const { data: productosBajoStock, error } = await supabase
-      .from('productos')
-      .select('*')
-      .lt('stock', 10)
-      .order('stock', { ascending: true });
+    // Obtener productos activos con sus relaciones
+    const { data: productos, error } = await supabase
+      .from("productos")
+      .select(`
+        id,
+        disenos!inner(nombre),
+        tipos_prenda!inner(nombre),
+        colores(nombre),
+        activo
+      `)
+      .eq("activo", true);
 
     if (error) {
       console.error('Error al obtener productos:', error);
@@ -48,7 +67,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Obtener todas las variantes para estos productos
+    const productoIds = productos?.map((p: Record<string, unknown>) => p.id) || [];
+    const { data: variantes, error: errorVariantes } = await supabase
+      .from("variantes")
+      .select("id, producto_id, talla, stock_actual")
+      .in("producto_id", productoIds);
+
+    if (errorVariantes) {
+      console.error('Error al obtener variantes:', errorVariantes);
+      return NextResponse.json(
+        { success: false, message: "Error al obtener variantes de productos" },
+        { status: 500 }
+      );
+    }
+
+    // Filtrar productos con stock bajo (<= 5 unidades)
+    const productosBajoStock: ProductoConStockBajo[] = [];
+    
+    (productos as any[])?.forEach((producto: any) => {
+      const productoVariantes = (variantes as Variante[])?.filter(v => v.producto_id === producto.id) || [];
+      const stockTotal = productoVariantes.reduce((sum, v) => sum + (v.stock_actual ?? 0), 0);
+      
+      // Buscar variantes con stock bajo
+      const variantesConStockBajo = productoVariantes.filter(v => (v.stock_actual ?? 0) <= 5);
+      
+      if (variantesConStockBajo.length > 0) {
+        productosBajoStock.push({
+          id: producto.id as string,
+          nombre: `${producto.disenos?.nombre} ${producto.tipos_prenda?.nombre} ${producto.colores?.nombre || ''}`.trim(),
+          diseno: producto.disenos?.nombre || '',
+          tipo_prenda: producto.tipos_prenda?.nombre || '',
+          color: producto.colores?.nombre || 'Sin color',
+          stock_total: stockTotal,
+          variantes_bajo: variantesConStockBajo.map(v => ({
+            id: v.id,
+            talla: v.talla || 'N/A',
+            stock_actual: v.stock_actual || 0
+          })),
+          total_variantes: productoVariantes.length
+        });
+      }
+    });
+
     // Enviar email real con Resend
+    if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY no está configurada');
+      return NextResponse.json(
+        { success: false, message: "Error de configuración: RESEND_API_KEY no está configurada. Por favor, configura la variable de entorno." },
+        { status: 500 }
+      );
+    }
+
     const resend = new Resend(process.env.RESEND_API_KEY);
 
     // Preparar datos para el archivo Excel si se solicita
@@ -57,12 +127,14 @@ export async function POST(request: NextRequest) {
     if (includeExcel && productosBajoStock && productosBajoStock.length > 0) {
       // Crear contenido CSV simple
       const csvContent = [
-        ['Producto', 'Stock Actual', 'Código', 'Precio'],
-        ...productosBajoStock.map((producto: Producto) => [
+        ['Producto', 'Diseño', 'Tipo', 'Color', 'Stock Total', 'Tallas Bajo Stock'],
+        ...productosBajoStock.map((producto) => [
           producto.nombre || 'N/A',
-          producto.stock?.toString() || '0',
-          producto.codigo || 'N/A',
-          producto.precio?.toString() || '0'
+          producto.diseno || 'N/A',
+          producto.tipo_prenda || 'N/A',
+          producto.color || 'N/A',
+          producto.stock_total.toString(),
+          producto.variantes_bajo.map(v => `${v.talla}:${v.stock_actual}`).join('; ')
         ])
       ].map(row => row.join(',')).join('\n');
 
@@ -74,7 +146,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const { data, error } = await resend.emails.send({
-        from: 'Taller Serigrafía <noreply@titan-serigrafia.cl>',
+        from: 'Taller Serigrafía <noreply@titanserigrafia.cl>',
         to: [to],
         subject: subject || '🚨 ALERTA DE STOCK CRÍTICO - Taller',
         html: `
@@ -92,15 +164,22 @@ export async function POST(request: NextRequest) {
               ${productosBajoStock && productosBajoStock.length > 0 ? `
                 <h2 style="color: #dc3545; margin-bottom: 15px;">📋 Productos con Stock Bajo:</h2>
                 <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                  ${productosBajoStock.map((producto: Producto, index: number) => `
+                  ${productosBajoStock.map((producto, index) => `
                     <div style="border-bottom: ${index < productosBajoStock.length - 1 ? '1px solid #ffeaa7' : 'none'}; padding: ${index < productosBajoStock.length - 1 ? '15px 0' : '15px 0 0'};">
                       <h3 style="margin: 0 0 10px 0; color: #856404;">
                         ${index + 1}. ${producto.nombre || 'Sin nombre'}
                       </h3>
                       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
-                        <div><strong>Stock actual:</strong> <span style="color: #dc3545; font-weight: bold;">${producto.stock || 0} unidades</span></div>
-                        <div><strong>Código:</strong> ${producto.codigo || 'N/A'}</div>
-                        <div><strong>Precio:</strong> $${producto.precio || 'N/A'}</div>
+                        <div><strong>Diseño:</strong> ${producto.diseno || 'N/A'}</div>
+                        <div><strong>Tipo:</strong> ${producto.tipo_prenda || 'N/A'}</div>
+                        <div><strong>Color:</strong> ${producto.color || 'N/A'}</div>
+                        <div><strong>Stock Total:</strong> <span style="color: #dc3545; font-weight: bold;">${producto.stock_total} unidades</span></div>
+                      </div>
+                      <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ffeaa7;">
+                        <strong style="color: #856404;">Tallas con stock bajo:</strong>
+                        <ul style="margin: 5px 0 0 20px; padding: 0;">
+                          ${producto.variantes_bajo.map(v => `<li>${v.talla}: ${v.stock_actual} unidades</li>`).join('')}
+                        </ul>
                       </div>
                     </div>
                   `).join('')}
