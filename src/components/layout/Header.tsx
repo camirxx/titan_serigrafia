@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Menu, X, Bell, LogOut } from "lucide-react";
-import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { Menu, X, LogOut } from "lucide-react";
 
 const HEADER_HEIGHT = 64;
 
@@ -46,7 +44,6 @@ export default function Header({
   user,
   role,
 }: HeaderProps) {
-  const router = useRouter();
   const [currentDate, setCurrentDate] = useState(() => formatDate(new Date()));
   const [currentTime, setCurrentTime] = useState(() => formatTime(new Date()));
 
@@ -113,12 +110,12 @@ export default function Header({
     <Menu className="h-5 w-5" />
   );
 
-  const initials = useMemo(() => {
-    if (!user.name) return "U";
-    const parts = user.name.trim().split(" ");
-    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-    return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
-  }, [user.name]);
+  // const initials = useMemo(() => {
+  //   if (!user.name) return "U";
+  //   const parts = user.name.trim().split(" ");
+  //   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  //   return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+  // }, [user.name]);
 
   const firstName = useMemo(() => {
     if (!user.name) return "Usuario";

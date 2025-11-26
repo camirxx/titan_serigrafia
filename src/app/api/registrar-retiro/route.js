@@ -63,7 +63,7 @@ export async function POST(request) {
 
       sesionId = nuevaSesion.id;
       usuarioSesionId = nuevaSesion.usuario_id;
-      tiendaId = nuevaSesion.tienda_id;
+      // tiendaId = nuevaSesion.tienda_id; // Disponible si se necesita en el futuro
       console.log('✅ Sesión creada:', sesionId);
     } else {
       console.log('✅ Usando sesión existente:', sesionId);

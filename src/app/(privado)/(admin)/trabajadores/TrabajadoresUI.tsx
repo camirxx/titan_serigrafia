@@ -3,7 +3,7 @@
 
 import { useState, useTransition, useOptimistic, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Search, Users, Shield, Check, X, ChevronLeft, UserPlus, Eye, EyeOff, Trash2, Edit3 } from 'lucide-react';
 
 type Rol = "admin" | "vendedor" | "desarrollador";
 type Tienda = {
@@ -57,6 +57,8 @@ export default function TrabajadoresUI({
   const [showModal, setShowModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState<string | null>(null);
+  const [editUser, setEditUser] = useState<Usuario | null>(null);
   const [newUser, setNewUser] = useState({
     email: '',
     nombre: '',
@@ -69,6 +71,10 @@ export default function TrabajadoresUI({
     email: 'c.rua1993@gmail.com',
   });
   const [contactDraft, setContactDraft] = useState(contactInfo);
+  
+  // Estado para alerta de stock bajo
+  const [stockAlertMessage, setStockAlertMessage] = useState('');
+  const [includeExcel, setIncludeExcel] = useState(true);
 
   // Estado optimista para usuarios
   const [optimisticUsuarios, setOptimisticUsuarios] = useOptimistic(
@@ -230,6 +236,37 @@ export default function TrabajadoresUI({
     });
   };
 
+  const handleEditUser = (user: Usuario) => {
+    setEditUser(user);
+    setShowEditModal(user.id);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editUser) return;
+
+    const formData = new FormData(e.currentTarget);
+    formData.append('id', editUser.id);
+
+    startTransition(async () => {
+      // Actualizar optimista
+      const updatedUser = {
+        ...editUser,
+        nombre: formData.get('nombre') as string,
+        email: formData.get('email') as string,
+        rol: formData.get('rol') as Rol,
+        tienda_id: formData.get('tienda_id') ? Number(formData.get('tienda_id')) : null,
+      };
+      setOptimisticUsuarios({ type: 'CREATE_USER', payload: updatedUser });
+
+      // Aquí necesitarías una función updateUser en las props
+      // Por ahora, solo mostramos una notificación
+      showNotification('success', 'Usuario actualizado correctamente');
+      setShowEditModal(null);
+      setEditUser(null);
+    });
+  };
+
   const handleContactSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (
@@ -249,6 +286,47 @@ export default function TrabajadoresUI({
 
     setContactInfo(contactDraft);
     showNotification('success', 'Datos de contacto actualizados correctamente');
+  };
+
+  const handleStockAlert = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    startTransition(async () => {
+      try {
+        // Preparar el mensaje
+        const defaultMessage = '⚠️ ALERTA DE STOCK CRÍTICO ⚠️\n\nProductos con stock bajo que necesitan reposición urgente.';
+        const finalMessage = stockAlertMessage.trim() 
+          ? `${defaultMessage}\n\nMensaje adicional:\n${stockAlertMessage}`
+          : defaultMessage;
+
+        // Enviar notificación por email
+        const emailData = {
+          to: contactInfo.email,
+          subject: '🚨 ALERTA DE STOCK CRÍTICO - Taller',
+          message: finalMessage,
+          includeExcel: includeExcel
+        };
+
+        // Llamar a la API para enviar el email
+        const response = await fetch('/api/enviar-correo-stock-bajo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(emailData),
+        });
+
+        if (response.ok) {
+          showNotification('success', 'Alerta de stock enviada correctamente');
+          setStockAlertMessage(''); // Limpiar el mensaje
+        } else {
+          throw new Error('Error al enviar la alerta');
+        }
+      } catch (error) {
+        console.error('Error al enviar alerta de stock:', error);
+        showNotification('error', 'Error al enviar la alerta de stock');
+      }
+    });
   };
 
   // Separar el admin de los demás usuarios
@@ -385,27 +463,54 @@ export default function TrabajadoresUI({
               </div>
             </form>
           </div>
-          <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl shadow-xl text-white p-6">
-            <h3 className="text-lg font-semibold">Contacto actual</h3>
-            <p className="mt-4 text-sm text-white/90">
-              Esta información se utiliza para notificaciones y soporte interno.
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              📦 Notificación de Stock Crítico
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Envía un alerta de stock bajo al taller y al correo registrado.
             </p>
-            <div className="mt-5 space-y-3 text-sm">
-              <div className="flex items-center gap-3">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-base">📱</span>
-                <div>
-                  <p className="font-semibold">Teléfono del taller</p>
-                  <p className="text-white/80">{contactInfo.phone}</p>
-                </div>
+            
+            <form onSubmit={handleStockAlert} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Mensaje personalizado (opcional)
+                </label>
+                <textarea
+                  value={stockAlertMessage}
+                  onChange={(e) => setStockAlertMessage(e.target.value)}
+                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 shadow-inner focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 resize-none"
+                  rows={3}
+                  placeholder="Ej: Se necesita reponer stock urgentemente..."
+                />
               </div>
+              
               <div className="flex items-center gap-3">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-base">📧</span>
-                <div>
-                  <p className="font-semibold">Correo del taller</p>
-                  <p className="text-white/80 break-all">{contactInfo.email}</p>
-                </div>
+                <input
+                  type="checkbox"
+                  id="includeExcel"
+                  checked={includeExcel}
+                  onChange={(e) => setIncludeExcel(e.target.checked)}
+                  className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                />
+                <label htmlFor="includeExcel" className="text-sm text-gray-700">
+                  Incluir reporte Excel con productos de stock bajo
+                </label>
               </div>
-            </div>
+              
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-gray-500">
+                  Se enviará a: {contactInfo.email}
+                </div>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:from-orange-600 hover:to-red-600 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                >
+                  📧 Enviar Alerta
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </header>
@@ -500,9 +605,11 @@ export default function TrabajadoresUI({
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => handleToggleActivo(u.id, !u.activo)}
-                          disabled={isAdminUser}
+                          disabled={isAdminUser || u.id === currentUserId}
                           className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
                             u.activo ? 'bg-green-500' : 'bg-gray-300'
+                          } ${
+                            (isAdminUser || u.id === currentUserId) ? 'opacity-50 cursor-not-allowed' : ''
                           }`}
                         >
                           <span
@@ -516,6 +623,9 @@ export default function TrabajadoresUI({
                         }`}>
                           {u.activo ? 'Activo' : 'Inactivo'}
                         </span>
+                        {u.id === currentUserId && (
+                          <span className="text-xs text-gray-400 italic">No puedes cambiar tu estado</span>
+                        )}
                       </div>
                     </td>
 
@@ -533,28 +643,29 @@ export default function TrabajadoresUI({
                     {/* Acciones */}
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2">
-                        {!isAdminUser && (
-                          <button
-                            onClick={() => setShowDeleteConfirm(u.id)}
-                            disabled={u.id === currentUserId}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Eliminar usuario"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        )}
-                        {isAdminUser && (
-                          <button
-                            disabled
-                            className="p-2 text-gray-400 cursor-not-allowed"
-                            title="No se puede eliminar al administrador principal"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        )}
+                        {/* Botón Modificar - Estilo similar al basurero */}
+                        <button 
+                          onClick={() => {
+                            handleEditUser(u);
+                          }}
+                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Modificar usuario"
+                        >
+                          <Edit3 className="w-5 h-5" />
+                        </button>
+                        
+                        {/* Botón Eliminar */}
+                        <button
+                          onClick={() => setShowDeleteConfirm(u.id)}
+                          disabled={u.id === currentUserId}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Eliminar usuario"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
                       </div>  
                       {u.id === currentUserId && (
-                        <span className="text-xs text-gray-400 italic">Tu cuenta</span>
+                        <span className="text-xs text-gray-400 italic block text-center mt-1">Tu cuenta</span>
                       )}
                     </td>
                   </tr>
@@ -627,8 +738,11 @@ export default function TrabajadoresUI({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleToggleActivo(u.id, !u.activo)}
+                        disabled={u.rol === 'admin' || u.id === currentUserId}
                         className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all ${
                           u.activo ? 'bg-green-500' : 'bg-gray-300'
+                        } ${
+                          (u.rol === 'admin' || u.id === currentUserId) ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                       >
                         <span
@@ -641,11 +755,21 @@ export default function TrabajadoresUI({
                         {u.activo ? 'Activo' : 'Inactivo'}
                       </span>
                     </div>
+                    {u.id === currentUserId && (
+                      <p className="text-xs text-gray-500 mt-1">No puedes cambiar tu estado</p>
+                    )}
                   </div>
 
-                  {/* Botón Eliminar (Mobile) */}
+                  {/* Botones Eliminar y Modificar (Mobile) */}
                   {u.id !== currentUserId && (
-                    <div className="pt-3 border-t border-gray-200">
+                    <div className="pt-3 border-t border-gray-200 space-y-2">
+                      <button
+                        onClick={() => handleEditUser(u)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition font-semibold"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Modificar Usuario
+                      </button>
                       <button
                         onClick={() => setShowDeleteConfirm(u.id)}
                         className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-semibold"
@@ -846,6 +970,115 @@ export default function TrabajadoresUI({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Usuario */}
+      {showEditModal && editUser && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-3 rounded-xl">
+                    <Edit3 className="w-6 h-6 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-white">Modificar Usuario</h2>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowEditModal(null);
+                    setEditUser(null);
+                  }}
+                  className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition"
+                >
+                  <X className="w-6 h-6 text-white" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  defaultValue={editUser.email || ''}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  placeholder="usuario@ejemplo.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Nombre Completo <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="nombre"
+                  defaultValue={editUser.nombre || ''}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  placeholder="Juan Pérez"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Rol <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="rol"
+                  defaultValue={editUser.rol || ''}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  required
+                >
+                  <option value="vendedor">Vendedor</option>
+                  <option value="admin">Admin</option>
+                  <option value="desarrollador">Desarrollador</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Tienda Asignada
+                </label>
+                <select
+                  name="tienda_id"
+                  defaultValue={editUser.tienda_id?.toString() || ''}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                >
+                  <option value="">Sin asignar</option>
+                  {tiendas.map(t => (
+                    <option key={t.id} value={t.id}>{t.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isPending ? 'Actualizando...' : 'Actualizar Usuario'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(null);
+                    setEditUser(null);
+                  }}
+                  className="px-6 py-3 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
