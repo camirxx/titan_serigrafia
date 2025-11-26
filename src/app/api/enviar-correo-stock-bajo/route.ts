@@ -2,7 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
-const DEFAULT_MESSAGE = "Alerta: existen productos con stock bajo en el inventario.";
+interface Producto {
+  id: string;
+  nombre: string | null;
+  stock: number | null;
+  codigo: string | null;
+  precio: number | null;
+}
+
+interface EmailAttachment {
+  filename: string;
+  content: string;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,38 +48,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Preparar contenido del email
-    let emailContent = message;
-    
-    if (productosBajoStock && productosBajoStock.length > 0) {
-      emailContent += "\n\n📋 PRODUCTOS CON STOCK BAJO:\n\n";
-      productosBajoStock.forEach((producto: any, index: number) => {
-        emailContent += `${index + 1}. ${producto.nombre}\n`;
-        emailContent += `   Stock actual: ${producto.stock} unidades\n`;
-        emailContent += `   Código: ${producto.codigo || 'N/A'}\n`;
-        emailContent += `   Precio: $${producto.precio || 'N/A'}\n\n`;
-      });
-      
-      emailContent += `\n📊 Total de productos críticos: ${productosBajoStock.length}`;
-    } else {
-      emailContent += "\n\n✅ No se encontraron productos con stock bajo en este momento.";
-    }
-
     // Enviar email real con Resend
     const resend = new Resend(process.env.RESEND_API_KEY);
 
     // Preparar datos para el archivo Excel si se solicita
-    let attachments: any[] = [];
+    const attachments: EmailAttachment[] = [];
     
     if (includeExcel && productosBajoStock && productosBajoStock.length > 0) {
-      // Crear contenido CSV simple (puede mejorarse con una librería como xlsx)
+      // Crear contenido CSV simple
       const csvContent = [
         ['Producto', 'Stock Actual', 'Código', 'Precio'],
-        ...productosBajoStock.map((p: any) => [
-          p.nombre || 'N/A',
-          p.stock || 0,
-          p.codigo || 'N/A',
-          p.precio || 0
+        ...productosBajoStock.map((producto: Producto) => [
+          producto.nombre || 'N/A',
+          producto.stock?.toString() || '0',
+          producto.codigo || 'N/A',
+          producto.precio?.toString() || '0'
         ])
       ].map(row => row.join(',')).join('\n');
 
@@ -98,13 +92,13 @@ export async function POST(request: NextRequest) {
               ${productosBajoStock && productosBajoStock.length > 0 ? `
                 <h2 style="color: #dc3545; margin-bottom: 15px;">📋 Productos con Stock Bajo:</h2>
                 <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                  ${productosBajoStock.map((producto: any, index: number) => `
+                  ${productosBajoStock.map((producto: Producto, index: number) => `
                     <div style="border-bottom: ${index < productosBajoStock.length - 1 ? '1px solid #ffeaa7' : 'none'}; padding: ${index < productosBajoStock.length - 1 ? '15px 0' : '15px 0 0'};">
                       <h3 style="margin: 0 0 10px 0; color: #856404;">
                         ${index + 1}. ${producto.nombre || 'Sin nombre'}
                       </h3>
                       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
-                        <div><strong>Stock actual:</strong> <span style="color: #dc3545; font-weight: bold;">${producto.stock} unidades</span></div>
+                        <div><strong>Stock actual:</strong> <span style="color: #dc3545; font-weight: bold;">${producto.stock || 0} unidades</span></div>
                         <div><strong>Código:</strong> ${producto.codigo || 'N/A'}</div>
                         <div><strong>Precio:</strong> $${producto.precio || 'N/A'}</div>
                       </div>
