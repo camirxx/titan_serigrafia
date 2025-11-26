@@ -5,10 +5,10 @@ import { supabaseBrowser } from '@/lib/supabaseClient'
 import { ChevronLeft, Check, AlertCircle } from 'lucide-react'
 
 // Formatea números con separadores de miles
-const formatNumber = (num: number | null | undefined): string => {
-  if (num === null || num === undefined) return '0';
-  return new Intl.NumberFormat('es-CL').format(num);
-};
+// const formatNumber = (num: number | null | undefined): string => {
+//   if (num === null || num === undefined) return '0';
+//   return new Intl.NumberFormat('es-CL').format(num);
+// };
 
 const getErrorMessage = (err: unknown, fallback: string) => {
   if (err instanceof Error) return err.message
@@ -726,10 +726,109 @@ const registrarIngresoCaja = async (denominaciones: Record<string, number>, conc
     )
   }
 
+  // Función VentaLayout para reutilizar la UI de selección
+  function VentaLayout({ titulo, opciones, accion, paso, setPaso, error, tallas, seleccionarTalla }: {
+    titulo: string
+    opciones: string[] | Array<{talla: string, variante_id: number, stock: number}>
+    accion: (opcion: string | {talla: string, variante_id: number, stock: number}) => void
+    paso: number
+    setPaso: (paso: number) => void
+    error: string | null
+    tallas: Array<{talla: string, variante_id: number, stock: number}>
+    seleccionarTalla: (talla: {talla: string, variante_id: number, stock: number}) => void
+  }) {
+    // Definir el paso anterior
+    const pasoAnterior = paso === 1 ? 0 : paso - 1
+    
+    return (
+      <div className="max-w-7xl mx-auto p-4 sm:p-6">
+        {/* FIX: Se añade sesionCajaId. onNuevaVenta es opcional, así que no es necesario aquí. */}
+        <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} sesionCajaId={sesionCajaId} />
+        {error && (
+          <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-lg animate-pulse max-w-3xl mx-auto mb-6">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <span className="font-semibold">{error}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-8 max-w-3xl mx-auto">
+          <div className="flex items-center gap-3 mb-8">
+            <button onClick={() => setPaso(pasoAnterior)} className="p-2 hover:bg-indigo-50 rounded-xl transition">
+              <ChevronLeft className="w-6 h-6 text-indigo-600" />
+            </button>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">{titulo}</h2>
+              <p className="text-sm text-gray-600 mt-1">Selecciona una opción para continuar</p>
+            </div>
+          </div>
+
+          {paso < 4 ? (
+            <div className="grid grid-cols-2 gap-4">
+              {opciones.length > 0 ? (opciones as string[]).map((opcion, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => accion(opcion)}
+                  className="p-8 text-xl font-bold text-gray-900 border-2 border-gray-300 rounded-xl hover:border-indigo-500 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  {opcion}
+                </button>
+              )) : (
+                <div className="col-span-2 p-8 text-center">
+                  <div className="flex flex-col items-center gap-3 text-gray-400">
+                    <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2-4a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-lg font-semibold">No hay opciones disponibles</span>
+                    <span className="text-sm">Verifica el stock de tus productos</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-4">
+              {tallas.length > 0 ? tallas.map((t, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => seleccionarTalla(t)}
+                  disabled={t.stock <= 0}
+                  className="p-6 border-2 border-gray-300 rounded-xl hover:border-indigo-500 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-300 disabled:hover:bg-white shadow-sm hover:shadow-md relative"
+                >
+                  <span className="font-bold text-xl block">{t.talla}</span>
+                  <span className={`text-xs mt-1 block font-semibold ${t.stock > 5 ? 'text-green-600' : t.stock > 0 ? 'text-orange-600' : 'text-red-600'}`}>
+                    Stock: {t.stock}
+                  </span>
+                  {t.stock <= 0 && (
+                    <span className="absolute inset-0 bg-black/10 flex items-center justify-center text-white text-xs font-bold rounded-xl">AGOTADO</span>
+                  )}
+                </button>
+              )) : (
+                <div className="col-span-3 p-8 text-center">
+                  <div className="flex flex-col items-center gap-3 text-gray-400">
+                    <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2-4a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-lg font-semibold">No hay tallas disponibles con stock</span>
+                    <span className="text-sm">Verifica los colores o el inventario general</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (paso === 1) {
     const titulo = "Selecciona la Categoría (Tipo de Prenda)"
     const opciones = tipos
-    const accion = seleccionarTipo
+    const accion = (opcion: string | {talla: string, variante_id: number, stock: number}) => {
+      if (typeof opcion === 'string') {
+        seleccionarTipo(opcion)
+      }
+    }
     
     return (
       <VentaLayout titulo={titulo} opciones={opciones} accion={accion} paso={paso} setPaso={setPaso} error={error} tallas={tallas} seleccionarTalla={seleccionarTalla} />
@@ -815,7 +914,11 @@ const registrarIngresoCaja = async (denominaciones: Record<string, number>, conc
   if (paso === 3) {
     const titulo = `Selecciona el Color de ${disenoSel}`
     const opciones = colores
-    const accion = seleccionarColor
+    const accion = (opcion: string | {talla: string, variante_id: number, stock: number}) => {
+      if (typeof opcion === 'string') {
+        seleccionarColor(opcion)
+      }
+    }
     
     return (
       <VentaLayout titulo={titulo} opciones={opciones} accion={accion} paso={paso} setPaso={setPaso} error={error} tallas={tallas} seleccionarTalla={seleccionarTalla} />
@@ -825,7 +928,11 @@ const registrarIngresoCaja = async (denominaciones: Record<string, number>, conc
   if (paso === 4) {
     const titulo = `Selecciona la Talla de ${disenoSel} (${colorSel})`
     const opciones: string[] = [] // No se usa para el paso 4
-    const accion = seleccionarTalla
+    const accion = (opcion: string | {talla: string, variante_id: number, stock: number}) => {
+      if (typeof opcion === 'object' && opcion.talla) {
+        seleccionarTalla(opcion)
+      }
+    }
     
     return (
       <VentaLayout titulo={titulo} opciones={opciones} accion={accion} paso={paso} setPaso={setPaso} error={error} tallas={tallas} seleccionarTalla={seleccionarTalla} />
@@ -1007,108 +1114,6 @@ const registrarIngresoCaja = async (denominaciones: Record<string, number>, conc
             {loading ? 'Registrando Venta...' : 'Confirmar Venta y Registrar'}
           </button>
         </div>
-      </div>
-    )
-  }
-
-  // Si paso es 1 (Seleccionar Categoría) o 3 (Seleccionar Color) se renderiza aquí
-  function VentaLayout({ titulo, opciones, accion, paso, setPaso, error, tallas, seleccionarTalla }: {
-    titulo: string
-    opciones: string[] | Array<{talla: string, variante_id: number, stock: number}>
-    accion: (opcion: any) => void
-    paso: number
-    setPaso: (paso: number) => void
-    error: string | null
-    tallas: Array<{talla: string, variante_id: number, stock: number}>
-    seleccionarTalla: (talla: {talla: string, variante_id: number, stock: number}) => void
-  }) {
-    // Definir el paso anterior
-    const pasoAnterior = paso === 1 ? 0 : paso - 1
-    
-    return (
-      <div className="max-w-7xl mx-auto p-4 sm:p-6">
-        {/* FIX: Se añade sesionCajaId. onNuevaVenta es opcional, así que no es necesario aquí. */}
-        <Header fechaSeleccionada={fechaSeleccionada} setFechaSeleccionada={setFechaSeleccionada} sesionCajaId={sesionCajaId} />
-        {error && (
-          <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-lg animate-pulse max-w-3xl mx-auto mb-6">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <span className="font-semibold">{error}</span>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-8 max-w-3xl mx-auto">
-          <div className="flex items-center gap-3 mb-8">
-            <button onClick={() => setPaso(pasoAnterior)} className="p-2 hover:bg-indigo-50 rounded-xl transition">
-              <ChevronLeft className="w-6 h-6 text-indigo-600" />
-            </button>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">{titulo}</h2>
-              <p className="text-sm text-gray-600 mt-1">Selecciona una opción para continuar</p>
-            </div>
-          </div>
-
-          {paso < 4 ? (
-            <div className="grid grid-cols-2 gap-4">
-              {opciones.length > 0 ? (opciones as string[]).map((opcion, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => accion(opcion)}
-                  className="p-8 text-xl font-bold text-gray-900 border-2 border-gray-300 rounded-xl hover:border-indigo-500 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 shadow-sm hover:shadow-md"
-                >
-                  {opcion}
-                </button>
-              )) : (
-                <div className="col-span-2 p-8 text-center">
-                  <div className="flex flex-col items-center gap-3 text-gray-400">
-                    <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2-4a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-lg font-semibold">No hay opciones disponibles</span>
-                    <span className="text-sm">Verifica el stock de tus productos</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-4">
-              {tallas.length > 0 ? tallas.map((t, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => seleccionarTalla(t)}
-                  disabled={t.stock <= 0}
-                  className="p-6 border-2 border-gray-300 rounded-xl hover:border-indigo-500 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-300 disabled:hover:bg-white shadow-sm hover:shadow-md relative"
-                >
-                  <span className="font-bold text-xl block">{t.talla}</span>
-                  <span className={`text-xs mt-1 block font-semibold ${t.stock > 5 ? 'text-green-600' : t.stock > 0 ? 'text-orange-600' : 'text-red-600'}`}>
-                    Stock: {t.stock}
-                  </span>
-                  {t.stock <= 0 && (
-                    <span className="absolute inset-0 bg-black/10 flex items-center justify-center text-white text-xs font-bold rounded-xl">AGOTADO</span>
-                  )}
-                </button>
-              )) : (
-                <div className="col-span-3 p-8 text-center">
-                  <div className="flex flex-col items-center gap-3 text-gray-400">
-                    <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2-4a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-lg font-semibold">No hay tallas disponibles con stock</span>
-                    <span className="text-sm">Verifica los colores o el inventario general</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="p-8 text-center">
-      <h1 className="text-3xl font-bold">POS En Mantenimiento</h1>
       <p className="mt-2">Por favor, espera la carga inicial de datos.</p>
       {error && <p className="mt-4 text-red-500">{error}</p>}
     </div>
@@ -1567,4 +1572,5 @@ function VueltoSelector({ vuelto, denominacionesDisponibles, billetesVuelto, onB
       </div>
     </div>
   )
+}
 }

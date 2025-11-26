@@ -33,7 +33,7 @@ export async function POST(request) {
 
     let sesionId = sesion?.id;
     let usuarioSesionId = sesion?.usuario_id;
-    let tiendaId = sesion?.tienda_id || 1;
+    // let tiendaId = sesion?.tienda_id || 1; // Disponible si se necesita en el futuro
 
     // Si no hay sesión abierta, crear una
     if (!sesionId || errorSesion) {

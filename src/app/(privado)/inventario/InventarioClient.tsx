@@ -115,11 +115,16 @@ export default function InventarioAgrupado() {
         { diseno: string; tipo_prenda: string; color: string }
       >();
 
-      todosProductos?.forEach((p: any) => {
-        productosUnicos.set(p.id, {
-          diseno: p.disenos?.nombre || "Sin diseño",
-          tipo_prenda: p.tipos_prenda?.nombre || "Sin tipo",
-          color: p.colores?.nombre || "Sin color",
+      todosProductos?.forEach((p: {
+        id: string | number;
+        disenos?: { nombre: string }[] | { nombre: string };
+        tipos_prenda?: { nombre: string }[] | { nombre: string };
+        colores?: { nombre: string }[] | { nombre: string };
+      }) => {
+        productosUnicos.set(Number(p.id), {
+          diseno: Array.isArray(p.disenos) ? p.disenos[0]?.nombre || "Sin diseño" : p.disenos?.nombre || "Sin diseño",
+          tipo_prenda: Array.isArray(p.tipos_prenda) ? p.tipos_prenda[0]?.nombre || "Sin tipo" : p.tipos_prenda?.nombre || "Sin tipo",
+          color: Array.isArray(p.colores) ? p.colores[0]?.nombre || "Sin color" : p.colores?.nombre || "Sin color",
         });
       });
 
@@ -259,8 +264,8 @@ export default function InventarioAgrupado() {
     return productosFiltrados.slice(start, start + ITEMS_PER_PAGE);
   }, [productosFiltrados, currentPage]);
 
-  const showingStart = productosFiltrados.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const showingEnd = productosFiltrados.length === 0 ? 0 : Math.min(currentPage * ITEMS_PER_PAGE, productosFiltrados.length);
+  // const showingStart = productosFiltrados.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  // const showingEnd = productosFiltrados.length === 0 ? 0 : Math.min(currentPage * ITEMS_PER_PAGE, productosFiltrados.length);
   const canGoPrev = currentPage > 1 && productosFiltrados.length > 0;
   const canGoNext = currentPage < totalPages && productosFiltrados.length > 0;
 
