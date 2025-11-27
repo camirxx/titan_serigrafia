@@ -79,6 +79,46 @@ export default function POSModerno() {
   const formatNumber = (num: number) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
   }
+<<<<<<< HEAD
+=======
+  
+  // --- FUNCIÓN CRÍTICA DE RECARGA DE INVENTARIO (NUEVA) ---
+  const cargarInventarioPOS = useCallback(async () => {
+      if (!tiendaId) return false;
+      
+      setError(null);
+      
+      try {
+        console.log('🔍 Recargando variantes para POS, tienda:', tiendaId)
+        
+        const { data, error } = await supabase
+          .from('variantes_admin_view')
+          .select('tipo_prenda, stock_actual')
+          .eq('tienda_id', tiendaId)
+          .eq('producto_activo', true)
+          // Mostrar todos los productos activos, incluso sin stock
+          .not('stock_actual', 'is', null)
+
+        if (error) throw error
+
+        const tiposUnicos = [...new Set(data?.map(d => d.tipo_prenda).filter(Boolean))]
+        setTipos(tiposUnicos)
+        
+        if (tiposUnicos.length === 0) {
+          setError('No hay productos disponibles con stock en tu tienda')
+          return false
+        }
+        
+        return true
+      } catch (err: unknown) {
+        console.error('💥 Error completo en cargarInventarioPOS:', err)
+        setError(getErrorMessage(err, 'Error al cargar el inventario del POS.'))
+        return false
+      }
+  }, [tiendaId, supabase])
+  // -----------------------------------------------------------------
+
+>>>>>>> parent of f3d2605 (UPDATE de POS)
   useEffect(() => {
     void cargarVentasDelDia()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,6 +221,40 @@ const cargarVentasDelDia = async () => {
     setError(getErrorMessage(err, 'Error al cargar ventas del día'))
   }
 }
+  const cargarSesionCaja = async () => {
+    try {
+      const { data: u } = await supabase.auth.getUser()
+      const uid = u.user?.id
+      if (!uid) return
+      
+      const { data: usr, error: eUsr } = await supabase
+        .from('usuarios')
+        .select('tienda_id')
+        .eq('id', uid)
+        .maybeSingle()
+      if (eUsr) throw eUsr
+      
+      const tId = usr?.tienda_id as number | null
+      setTiendaId(tId ?? null)
+      
+      if (!tId) return
+      
+      const { data: ses, error: eSes } = await supabase
+        .from('v_caja_sesion_abierta')
+        .select('id, saldo_inicial')
+        .eq('tienda_id', tId)
+        .maybeSingle()
+      
+      if (eSes) throw eSes
+      
+      setSesionCajaId(ses?.id ?? null)
+      setSaldoInicialCaja(Number(ses?.saldo_inicial || 0))
+    } catch (err) {
+      console.warn('No se pudo cargar sesión de caja', err)
+      setSesionCajaId(null)
+      setSaldoInicialCaja(0)
+    }
+  }
 
   const registrarIngresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
     if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
@@ -318,7 +392,7 @@ const cargarVentasDelDia = async () => {
         .from('variantes_admin_view')
         .select('diseno, stock_actual')
         .eq('tipo_prenda', tipo)
-        .eq('tienda_id', currentTiendaId)
+        .eq('tienda_id', tiendaId as number)
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
         .not('stock_actual', 'is', null)
@@ -335,7 +409,11 @@ const cargarVentasDelDia = async () => {
       setDisenos(disenosUnicos)
       setBusquedaDiseno('')
       setPaso(2)
+<<<<<<< HEAD
     } catch (err: unknown) {
+=======
+    } catch (err) {
+>>>>>>> parent of f3d2605 (UPDATE de POS)
       setError(getErrorMessage(err, 'Error al cargar diseños disponibles'))
     }
   }
