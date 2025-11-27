@@ -181,30 +181,6 @@ const cargarVentasDelDia = async () => {
     setError(getErrorMessage(err, 'Error al cargar ventas del día'))
   }
 }
-  const cargarSesionCaja = async () => {
-  try {
-    // Ya no necesitamos TIENDA_CENTRAL porque usamos el valor directamente en la consulta
-
-    // Ya no necesitamos leer tienda_id del usuario
-    // setTiendaId(TIENDA_CENTRAL) // Eliminado por no usarse
-
-    const { data: ses, error: eSes } = await supabase
-      .from('v_caja_sesion_abierta')
-      .select('id, saldo_inicial')
-      .eq('tienda_id', 1)
-      .maybeSingle()
-
-    if (eSes) throw eSes
-
-    setSesionCajaId(ses?.id ?? null)
-    setSaldoInicialCaja(Number(ses?.saldo_inicial || 0))
-
-  } catch (err) {
-    console.warn('No se pudo cargar sesión de caja', err)
-    setSesionCajaId(null)
-    setSaldoInicialCaja(0)
-  }
-}
 
   const registrarIngresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
     if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
@@ -288,55 +264,51 @@ const cargarVentasDelDia = async () => {
   }
 
   const iniciarVenta = async () => {
-    setPaso(1)
+    if (!tiendaId) {
+      setError('No se pudo determinar tu tienda. Verifica tu usuario.')
+      return
+    }
+    
     setError(null)
     
+    // 🎯 REEMPLAZO DE LA LÓGICA DE CARGA DIRECTA
+    const success = await cargarInventarioPOS(); 
+    
+    if (success) {
+      setPaso(1) // Avanza solo si se encontraron productos
+    } else {
+      setPaso(0) // Se queda en la vista principal si no hay stock
+    }
+  }
+  // -----------------------------------------------------------------
+
+  const seleccionarDiseno = async (diseno: string) => {
+    setDisenoSel(diseno)
+    setError(null)
     try {
-      console.log('🔍 Consultando variantes disponibles en inventario')
-      
-      // OPCIÓN 1: Intentar con variantes_admin_view
-      let data;
-      
-      const result1 = await supabase
+      const { data, error } = await supabase
         .from('variantes_admin_view')
-        .select('tipo_prenda, stock_actual, diseno, color, talla, variante_id, producto_activo')
-        .eq('tienda_id', 1)
+        .select('color, stock_actual')
+        .eq('tipo_prenda', tipoSel)
+        .eq('diseno', diseno)
+        .eq('tienda_id', tiendaId as number)
         .eq('producto_activo', true)
-        .gt('stock_actual', 0)
+        // Mostrar todos los colores, incluso sin stock
+        .not('stock_actual', 'is', null)
 
-      console.log('📊 Resultado variantes_admin_view:', result1)
+      if (error) throw error
 
-      if (result1.error) {
-        console.log('⚠️ Error en view, intentando con tablas directas...')
-        
-
-      } else {
-        data = result1.data
-      }
-
-      console.log('✅ Datos finales:', data)
-
-      if (!data || data.length === 0) {
-        setError('No hay productos disponibles con stock en el inventario. Verifica que hayas agregado productos con stock.')
-        setPaso(0)
-        return
-      }
-
-      const tiposUnicos = [...new Set(data?.map((d: { tipo_prenda: string }) => d.tipo_prenda).filter(Boolean))]
-      console.log('✅ Tipos únicos encontrados:', tiposUnicos)
+      const coloresUnicos = [...new Set(data?.map(d => d.color).filter(Boolean))]
       
-      if (tiposUnicos.length === 0) {
-        setError('No hay productos disponibles con stock en el inventario')
-        setPaso(0)
+      if (coloresUnicos.length === 0) {
+        setError('No hay colores disponibles para este diseño')
         return
       }
       
-      setTipos(tiposUnicos)
-    } catch (err: unknown) {
-      console.error('💥 Error completo en iniciarVenta:', err)
-      console.error('💥 Error stringificado:', JSON.stringify(err, null, 2))
-      setError(getErrorMessage(err, 'Error al iniciar la venta. Verifica que las tablas existen'))
-      setPaso(0)
+      setColores(coloresUnicos)
+      setPaso(3)
+    } catch (err) {
+      setError(getErrorMessage(err, 'Error al cargar colores disponibles'))
     }
   }
   const seleccionarTipo = async (tipo: string) => {
@@ -346,7 +318,7 @@ const cargarVentasDelDia = async () => {
         .from('variantes_admin_view')
         .select('diseno, stock_actual')
         .eq('tipo_prenda', tipo)
-        .eq('tienda_id', 1)
+        .eq('tienda_id', currentTiendaId)
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
         .not('stock_actual', 'is', null)
@@ -368,41 +340,8 @@ const cargarVentasDelDia = async () => {
     }
   }
 
-  const seleccionarDiseno = async (diseno: string) => {
-  setDisenoSel(diseno)
-  setError(null)
-
-    try {
-      const { data, error } = await supabase
-        .from('variantes_admin_view')
-        .select('color, stock_actual')
-        .eq('tipo_prenda', tipoSel)
-        .eq('diseno', diseno)
-        .eq('tienda_id', 1)                // 🔥 Forzamos Inventario Central
-        .eq('producto_activo', true)
-        .gt('stock_actual', 0)
-        .not('stock_actual', 'is', null)
-
-      if (error) throw error
-
-      const coloresUnicos = [
-        ...new Set(data?.map(d => d.color).filter(Boolean))
-      ]
-
-      if (coloresUnicos.length === 0) {
-        setError('No hay colores disponibles para este diseño')
-        return
-      }
-
-      setColores(coloresUnicos)
-      setPaso(3)
-
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Error al cargar colores disponibles'))
-    }
-  }
-
-  const cargarTallasDisponibles = async (color: string) => {
+  const seleccionarColor = async (color: string) => {
+    setColorSel(color)
     try {
       const { data, error } = await supabase
         .from('variantes_admin_view')
@@ -435,14 +374,7 @@ const cargarVentasDelDia = async () => {
     }
   }
 
-  const seleccionarColor = async (color: string) => {
-    setColorSel(color)
-    const tallasData = await cargarTallasDisponibles(color)
-    if (tallasData.length > 0) {
-      setTallas(tallasData)
-      setPaso(4)
-    }
-  }
+
 
   const seleccionarTalla = (talla: {talla: string, variante_id: number, stock: number}) => {
     if (talla.stock <= 0) {
