@@ -79,8 +79,7 @@ export default function POSModerno() {
   const formatNumber = (num: number) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
   }
-<<<<<<< HEAD
-=======
+
   
   // --- FUNCIÓN CRÍTICA DE RECARGA DE INVENTARIO (NUEVA) ---
   const cargarInventarioPOS = useCallback(async () => {
@@ -116,9 +115,7 @@ export default function POSModerno() {
         return false
       }
   }, [tiendaId, supabase])
-  // -----------------------------------------------------------------
 
->>>>>>> parent of f3d2605 (UPDATE de POS)
   useEffect(() => {
     void cargarVentasDelDia()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -413,6 +410,9 @@ const cargarVentasDelDia = async () => {
     } catch (err: unknown) {
 =======
     } catch (err) {
+<<<<<<< HEAD
+>>>>>>> parent of f3d2605 (UPDATE de POS)
+=======
 >>>>>>> parent of f3d2605 (UPDATE de POS)
       setError(getErrorMessage(err, 'Error al cargar diseños disponibles'))
     }
