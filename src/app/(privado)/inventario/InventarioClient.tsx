@@ -113,11 +113,16 @@ export default function InventarioAgrupado() {
         { diseno: string; tipo_prenda: string; color: string }
       >();
 
-      todosProductos?.forEach((p: any) => {
+      todosProductos?.forEach((p: { 
+        id: number; 
+        disenos: { nombre: unknown }[]; 
+        tipos_prenda: { nombre: unknown }[]; 
+        colores: { nombre: unknown }[]; 
+      }) => {
         productosUnicos.set(p.id, {
-          diseno: p.disenos?.nombre || "Sin diseño",
-          tipo_prenda: p.tipos_prenda?.nombre || "Sin tipo",
-          color: p.colores?.nombre || "Sin color",
+          diseno: (p.disenos?.[0]?.nombre as string) || "Sin diseño",
+          tipo_prenda: (p.tipos_prenda?.[0]?.nombre as string) || "Sin tipo",
+          color: (p.colores?.[0]?.nombre as string) || "Sin color",
         });
       });
 

@@ -51,7 +51,7 @@ export default function POSModerno() {
   const [totalDia, setTotalDia] = useState(0)
   const [saldoInicialCaja, setSaldoInicialCaja] = useState(0)
   const [sesionCajaId, setSesionCajaId] = useState<number | null>(null)
-  // const [tiendaId, setTiendaId] = useState<number | null>(null) // Eliminado por no usarse
+  const [tiendaId, setTiendaId] = useState<number | null>(null)
   
   const [tipos, setTipos] = useState<string[]>([])
   const [disenos, setDisenos] = useState<string[]>([])
@@ -86,92 +86,20 @@ export default function POSModerno() {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
   }
 
-<<<<<<< HEAD
   
   // --- FUNCIÓN CRÍTICA DE RECARGA DE INVENTARIO (NUEVA) ---
   const cargarInventarioPOS = useCallback(async () => {
       if (!tiendaId) return false;
-=======
-  const cargarSesionCaja = useCallback(async () => {
-    try {
-      // Obtener el usuario actual
-      const { data: u, error: userError } = await supabase.auth.getUser()
-      if (userError || !u.user?.id) {
-        throw new Error('No se pudo obtener el usuario actual')
-      }
-      
-      // Obtener la tienda del usuario
-      const { data: usuario, error: userDataError } = await supabase
-        .from('usuarios')
-        .select('tienda_id')
-        .eq('id', u.user.id)
-        .single()
-      
-      if (userDataError || !usuario) {
-        throw new Error('No se pudo obtener la información de la tienda')
-      }
-      
-      // Asegurarnos de que tenemos un ID de tienda
-      if (!usuario.tienda_id) {
-        throw new Error('El usuario no tiene una tienda asignada')
-      }
-      
-      const tiendaId = usuario.tienda_id as number
-      setTiendaId(tiendaId)
-      
-      // Obtener la sesión de caja abierta para esta tienda
-      const { data: sesion, error: sesionError } = await supabase
-        .from('v_caja_sesion_abierta')
-        .select('id, saldo_inicial')
-        .eq('tienda_id', tiendaId)
-        .maybeSingle()
-      
-      if (sesionError) {
-        console.warn('No hay sesión de caja abierta o hubo un error:', sesionError)
-      }
-      
-      // Actualizar el estado con los datos de la sesión de caja
-      setSesionCajaId(sesion?.id ?? null)
-      setSaldoInicialCaja(Number(sesion?.saldo_inicial || 0))
-      
-      return tiendaId // Devolvemos el ID de la tienda para usarlo si es necesario
-    } catch (err) {
-      console.error('Error al cargar la sesión de caja:', err)
-      setError(getErrorMessage(err, 'Error al cargar la sesión de caja'))
-      setSesionCajaId(null)
-      setSaldoInicialCaja(0)
-      return null
-    }
-  }, [supabase, setTiendaId, setSesionCajaId, setSaldoInicialCaja, setError])
-
-  // --- FUNCIÓN CRÍTICA DE RECARGA DE INVENTARIO (NUEVA) ---
-  const cargarInventarioPOS = useCallback(async () => {
-      // Verificar que tenemos un ID de tienda válido
-      const currentTiendaId = tiendaId || (await cargarSesionCaja())
-      
-      if (!currentTiendaId) {
-        setError('No se pudo determinar la tienda. Por favor, inicia sesión nuevamente.')
-        return false;
-      }
->>>>>>> parent of b334bfa (respaldo POS completo)
       
       setError(null);
       
       try {
-<<<<<<< HEAD
         console.log('🔍 Recargando variantes para POS, tienda:', tiendaId)
-=======
-        console.log('🔍 Recargando variantes para POS, tienda:', currentTiendaId)
->>>>>>> parent of b334bfa (respaldo POS completo)
         
         const { data, error } = await supabase
           .from('variantes_admin_view')
           .select('tipo_prenda, stock_actual')
-<<<<<<< HEAD
           .eq('tienda_id', tiendaId)
-=======
-          .eq('tienda_id', currentTiendaId)
->>>>>>> parent of b334bfa (respaldo POS completo)
           .eq('producto_activo', true)
           // Mostrar todos los productos activos, incluso sin stock
           .not('stock_actual', 'is', null)
@@ -182,11 +110,7 @@ export default function POSModerno() {
         setTipos(tiposUnicos)
         
         if (tiposUnicos.length === 0) {
-<<<<<<< HEAD
           setError('No hay productos disponibles con stock en tu tienda')
-=======
-          setError('No hay productos disponibles en tu tienda')
->>>>>>> parent of b334bfa (respaldo POS completo)
           return false
         }
         
@@ -196,12 +120,7 @@ export default function POSModerno() {
         setError(getErrorMessage(err, 'Error al cargar el inventario del POS.'))
         return false
       }
-<<<<<<< HEAD
   }, [tiendaId, supabase])
-=======
-  }, [tiendaId, supabase, cargarSesionCaja, setError, setTipos])
-  // -----------------------------------------------------------------
->>>>>>> parent of b334bfa (respaldo POS completo)
 
   useEffect(() => {
     void cargarVentasDelDia()
@@ -338,6 +257,43 @@ const cargarVentasDelDia = async () => {
   }
 }
 
+const cargarSesionCaja = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuario no autenticado');
+
+    // Obtener tienda_id del usuario
+    const { data: userData, error: userError } = await supabase
+      .from("usuarios")
+      .select("tienda_id")
+      .eq("id", user.id)
+      .single();
+    
+    if (userError) throw userError;
+    if (!userData?.tienda_id) throw new Error('Usuario no tiene tienda asignada');
+
+    setTiendaId(userData.tienda_id);
+
+    const { data: ses, error: eSes } = await supabase
+      .from('v_caja_sesion_abierta')
+      .select('id, saldo_inicial')
+      .eq('tienda_id', userData.tienda_id)
+      .maybeSingle();
+
+    if (eSes) throw eSes;
+
+    setSesionCajaId(ses?.id ?? null);
+    setSaldoInicialCaja(Number(ses?.saldo_inicial || 0));
+    
+    return userData.tienda_id;
+  } catch (err) {
+    console.warn('No se pudo cargar sesión de caja', err);
+    setSesionCajaId(null);
+    setSaldoInicialCaja(0);
+    return null;
+  }
+}
+
 const registrarIngresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
     if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
     setError(null); setLoading(true)
@@ -434,7 +390,6 @@ const registrarIngresoCaja = async (denominaciones: Record<string, number>, conc
       setPaso(1) // Avanza solo si se encontraron productos
     } else {
       setPaso(0) // Se queda en la vista principal si no hay stock
-<<<<<<< HEAD
     }
   }
   // -----------------------------------------------------------------
@@ -492,92 +447,12 @@ const registrarIngresoCaja = async (denominaciones: Record<string, number>, conc
       setDisenos(disenosUnicos)
       setBusquedaDiseno('')
       setPaso(2)
-<<<<<<< HEAD
-    } catch (err: unknown) {
-=======
     } catch (err) {
-<<<<<<< HEAD
->>>>>>> parent of f3d2605 (UPDATE de POS)
-=======
->>>>>>> parent of f3d2605 (UPDATE de POS)
       setError(getErrorMessage(err, 'Error al cargar diseños disponibles'))
-=======
->>>>>>> parent of b334bfa (respaldo POS completo)
     }
   }
   // -----------------------------------------------------------------
 
-<<<<<<< HEAD
-=======
-  const seleccionarDiseno = async (diseno: string) => {
-    setDisenoSel(diseno)
-    setError(null)
-    try {
-      const { data, error } = await supabase
-        .from('variantes_admin_view')
-        .select('color, stock_actual')
-        .eq('tipo_prenda', tipoSel)
-        .eq('diseno', diseno)
-        .eq('tienda_id', tiendaId as number)
-        .eq('producto_activo', true)
-        // Mostrar todos los colores, incluso sin stock
-        .not('stock_actual', 'is', null)
-
-      if (error) throw error
-
-      const coloresUnicos = [...new Set(data?.map(d => d.color).filter(Boolean))]
-      
-      if (coloresUnicos.length === 0) {
-        setError('No hay colores disponibles para este diseño')
-        return
-      }
-      
-      setColores(coloresUnicos)
-      setPaso(3)
-    } catch (err) {
-      setError(getErrorMessage(err, 'Error al cargar colores disponibles'))
-    }
-  }
-
-  const seleccionarTipo = async (tipo: string) => {
-    setTipoSel(tipo)
-    setError(null)
-    try {
-      // Asegurarnos de tener un ID de tienda válido
-      const currentTiendaId = tiendaId || (await cargarSesionCaja())
-      if (!currentTiendaId) {
-        throw new Error('No se pudo determinar la tienda')
-      }
-
-      const { data, error } = await supabase
-        .from('variantes_admin_view')
-        .select('diseno, stock_actual')
-        .eq('tipo_prenda', tipo)
-        .eq('tienda_id', currentTiendaId)
-        .eq('producto_activo', true)
-        // Mostrar todos los diseños, incluso sin stock
-        .not('stock_actual', 'is', null)
-        .order('diseno')
-
-      if (error) throw error
-
-      const disenosUnicos = [...new Set(data?.map(d => d.diseno).filter(Boolean))]
-      
-      if (disenosUnicos.length === 0) {
-        setError('No hay diseños disponibles para este tipo de prenda')
-        return
-      }
-      
-      setDisenos(disenosUnicos)
-      setBusquedaDiseno('')
-      setPaso(2)
-    } catch (err) {
-      console.error('Error en seleccionarTipo:', err)
-      setError(getErrorMessage(err, 'Error al cargar diseños disponibles'))
-    }
-  }
-
->>>>>>> parent of b334bfa (respaldo POS completo)
   const seleccionarColor = async (color: string) => {
     setColorSel(color)
     try {
@@ -587,7 +462,7 @@ const registrarIngresoCaja = async (denominaciones: Record<string, number>, conc
         .eq('tipo_prenda', tipoSel)
         .eq('diseno', disenoSel)
         .eq('color', color)
-        .eq('tienda_id', 1)
+        .eq('tienda_id', tiendaId as number)
         .eq('producto_activo', true)
         // Mostrar todas las tallas, incluso sin stock
         .not('stock_actual', 'is', null)
@@ -606,23 +481,12 @@ const registrarIngresoCaja = async (denominaciones: Record<string, number>, conc
         return
       }
 
-<<<<<<< HEAD
-      return tallasData
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Error al cargar tallas disponibles'))
-      return []
-    }
-  }
-
-
-=======
       setTallas(tallasData)
       setPaso(4)
     } catch (err) {
       setError(getErrorMessage(err, 'Error al cargar las tallas'))
     }
   }
->>>>>>> parent of b334bfa (respaldo POS completo)
 
   const seleccionarTalla = (talla: {talla: string, variante_id: number, stock: number}) => {
     if (talla.stock <= 0) {
