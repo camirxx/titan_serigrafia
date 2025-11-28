@@ -824,14 +824,14 @@ const cargarVentasDelDia = async () => {
 
           <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-6 mb-6">
             <div className="grid grid-cols-2 gap-4 text-lg">
-              <div><span className="text-indigo-700 font-semibold">Tipo:</span> <span className="font-bold">{tipoSel}</span></div>
-              <div><span className="text-indigo-700 font-semibold">Talla:</span> <span className="font-bold">{tallaSel?.talla}</span></div>
-              <div><span className="text-indigo-700 font-semibold">Diseño:</span> <span className="font-bold">{disenoSel}</span></div>
-              <div><span className="text-indigo-700 font-semibold">Color:</span> <span className="font-bold">{colorSel}</span></div>
+              <div><span className="text-indigo-700 font-semibold">Tipo:</span> <span className="text-black font-semibold">{tipoSel}</span></div>
+              <div><span className="text-indigo-700 font-semibold">Talla:</span> <span className="text-black font-semibold">{tallaSel?.talla}</span></div>
+              <div><span className="text-indigo-700 font-semibold">Diseño:</span> <span className="text-black font-semibold">{disenoSel}</span></div>
+              <div><span className="text-indigo-700 font-semibold">Color:</span> <span className="text-black font-semibold">{colorSel}</span></div>
             </div>
             {tallaSel && (
               <div className="mt-4 pt-4 border-t border-indigo-200">
-                <span className="text-indigo-700 font-semibold">Stock disponible:</span> 
+                <span className="text-indigo-700 font-semibold">Stock disponible:</span>
                 <span className={`ml-2 font-bold ${tallaSel.stock > 5 ? 'text-green-600' : 'text-orange-600'}`}>
                   {tallaSel.stock} unidad{tallaSel.stock !== 1 ? 'es' : ''}
                 </span>
@@ -887,7 +887,7 @@ const cargarVentasDelDia = async () => {
             <button
               onClick={continuarAPago}
               disabled={loading}
-              className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
+              className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600  text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
             >
               {loading ? 'Procesando...' : metodo === 'efectivo' ? 'Siguiente' : 'Confirmar Venta'}
             </button>
@@ -971,7 +971,7 @@ const cargarVentasDelDia = async () => {
               )
               return Math.abs(totalVueltoSeleccionado - Math.abs(faltante)) > 0.01
             })())}
-            className="w-full py-4 mt-8 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
+            className="w-full py-4 mt-8 bg-gradient-to-r from-indigo-600 to-purple-600 text-black text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
           >
             {loading ? 'Registrando...' : 
              faltante > 0 ? 'Falta dinero por ingresar' :
@@ -1361,11 +1361,11 @@ function ModalMovimientoCaja({
                   <span className="text-4xl leading-none">{tipo === 'ingreso' ? '💰' : '💸'}</span>
                 </div>
                 <div>
-                  <h2 className="text-3xl font-bold text-white">
+                  <h2 className="text-3xl font-bold">
                     {tipo === 'ingreso' ? 'Ingresar Dinero' : 'Retirar Dinero'}
                   </h2>
-                  <p className="text-white/90 text-sm mt-0.5">
-                    {tipo === 'ingreso' ? 'Especifica los billetes que agregas a la caja' : 'Especifica los billetes que retiras de la caja'}
+                  <p className="text-black/90 text-sm mt-0.5">
+                    {tipo === 'ingreso' ? '' : ''}
                   </p>
                 </div>
               </div>
@@ -1524,7 +1524,7 @@ function ModalMovimientoCaja({
             <button
               onClick={handleConfirmar}
               disabled={total <= 0}
-              className={`flex-1 py-3 px-4 text-white font-bold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-md hover:shadow-lg active:scale-95 ${
+              className={`flex-1 py-3 px-4 text-black font-bold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-md hover:shadow-lg active:scale-95 ${
                 tipo === 'ingreso' 
                   ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700' 
                   : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700'

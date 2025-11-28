@@ -166,9 +166,49 @@ export default function ModalAgregarDiseno({
       limpiarFormulario();
       onClose();
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Error al crear el diseño";
-      setError(message);
+      console.error("Error al crear diseño:", err);
+      
+      // Analizar el tipo de error para dar mensajes más específicos
+      let errorMessage = "Error al crear el diseño";
+      
+      if (err instanceof Error) {
+        const errorLower = err.message.toLowerCase();
+        
+        // Error de duplicado (diseño ya existe)
+        if (errorLower.includes("duplicate") || errorLower.includes("unique") || errorLower.includes("already exists")) {
+          errorMessage = `❌ El diseño "${nombreDiseno.trim()}" ya existe. Por favor, usa un nombre diferente.`;
+        }
+        // Error de permisos (RLS)
+        else if (errorLower.includes("permission") || errorLower.includes("unauthorized") || errorLower.includes("policy")) {
+          errorMessage = "❌ No tienes permisos para crear diseños. Contacta al administrador.";
+        }
+        // Error de conexión
+        else if (errorLower.includes("connection") || errorLower.includes("network")) {
+          errorMessage = "❌ Error de conexión. Verifica tu internet e intenta nuevamente.";
+        }
+        // Error de validación
+        else if (errorLower.includes("validation") || errorLower.includes("required")) {
+          errorMessage = "❌ Faltan datos obligatorios. Revisa todos los campos.";
+        }
+        // Error de base de datos genérico
+        else if (errorLower.includes("database") || errorLower.includes("sql")) {
+          errorMessage = "❌ Error en la base de datos. Intenta nuevamente o contacta soporte.";
+        }
+        // Error al obtener IDs de productos
+        else if (errorLower.includes("ids") || errorLower.includes("rls") || errorLower.includes("select")) {
+          errorMessage = "❌ Error al guardar los productos. Verifica los permisos de la base de datos.";
+        }
+        // Otro tipo de error conocido
+        else {
+          errorMessage = `❌ Error: ${err.message}`;
+        }
+      } else {
+        errorMessage = "❌ Error desconocido del sistema. Intenta nuevamente.";
+      }
+      
+      // Mostrar alert con el mensaje de error específico
+      alert(errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -199,8 +239,16 @@ export default function ModalAgregarDiseno({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {error && (
-            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded">
-              {error}
+            <div className="bg-red-50 border-2 border-red-200 text-red-800 p-4 rounded-lg shadow-md animate-pulse">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="flex-1">
+                  <p className="font-semibold text-red-800">No se pudo agregar el diseño</p>
+                  <p className="text-sm text-red-700 mt-1">{error}</p>
+                </div>
+              </div>
             </div>
           )}
           {ok && (
@@ -281,7 +329,7 @@ export default function ModalAgregarDiseno({
 
           {tiposSeleccionados.length > 0 &&
             coloresSeleccionados.length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+              <div className="bg-blue-50 border text-black border-blue-200 rounded-lg p-3 text-sm">
                 Se crearán: <b>{tiposSeleccionados.length}</b> ×{" "}
                 <b>{coloresSeleccionados.length}</b> ={" "}
                 <b>
