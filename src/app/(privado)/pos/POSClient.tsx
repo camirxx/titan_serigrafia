@@ -298,37 +298,84 @@ const cargarVentasDelDia = async () => {
   }
 
   const iniciarVenta = async () => {
-    if (!tiendaId) {
-      setError('No se pudo determinar tu tienda. Verifica tu usuario.')
-      return
-    }
-    
     setPaso(1)
     setError(null)
     
     try {
-      console.log('🔍 Consultando variantes para tienda:', tiendaId)
+      console.log('🔍 Consultando variantes disponibles en inventario')
       
-      const { data, error } = await supabase
+      // OPCIÓN 1: Intentar con variantes_admin_view
+      let data, error;
+      
+      const result1 = await supabase
         .from('variantes_admin_view')
-        .select('tipo_prenda, stock_actual')
-        .eq('tienda_id', tiendaId)
+        .select('tipo_prenda, stock_actual, diseno, color, talla, variante_id, producto_activo')
+        .eq('tienda_id', 1)
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
-        .not('stock_actual', 'is', null)
 
-      console.log('📊 Respuesta Supabase:', { data, error })
+      console.log('📊 Resultado variantes_admin_view:', result1)
 
-      if (error) {
-        console.error('❌ Error de Supabase:', JSON.stringify(error, null, 2))
-        throw error
+      if (result1.error) {
+        console.log('⚠️ Error en view, intentando con tablas directas...')
+        
+        // OPCIÓN 2: Consultar directamente desde variantes + productos
+        const result2 = await supabase
+          .from('variantes')
+          .select(`
+            id,
+            talla,
+            stock_actual,
+            productos!inner (
+              id,
+              activo,
+              tienda_id,
+              disenos (nombre),
+              tipos_prenda (nombre),
+              colores (nombre)
+            )
+          `)
+          .eq('productos.tienda_id', 1)
+          .eq('productos.activo', true)
+          .gt('stock_actual', 0)
+
+        console.log('📊 Resultado consulta directa:', result2)
+        
+        if (result2.error) throw result2.error
+        
+        // Transformar datos
+        data = result2.data?.map((v: any) => ({
+          tipo_prenda: Array.isArray(v.productos.tipos_prenda) 
+            ? v.productos.tipos_prenda[0]?.nombre 
+            : v.productos.tipos_prenda?.nombre,
+          stock_actual: v.stock_actual,
+          diseno: Array.isArray(v.productos.disenos)
+            ? v.productos.disenos[0]?.nombre
+            : v.productos.disenos?.nombre,
+          color: Array.isArray(v.productos.colores)
+            ? v.productos.colores[0]?.nombre
+            : v.productos.colores?.nombre,
+          variante_id: v.id,
+          talla: v.talla
+        }))
+      } else {
+        data = result1.data
+        error = result1.error
       }
 
-      const tiposUnicos = [...new Set(data?.map(d => d.tipo_prenda).filter(Boolean))]
+      console.log('✅ Datos finales:', data)
+
+      if (!data || data.length === 0) {
+        setError('No hay productos disponibles con stock en el inventario. Verifica que hayas agregado productos con stock.')
+        setPaso(0)
+        return
+      }
+
+      const tiposUnicos = [...new Set(data?.map((d: any) => d.tipo_prenda).filter(Boolean))]
       console.log('✅ Tipos únicos encontrados:', tiposUnicos)
       
       if (tiposUnicos.length === 0) {
-        setError('No hay productos disponibles con stock en tu tienda')
+        setError('No hay productos disponibles con stock en el inventario')
         setPaso(0)
         return
       }
@@ -887,7 +934,7 @@ const cargarVentasDelDia = async () => {
             <button
               onClick={continuarAPago}
               disabled={loading}
-              className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600  text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
+              className=" text-white w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600  text-xl  rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
             >
               {loading ? 'Procesando...' : metodo === 'efectivo' ? 'Siguiente' : 'Confirmar Venta'}
             </button>
@@ -945,7 +992,7 @@ const cargarVentasDelDia = async () => {
               </div>
 
               <div className={`p-4 rounded-xl mt-6 ${faltante > 0 ? 'bg-red-50 border-2 border-red-200' : 'bg-green-50 border-2 border-green-200'}`}>
-                <div className="text-lg font-bold">Total ingresado: ${formatNumber(totalBilletes)}</div>
+                <div className="text-lg text-black font-bold">Total ingresado: ${formatNumber(totalBilletes)}</div>
                 {faltante > 0 && <div className="text-red-700 font-semibold">Falta: ${formatNumber(faltante)}</div>}
                 {faltante < 0 && <div className="text-orange-700 font-semibold text-xl">⚠️ Vuelto a entregar: ${formatNumber(Math.abs(faltante))}</div>}
                 {faltante === 0 && <div className="text-green-700 font-semibold flex items-center gap-2"><Check className="w-5 h-5" /> Monto exacto</div>}

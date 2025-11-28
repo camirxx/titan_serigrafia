@@ -154,42 +154,139 @@ export default function ModalEditarProducto({ isOpen, onClose, producto, onSucce
     try {
       const supabase = supabaseBrowser();
 
-      // 1. Eliminar primero las variantes del producto
-      const { error: errorVariantes } = await supabase
+      console.log('🗑️ Iniciando eliminación del producto:', producto.producto_id);
+
+      // PASO 1: Obtener todas las variantes del producto
+      const { data: variantes, error: errorGetVariantes } = await supabase
         .from("variantes")
-        .delete()
+        .select("id")
         .eq("producto_id", producto.producto_id);
 
-      if (errorVariantes) {
-        console.error("Error eliminando variantes:", errorVariantes);
-        throw errorVariantes;
+      if (errorGetVariantes) {
+        console.error("Error obteniendo variantes:", errorGetVariantes);
+        throw new Error("No se pudo verificar las variantes del producto");
       }
 
-      // 2. Eliminar el producto
+      const varianteIds = variantes?.map(v => v.id) || [];
+      console.log('📦 Variantes encontradas:', varianteIds.length);
+
+      if (varianteIds.length > 0) {
+        // PASO 2: Verificar si hay ventas asociadas (NO ELIMINAR SI HAY VENTAS)
+        const { count, error: errorVentas } = await supabase
+          .from("detalle_ventas")
+          .select("*", { count: 'exact', head: true })
+          .in("variante_id", varianteIds);
+
+        if (errorVentas) {
+          console.error("Error verificando ventas:", errorVentas);
+        }
+
+        const cantidadVentas = count || 0;
+        
+        if (cantidadVentas > 0) {
+          throw new Error(`❌ No se puede eliminar este producto porque tiene ${cantidadVentas} ventas registradas. Por seguridad, no eliminamos productos con historial de ventas. Si deseas ocultarlo, marca el producto como "Inactivo".`);
+        }
+
+        console.log('✓ Sin ventas asociadas, procediendo con la eliminación...');
+
+        // PASO 3: Eliminar devoluciones_items
+        const { error: errorDevolucionesItems } = await supabase
+          .from("devoluciones_items")
+          .delete()
+          .in("variante_id", varianteIds);
+
+        if (errorDevolucionesItems && errorDevolucionesItems.code !== 'PGRST116') {
+          console.warn("⚠️ Error al eliminar devoluciones_items:", errorDevolucionesItems);
+        } else {
+          console.log('✅ devoluciones_items eliminados');
+        }
+
+        // PASO 4: Eliminar cambios_items_entregados
+        const { error: errorCambiosItems } = await supabase
+          .from("cambios_items_entregados")
+          .delete()
+          .in("variante_id", varianteIds);
+
+        if (errorCambiosItems && errorCambiosItems.code !== 'PGRST116') {
+          console.warn("⚠️ Error al eliminar cambios_items_entregados:", errorCambiosItems);
+        } else {
+          console.log('✅ cambios_items_entregados eliminados');
+        }
+
+        // PASO 5: Eliminar cambios_detalle (from_variante_id)
+        const { error: errorCambiosDetalleFrom } = await supabase
+          .from("cambios_detalle")
+          .delete()
+          .in("from_variante_id", varianteIds);
+
+        if (errorCambiosDetalleFrom && errorCambiosDetalleFrom.code !== 'PGRST116') {
+          console.warn("⚠️ Error al eliminar cambios_detalle (from):", errorCambiosDetalleFrom);
+        } else {
+          console.log('✅ cambios_detalle (from) eliminados');
+        }
+
+        // PASO 6: Eliminar cambios_detalle (to_variante_id)
+        const { error: errorCambiosDetalleTo } = await supabase
+          .from("cambios_detalle")
+          .delete()
+          .in("to_variante_id", varianteIds);
+
+        if (errorCambiosDetalleTo && errorCambiosDetalleTo.code !== 'PGRST116') {
+          console.warn("⚠️ Error al eliminar cambios_detalle (to):", errorCambiosDetalleTo);
+        } else {
+          console.log('✅ cambios_detalle (to) eliminados');
+        }
+
+        // PASO 7: Eliminar movimientos_inventario
+        const { error: errorMovimientos } = await supabase
+          .from("movimientos_inventario")
+          .delete()
+          .in("variante_id", varianteIds);
+
+        if (errorMovimientos && errorMovimientos.code !== 'PGRST116') {
+          console.warn("⚠️ Error al eliminar movimientos_inventario:", errorMovimientos);
+        } else {
+          console.log('✅ movimientos_inventario eliminados');
+        }
+
+        // PASO 8: Eliminar variantes
+        const { error: errorVariantes } = await supabase
+          .from("variantes")
+          .delete()
+          .eq("producto_id", producto.producto_id);
+
+        if (errorVariantes) {
+          console.error("❌ Error eliminando variantes:", errorVariantes);
+          throw new Error(`Error al eliminar variantes: ${errorVariantes.message}`);
+        }
+        console.log('✅ Variantes eliminadas');
+      }
+
+      // PASO 9: Finalmente eliminar el producto
       const { error: errorProducto } = await supabase
         .from("productos")
         .delete()
         .eq("id", producto.producto_id);
 
       if (errorProducto) {
-        console.error("Error eliminando producto:", errorProducto);
-        throw errorProducto;
+        console.error("❌ Error eliminando producto:", errorProducto);
+        throw new Error(`Error al eliminar producto: ${errorProducto.message}`);
       }
 
-      // 3. Cerrar el modal de confirmación
+      console.log('✅ Producto eliminado exitosamente');
+
+      // PASO 10: Cerrar modal y notificar éxito
       setMostrarConfirmacionEliminar(false);
-      
-      // 4. Notificar éxito y cerrar modal
       onSuccess();
       onClose();
     } catch (err) {
-      console.error("Error al eliminar:", err);
+      console.error("💥 Error al eliminar:", err);
       setError(err instanceof Error ? err.message : "Error al eliminar producto");
     } finally {
       setLoading(false);
     }
   };
-
+  
   const handleGuardar = async () => {
     if (!producto) return;
     

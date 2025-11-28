@@ -72,33 +72,6 @@ const ChatbotWidget = () => {
     );
   };
 
-  const showResumenCajaMenu = () => {
-    setCurrentMenu('resumen-caja');
-    addMessage(
-      '💰 Resumen de Caja:',
-      true,
-      [
-        { id: 'ganancia-dia', label: '✨ Ganancia del día' },
-        { id: 'ingreso-caja', label: '💵 Ingreso en caja' },
-        { id: 'dinero-retirado', label: '💸 Retiro de caja' },
-        { id: 'volver-resumen', label: '⬅️ Volver' }
-      ]
-    );
-  };
-
-  const showResumenProductosMenu = () => {
-    setCurrentMenu('resumen-productos');
-    addMessage(
-      '🛒 Resumen de Productos:',
-      true,
-      [
-        { id: 'total-vendido', label: '🧮 Total vendido del día' },
-        { id: 'modelo-mas-vendido', label: '🏆 Modelo más vendido' },
-        { id: 'volver-resumen', label: '⬅️ Volver' }
-      ]
-    );
-  };
-
   const handleInventarioCompleto = () => {
     addMessage('Te llevo al inventario... 📋', true);
     setTimeout(() => {
@@ -114,16 +87,22 @@ const ChatbotWidget = () => {
   const searchProduct = async (productName) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/productos/buscar?nombre=${encodeURIComponent(productName)}`);
+      console.log('🔍 Buscando producto:', productName);
+      
+      // ✅ Agregar tienda_id = 1 en la consulta
+      const response = await fetch(`/api/productos/buscar?nombre=${encodeURIComponent(productName)}&tienda_id=1`);
       const data = await response.json();
 
+      console.log('📊 Respuesta API:', data);
+
       if (data.error) {
+        console.error('❌ Error en API:', data.error);
         addMessage('❌ Hubo un error al buscar el producto.');
         return;
       }
 
       if (!data.productos || data.productos.length === 0) {
-        addMessage('❌ No encontré ese producto.');
+        addMessage(`❌ No encontré productos con el nombre "${productName}" en el inventario.`);
         return;
       }
 
@@ -170,7 +149,8 @@ const ChatbotWidget = () => {
 
       addMessage(mensaje);
     } catch (error) {
-      addMessage('❌ Hubo un error al buscar el producto.');
+      console.error('❌ Error completo:', error);
+      addMessage('❌ Hubo un error al buscar el producto. Por favor intenta de nuevo.');
     } finally {
       setIsLoading(false);
       setConversationState({});
@@ -182,10 +162,16 @@ const ChatbotWidget = () => {
     setIsLoading(true);
     let data = null;
     try {
-      const response = await fetch('/api/stock-bajo');
+      console.log('🔍 Consultando stock bajo...');
+      
+      // ✅ Agregar tienda_id = 1 en la consulta
+      const response = await fetch('/api/stock-bajo?tienda_id=1');
       data = await response.json();
 
+      console.log('📊 Respuesta API stock bajo:', data);
+
       if (data.error) {
+        console.error('❌ Error en API:', data.error);
         addMessage('❌ Hubo un error al verificar el stock.');
         return;
       }
@@ -225,7 +211,8 @@ const ChatbotWidget = () => {
         }
       }
     } catch (error) {
-      addMessage('❌ Hubo un error al verificar el stock.');
+      console.error('❌ Error completo:', error);
+      addMessage('❌ Hubo un error al verificar el stock. Por favor intenta de nuevo.');
     } finally {
       setIsLoading(false);
       if (!data?.productos || data?.productos.length <= 5) {
@@ -234,406 +221,13 @@ const ChatbotWidget = () => {
     }
   };
 
-  const handleGananciaDiaConFecha = async () => {
-    const fecha = conversationState.fecha || new Date().toISOString().split('T')[0];
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/ganancia-dia?fecha=${fecha}`);
-      const data = await response.json();
-
-      if (data && !data.error) {
-        addMessage(
-          `💰 Ganancia del día (${fecha}):\n\n` +
-          `📊 Total ventas: $${data.total_ventas.toLocaleString('es-CL')}\n` +
-          `🛒 Cantidad de ventas: ${data.cantidad_ventas}`
-        );
-      } else {
-        addMessage('❌ No hay ganancias para esa fecha.');
-      }
-    } catch (error) {
-      addMessage('❌ No pude obtener esa info.');
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenCajaMenu(), 1500);
-    }
-  };
-
-  const handleTotalVendido = async () => {
-    const fecha = conversationState.fecha || new Date().toISOString().split('T')[0];
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/total-vendido?fecha=${fecha}`);
-      const data = await response.json();
-
-      if (data && !data.error) {
-        let mensaje = `🧮 Total vendido (${fecha}):\n\n`;
-        mensaje += `📦 Total productos: ${data.cantidad_total} unidades\n\n`;
-        
-        if (data.categorias && data.categorias.length > 0) {
-          mensaje += `📋 Desglose por categorías:\n`;
-          data.categorias.forEach((cat, index) => {
-            mensaje += `${index + 1}. ${cat.nombre_formateado}: ${cat.cantidad} unidades\n`;
-          });
-          
-          if (data.resumen) {
-            mensaje += `\n🏆 Más vendido: ${data.resumen.categoria_mas_vendida}`;
-          }
-        } else {
-          mensaje += `📋 No hay ventas registradas para esta fecha`;
-        }
-
-        addMessage(mensaje);
-      } else {
-        addMessage('❌ No hay ventas para esa fecha.');
-      }
-    } catch (error) {
-      addMessage('❌ No pude obtener las ventas.');
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenProductosMenu(), 1500);
-    }
-  };
-
-  const handleTotalPoleras = async () => {
-    setIsLoading(true);
-    try {
-      const hoy = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/total-poleras?fecha=${hoy}`);
-      const data = await response.json();
-
-      addMessage(
-        `👕 Poleras vendidas hoy:\n\n` +
-        `${data.cantidad_poleras || 0} unidades`
-      );
-    } catch (error) {
-      addMessage('❌ No pude contar las poleras.');
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenProductosMenu(), 1500);
-    }
-  };
-
-  const handleMasVendido = async () => {
-    const fecha = conversationState.fecha || new Date().toISOString().split('T')[0];
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/modelo-mas-vendido?fecha=${fecha}`);
-      const data = await response.json();
-
-      if (data && !data.error) {
-        let mensaje = `🏆 Modelo más vendido (${fecha}):\n\n`;
-        
-        if (data.hay_empate) {
-          mensaje += `🤝 ¡Hay un empate!\n\n`;
-          mensaje += `Varios modelos vendieron ${data.cantidad_vendida} unidades:\n\n`;
-          
-          if (data.modelos_empate && data.modelos_empate.length > 0) {
-            data.modelos_empate.forEach((modelo, index) => {
-              mensaje += `${index + 1}. ${modelo.nombre} (${modelo.tipo_prenda})\n`;
-            });
-          }
-          
-          mensaje += `\n📊 No hay un modelo único más vendido hoy.`;
-        } else if (data.nombre) {
-          mensaje += `🎉 El modelo más vendido es:\n\n`;
-          mensaje += `✨ ${data.nombre}\n`;
-          if (data.diseno && data.diseno !== 'Diseño clásico') {
-            mensaje += `🎨 ${data.diseno}\n`;
-          }
-          mensaje += `📦 ${data.tipo_prenda}\n`;
-          mensaje += `🔢 ${data.cantidad_vendida} unidades vendidas`;
-        } else {
-          mensaje += `📋 ${data.mensaje || 'No hay ventas registradas para esta fecha'}`;
-        }
-
-        addMessage(mensaje);
-      } else {
-        addMessage('❌ No hay ventas para esa fecha.');
-      }
-    } catch (error) {
-      addMessage('❌ No pude obtener esa info.');
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenProductosMenu(), 1500);
-    }
-  };
-
-  const handleRegistrarIngreso = () => {
-    setConversationState({ waitingFor: 'ingreso-monto' });
-    addMessage('💰 Escribe el monto del ingreso (ejemplo: 5000):');
-  };
-
-  const handleRegistrarRetiro = () => {
-    setConversationState({ waitingFor: 'retiro-monto' });
-    addMessage('💸 Escribe el monto del retiro (ejemplo: 2000):');
-  };
-
-  const handleIngresoInput = async (input) => {
-    const monto = parseInt(input);
-    
-    if (isNaN(monto) || monto <= 0) {
-      addMessage('❌ Monto inválido. Escribe un número mayor a 0 (ejemplo: 5000)');
-      return;
-    }
-
-    setConversationState({ waitingFor: 'ingreso-concepto', monto: monto });
-    addMessage(`💰 Ingreso de $${monto.toLocaleString('es-CL')}\n\n📝 Ahora escribe el concepto (ejemplo: pago cliente, arriendo, etc.):`);
-  };
-
-  const handleRetiroInput = async (input) => {
-    const monto = parseInt(input);
-    
-    if (isNaN(monto) || monto <= 0) {
-      addMessage('❌ Monto inválido. Escribe un número mayor a 0 (ejemplo: 2000)');
-      return;
-    }
-
-    setConversationState({ waitingFor: 'retiro-concepto', monto: monto });
-    addMessage(`💸 Retiro de $${monto.toLocaleString('es-CL')}\n\n📝 Ahora escribe el motivo (ejemplo: compra insumos, gastos, etc.):`);
-  };
-
-  const handleIngresoConcepto = async (concepto) => {
-    const monto = conversationState.monto;
-    
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/registrar-ingreso', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          monto: monto,
-          concepto: concepto
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        addMessage(
-          `✅ Ingreso registrado exitosamente:\n\n` +
-          `💰 Monto: $${monto.toLocaleString('es-CL')}\n` +
-          `📝 Concepto: ${concepto}\n` +
-          `🕐 Hora: ${data.ingreso.hora}\n\n` +
-          `📋 El ingreso ha sido agregado al resumen de caja.`
-        );
-      } else {
-        addMessage(`❌ Error: ${data.error}`);
-      }
-    } catch (error) {
-      addMessage('❌ No pude registrar el ingreso.');
-    } finally {
-      setIsLoading(false);
-      setConversationState({});
-      setTimeout(() => showResumenCajaMenu(), 2000);
-    }
-  };
-
-  const handleRetiroConcepto = async (concepto) => {
-    const monto = conversationState.monto;
-    
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/registrar-retiro', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          monto: monto,
-          concepto: concepto
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        addMessage(
-          `✅ Retiro registrado exitosamente:\n\n` +
-          `💸 Monto: $${monto.toLocaleString('es-CL')}\n` +
-          `📝 Motivo: ${concepto}\n` +
-          `🕐 Hora: ${data.retiro.hora}\n\n` +
-          `📋 El retiro ha sido descontado de la caja.`
-        );
-      } else {
-        addMessage(`❌ Error: ${data.error}`);
-      }
-    } catch (error) {
-      addMessage('❌ No pude registrar el retiro.');
-    } finally {
-      setIsLoading(false);
-      setConversationState({});
-      setTimeout(() => showResumenCajaMenu(), 2000);
-    }
-  };
-
-  const handleFechaHoy = () => {
-    const hoy = new Date();
-    const fechaParaAPI = hoy.toISOString().split('T')[0]; // YYYY-MM-DD
-    const fechaFormateada = `${String(hoy.getDate()).padStart(2, '0')}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${hoy.getFullYear()}`; // DD-MM-YYYY
-    
-    const nextAction = conversationState.nextAction;
-    
-    setConversationState({ fecha: fechaParaAPI });
-    addMessage(`📅 Mostrando resumen de hoy (${fechaFormateada})`);
-    
-    // Ejecutar la acción guardada
-    setTimeout(() => {
-      if (nextAction === 'ganancia-dia') {
-        handleGananciaDiaConFecha();
-      } else if (nextAction === 'ingreso-caja') {
-        handleIngresoCajaConFecha();
-      } else if (nextAction === 'dinero-retirado') {
-        handleDineroRetiradoConFecha();
-      } else {
-        // Si no hay acción guardada, mostrar menú de opciones
-        showResumenOpciones();
-      }
-    }, 1000);
-  };
-
-  const handleOtraFecha = () => {
-    setConversationState({ 
-      waitingFor: 'fecha-input',
-      nextAction: conversationState.nextAction 
-    });
-    addMessage('📆 Escribe la fecha (formato: DD-MM-YYYY, ejemplo: 15-01-2024):');
-  };
-
-  const showResumenOpciones = () => {
-    setCurrentMenu('resumen-opciones');
-    addMessage(
-      '📊 ¿Qué quieres consultar?',
-      true,
-      [
-        { id: 'resumen-caja', label: '💰 Caja' },
-        { id: 'resumen-productos', label: '🛒 Productos' },
-        { id: 'volver-resumen', label: '⬅️ Volver' }
-      ]
-    );
-  };
-
-  const handleFechaInput = (fechaInput) => {
-    // Validar formato de fecha DD-MM-YYYY
-    const fechaRegex = /^\d{2}-\d{2}-\d{4}$/;
-    if (!fechaRegex.test(fechaInput)) {
-      addMessage('❌ Formato inválido. Usa: DD-MM-YYYY (ejemplo: 15-01-2024)');
-      return;
-    }
-
-    // Convertir DD-MM-YYYY a YYYY-MM-DD para la API
-    const [dia, mes, año] = fechaInput.split('-');
-    const fechaParaAPI = `${año}-${mes}-${dia}`;
-    
-    // Validar que sea una fecha válida
-    const fecha = new Date(fechaParaAPI);
-    if (isNaN(fecha.getTime())) {
-      addMessage('❌ Fecha inválida. Intenta nuevamente.');
-      return;
-    }
-
-    const nextAction = conversationState.nextAction;
-
-    setConversationState({ fecha: fechaParaAPI });
-    addMessage(`📆 Mostrando resumen de ${fechaInput}`);
-    
-    // Ejecutar la acción guardada
-    setTimeout(() => {
-      if (nextAction === 'ganancia-dia') {
-        handleGananciaDiaConFecha();
-      } else if (nextAction === 'ingreso-caja') {
-        handleIngresoCajaConFecha();
-      } else if (nextAction === 'dinero-retirado') {
-        handleDineroRetiradoConFecha();
-      } else {
-        // Si no hay acción guardada, mostrar menú de opciones
-        showResumenOpciones();
-      }
-    }, 1000);
-  };
-
-  const handleIngresoCajaConFecha = async () => {
-    setIsLoading(true);
-    try {
-      const fecha = conversationState.fecha || new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/resumen-caja?fecha=${fecha}`);
-      const data = await response.json();
-
-      const esHoy = fecha === new Date().toISOString().split('T')[0];
-      const diaTexto = esHoy ? 'hoy' : `el ${fecha}`;
-
-      let mensaje = `💵 Ingreso en caja ${diaTexto}:\n\n`;
-      mensaje += `💰 Total efectivo: $${data.total_efectivo?.toLocaleString('es-CL') || 0}\n\n`;
-      
-      mensaje += `🛒 Ventas en efectivo: $${data.total_ventas_efectivo?.toLocaleString('es-CL') || 0} (${data.cantidad_ventas_efectivo || 0} ventas)\n`;
-      mensaje += `📝 Ingresos manuales: $${data.total_ingresos_manuales?.toLocaleString('es-CL') || 0} (${data.cantidad_ingresos_manuales || 0})\n`;
-      
-      // Mostrar detalle de ingresos manuales
-      if (data.cantidad_ingresos_manuales > 0 && data.detalle_manuales) {
-        mensaje += `\n📋 Detalle ingresos manuales:\n`;
-        data.detalle_manuales.forEach(ingreso => {
-          mensaje += `• $${ingreso.monto?.toLocaleString('es-CL')} - ${ingreso.concepto} (${ingreso.hora})\n`;
-        });
-      } else if (data.cantidad_ingresos_manuales === 0) {
-        mensaje += `\n📋 No hubo ingresos manuales ${diaTexto}\n`;
-      }
-
-      addMessage(mensaje);
-    } catch (error) {
-      addMessage('❌ No pude obtener el ingreso.');
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenCajaMenu(), 1500);
-    }
-  };
-
-  const handleDineroRetiradoConFecha = async () => {
-    setIsLoading(true);
-    try {
-      const fecha = conversationState.fecha || new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/dinero-retirado?fecha=${fecha}`);
-      const data = await response.json();
-
-      const esHoy = fecha === new Date().toISOString().split('T')[0];
-      const diaTexto = esHoy ? 'hoy' : `el ${fecha}`;
-
-      let mensaje = `💸 Retiros de caja ${diaTexto}:\n\n`;
-      
-      if (data.total_dia > 0) {
-        mensaje += `📅 Retiros ${diaTexto}: $${data.total_dia?.toLocaleString('es-CL')}\n`;
-        if (data.total_acumulado_anterior > 0) {
-          mensaje += `📊 Acumulado anterior: $${data.total_acumulado_anterior?.toLocaleString('es-CL')}\n`;
-        }
-        mensaje += `\n📝 Detalle ${diaTexto}:\n`;
-        data.retiros_dia.forEach((retiro, index) => {
-          mensaje += `${index + 1}. $${retiro.monto?.toLocaleString('es-CL')} - ${retiro.motivo} (${retiro.hora})\n`;
-        });
-      } else {
-        mensaje += `✅ No hay retiros ${diaTexto}\n`;
-        if (data.total_acumulado_anterior > 0) {
-          mensaje += `📊 Total acumulado: $${data.total_acumulado_anterior?.toLocaleString('es-CL')}`;
-        }
-      }
-
-      addMessage(mensaje);
-    } catch (error) {
-      addMessage('❌ No pude obtener los retiros.');
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => showResumenCajaMenu(), 1500);
-    }
-  };
-
   const handleBorrarChat = () => {
-    // Limpiar todo el estado
     setMessages([]);
     setCurrentMenu('main');
     setConversationState({});
     setIsLoading(false);
     setInputValue('');
     
-    // Mostrar mensaje de confirmación y reiniciar
     setTimeout(() => {
       addMessage('✨ Chat borrado exitosamente. ¡Empecemos de nuevo!', true);
       setTimeout(() => {
@@ -643,7 +237,6 @@ const ChatbotWidget = () => {
   };
 
   const handleOptionClick = (optionId) => {
-    // Menú principal
     if (optionId === 'inventario') {
       showInventoryMenu();
     } else if (optionId === 'resumen') {
@@ -652,9 +245,7 @@ const ChatbotWidget = () => {
       handleBorrarChat();
     } else if (optionId === 'volver-main') {
       showMainMenu();
-    } 
-    // Inventario
-    else if (optionId === 'inventario-completo') {
+    } else if (optionId === 'inventario-completo') {
       handleInventarioCompleto();
     } else if (optionId === 'buscar-producto') {
       handleBuscarProducto();
@@ -664,48 +255,6 @@ const ChatbotWidget = () => {
       handleInventarioCompleto();
     } else if (optionId === 'volver-inventario') {
       showInventoryMenu();
-    }
-    // Resumen - Selección de fecha
-    else if (optionId === 'hoy') {
-      handleFechaHoy();
-    } else if (optionId === 'otra-fecha') {
-      handleOtraFecha();
-    }
-    // Resumen - Submenús
-    else if (optionId === 'resumen-caja') {
-      showResumenCajaMenu();
-    } else if (optionId === 'resumen-productos') {
-      showResumenProductosMenu();
-    } else if (optionId === 'volver-resumen') {
-      showResumenMenu();
-    }
-    // Caja - Primero preguntar por fecha si no está definida
-    else if (optionId === 'ganancia-dia' || optionId === 'ingreso-caja' || optionId === 'dinero-retirado') {
-      if (!conversationState.fecha) {
-        // Guardar la opción que quiere ver y preguntar por fecha
-        setConversationState({ 
-          waitingFor: 'resumen-fecha',
-          nextAction: optionId 
-        });
-        showResumenMenu();
-      } else {
-        // Si ya hay fecha, ejecutar la acción directamente
-        if (optionId === 'ganancia-dia') {
-          handleGananciaDiaConFecha();
-        } else if (optionId === 'ingreso-caja') {
-          handleIngresoCajaConFecha();
-        } else if (optionId === 'dinero-retirado') {
-          handleDineroRetiradoConFecha();
-        }
-      }
-    }
-    // Productos
-    else if (optionId === 'total-vendido') {
-      handleTotalVendido();
-    } else if (optionId === 'total-poleras') {
-      handleTotalPoleras();
-    } else if (optionId === 'modelo-mas-vendido') {
-      handleMasVendido();
     }
   };
 
@@ -718,8 +267,6 @@ const ChatbotWidget = () => {
 
     if (conversationState.waitingFor === 'product-name') {
       searchProduct(userMessage);
-    } else if (conversationState.waitingFor === 'fecha-input') {
-      handleFechaInput(userMessage);
     } else {
       addMessage('Selecciona una opción de arriba 👆');
     }
@@ -744,7 +291,6 @@ const ChatbotWidget = () => {
             <MessageCircle className="h-6 w-6" />
           </button>
           
-          {/* Tooltip */}
           <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
             <div className="bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-lg whitespace-nowrap">
               ¿Necesitas ayuda?
@@ -762,7 +308,7 @@ const ChatbotWidget = () => {
             <div className="flex items-center gap-2">
               <MessageCircle size={24} />
               <div>
-                <h3 className="font-semibold">Asistente</h3>
+                <h3 className="font-semibold">Asistente de Inventario</h3>
                 <p className="text-xs text-indigo-100">¿En qué te ayudo?</p>
               </div>
             </div>

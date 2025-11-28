@@ -26,14 +26,16 @@ export default function ModalAgregarDiseno({
 
   // form
   const [nombreDiseno, setNombreDiseno] = useState("");
-  const [coloresSeleccionados, setColoresSeleccionados] = useState<number[]>([]);
+  const [coloresSeleccionados, setColoresSeleccionados] = useState<number[]>(
+    []
+  );
   const [tiposSeleccionados, setTiposSeleccionados] = useState<number[]>([]);
 
   // catálogos
   const [coloresDisponibles, setColoresDisponibles] = useState<Color[]>([]);
   const [tiposDisponibles, setTiposDisponibles] = useState<TipoPrenda[]>([]);
 
-  // --- cargar catálogos ---
+  // --- Declarar cargarCatalogos ANTES y memorizado ---
   const cargarCatalogos = useCallback(async () => {
     try {
       const { data: colores, error: e1 } = await supabase
@@ -56,7 +58,7 @@ export default function ModalAgregarDiseno({
     }
   }, [supabase]);
 
-  // al abrir modal
+  // --- Effect que reacciona a apertura del modal ---
   useEffect(() => {
     if (!isOpen) return;
     setOk(null);
@@ -74,8 +76,19 @@ export default function ModalAgregarDiseno({
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
 
-  // 🔥 TIENDA FIJA = 1
-  const TIENDA_CENTRAL = 1;
+  // 👉 helper: obtiene tienda del usuario autenticado
+  const getTiendaIdActual = async (): Promise<number | null> => {
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id;
+    if (!uid) return null;
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("tienda_id")
+      .eq("id", uid)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.tienda_id ?? null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +110,15 @@ export default function ModalAgregarDiseno({
 
     setLoading(true);
     try {
-      // 1) Upsert diseño
+      // 0) tienda actual
+      const tiendaId = 1;
+      
+      if (!tiendaId)
+        throw new Error(
+          "No se pudo determinar tu tienda. Verifica tu usuario.tienda_id."
+        );
+
+      // 1) UPSERT diseño por nombre
       const { data: disenoRow, error: eUpsert } = await supabase
         .from("disenos")
         .upsert({ nombre: nombreDiseno.trim() }, { onConflict: "nombre" })
@@ -106,16 +127,22 @@ export default function ModalAgregarDiseno({
       if (eUpsert) throw eUpsert;
       const disenoId = disenoRow.id as number;
 
-      // 2) Crear productos (siempre tienda_id = 1)
-      const productosACrear = [];
+      // 2) Crear productos con tienda_id
+      const productosACrear: Array<{
+        diseno_id: number;
+        tipo_prenda_id: number;
+        color_polera_id: number;
+        tienda_id: number;
+        activo: boolean;
+      }> = [];
 
       for (const tipoId of tiposSeleccionados) {
         for (const colorId of coloresSeleccionados) {
           productosACrear.push({
             diseno_id: disenoId,
             tipo_prenda_id: tipoId,
-            color_id: colorId,
-            tienda_id: TIENDA_CENTRAL, // 🔥 FIJO
+            color_polera_id: colorId,
+            tienda_id: tiendaId,
             activo: true,
           });
         }
@@ -125,17 +152,16 @@ export default function ModalAgregarDiseno({
         .from("productos")
         .insert(productosACrear)
         .select("id");
-
       if (eInsProd) throw eInsProd;
 
       const productoIds = (productosNew ?? []).map((p) => p.id as number);
       if (productoIds.length === 0) {
         throw new Error(
-          "No se obtuvieron IDs de productos (verifica RLS de SELECT)."
+          "No se obtuvieron IDs de productos (revisa RLS de SELECT en productos)."
         );
       }
 
-      // 3) variantes
+      // 3) Crear variantes para cada producto
       const tallas = ["S", "M", "L", "XL", "XXL", "XXXL"];
       const variantesACrear: {
         producto_id: number;
@@ -158,57 +184,16 @@ export default function ModalAgregarDiseno({
       const { error: eInsVar } = await supabase
         .from("variantes")
         .insert(variantesACrear);
-
       if (eInsVar) throw eInsVar;
 
       setOk("✅ Diseño y variantes creadas correctamente");
-      onSuccess();
+      onSuccess(); // recarga inventario en el padre
       limpiarFormulario();
       onClose();
     } catch (err: unknown) {
-      console.error("Error al crear diseño:", err);
-      
-      // Analizar el tipo de error para dar mensajes más específicos
-      let errorMessage = "Error al crear el diseño";
-      
-      if (err instanceof Error) {
-        const errorLower = err.message.toLowerCase();
-        
-        // Error de duplicado (diseño ya existe)
-        if (errorLower.includes("duplicate") || errorLower.includes("unique") || errorLower.includes("already exists")) {
-          errorMessage = `❌ El diseño "${nombreDiseno.trim()}" ya existe. Por favor, usa un nombre diferente.`;
-        }
-        // Error de permisos (RLS)
-        else if (errorLower.includes("permission") || errorLower.includes("unauthorized") || errorLower.includes("policy")) {
-          errorMessage = "❌ No tienes permisos para crear diseños. Contacta al administrador.";
-        }
-        // Error de conexión
-        else if (errorLower.includes("connection") || errorLower.includes("network")) {
-          errorMessage = "❌ Error de conexión. Verifica tu internet e intenta nuevamente.";
-        }
-        // Error de validación
-        else if (errorLower.includes("validation") || errorLower.includes("required")) {
-          errorMessage = "❌ Faltan datos obligatorios. Revisa todos los campos.";
-        }
-        // Error de base de datos genérico
-        else if (errorLower.includes("database") || errorLower.includes("sql")) {
-          errorMessage = "❌ Error en la base de datos. Intenta nuevamente o contacta soporte.";
-        }
-        // Error al obtener IDs de productos
-        else if (errorLower.includes("ids") || errorLower.includes("rls") || errorLower.includes("select")) {
-          errorMessage = "❌ Error al guardar los productos. Verifica los permisos de la base de datos.";
-        }
-        // Otro tipo de error conocido
-        else {
-          errorMessage = `❌ Error: ${err.message}`;
-        }
-      } else {
-        errorMessage = "❌ Error desconocido del sistema. Intenta nuevamente.";
-      }
-      
-      // Mostrar alert con el mensaje de error específico
-      alert(errorMessage);
-      setError(errorMessage);
+      const message =
+        err instanceof Error ? err.message : "Error al crear el diseño";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -239,16 +224,8 @@ export default function ModalAgregarDiseno({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {error && (
-            <div className="bg-red-50 border-2 border-red-200 text-red-800 p-4 rounded-lg shadow-md animate-pulse">
-              <div className="flex items-start gap-2">
-                <svg className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div className="flex-1">
-                  <p className="font-semibold text-red-800">No se pudo agregar el diseño</p>
-                  <p className="text-sm text-red-700 mt-1">{error}</p>
-                </div>
-              </div>
+            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded">
+              {error}
             </div>
           )}
           {ok && (
@@ -329,12 +306,11 @@ export default function ModalAgregarDiseno({
 
           {tiposSeleccionados.length > 0 &&
             coloresSeleccionados.length > 0 && (
-              <div className="bg-blue-50 border text-black border-blue-200 rounded-lg p-3 text-sm">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-black text-sm">
                 Se crearán: <b>{tiposSeleccionados.length}</b> ×{" "}
                 <b>{coloresSeleccionados.length}</b> ={" "}
                 <b>
-                  {tiposSeleccionados.length *
-                    coloresSeleccionados.length}{" "}
+                  {tiposSeleccionados.length * coloresSeleccionados.length}{" "}
                   productos
                 </b>{" "}
                 (cada uno con 6 tallas)

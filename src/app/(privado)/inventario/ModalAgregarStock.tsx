@@ -18,10 +18,6 @@ type Variante = {
   stock_actual: number;
 };
 
-// Tipos eliminados porque ya no se usan (se cambió a consulta directa)
-// type VarianteAdminRow = { ... }
-// type VarianteDetalleRow = { ... }
-
 type ModalAgregarStockProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -62,7 +58,9 @@ export default function ModalAgregarStock({
   // ----- CARGA DE PRODUCTOS (memorizada) -----
   const cargarProductos = useCallback(async () => {
     try {
-      // Consulta directa a productos sin filtrar por tienda específica
+      console.log('🔍 Cargando productos del inventario central (tienda_id = 1)');
+      
+      // ✅ Consulta productos del INVENTARIO CENTRAL (tienda_id = 1)
       const { data, error: err } = await supabase
         .from("productos")
         .select(`
@@ -70,21 +68,25 @@ export default function ModalAgregarStock({
           disenos!inner(nombre),
           tipos_prenda!inner(nombre),
           colores!inner(nombre),
-          activo
+          activo,
+          tienda_id
         `)
         .eq("activo", true)
+        .eq("tienda_id", 1) // ✅ SOLO INVENTARIO CENTRAL
         .order("id", { ascending: true });
 
       if (err) throw err;
 
+      console.log('📊 Productos encontrados:', data?.length);
+
       const productosUnicos = new Map<number, Producto>();
 
       data?.forEach((p: { 
-  id: number; 
-  disenos: { nombre: string } | { nombre: string }[]; 
-  tipos_prenda: { nombre: string } | { nombre: string }[]; 
-  colores: { nombre: string } | { nombre: string }[]; 
-}) => {
+        id: number; 
+        disenos: { nombre: string } | { nombre: string }[]; 
+        tipos_prenda: { nombre: string } | { nombre: string }[]; 
+        colores: { nombre: string } | { nombre: string }[]; 
+      }) => {
         const diseno = Array.isArray(p.disenos) ? p.disenos[0]?.nombre : (p.disenos as { nombre: string }).nombre;
         const tipo = Array.isArray(p.tipos_prenda) ? p.tipos_prenda[0]?.nombre : (p.tipos_prenda as { nombre: string }).nombre;
         const color = Array.isArray(p.colores) ? p.colores[0]?.nombre : (p.colores as { nombre: string }).nombre;
@@ -99,8 +101,11 @@ export default function ModalAgregarStock({
         }
       });
 
-      setProductos(Array.from(productosUnicos.values()));
+      const productosArray = Array.from(productosUnicos.values());
+      console.log('✅ Productos únicos procesados:', productosArray.length);
+      setProductos(productosArray);
     } catch (err: unknown) {
+      console.error('❌ Error cargando productos:', err);
       const message =
         err instanceof Error ? err.message : "Error cargando productos";
       setError(message);
@@ -112,7 +117,8 @@ export default function ModalAgregarStock({
     async (productoId: number) => {
       setError(null);
       try {
-        // Consulta directa a variantes sin usar la vista
+        console.log('🔍 Cargando variantes del producto:', productoId);
+        
         const { data, error } = await supabase
           .from("variantes")
           .select("id, producto_id, talla, stock_actual")
@@ -128,8 +134,10 @@ export default function ModalAgregarStock({
           stock_actual: Number(r.stock_actual ?? 0),
         }));
 
+        console.log('✅ Variantes cargadas:', vs.length);
         setVariantes(vs);
       } catch (err: unknown) {
+        console.error('❌ Error cargando variantes:', err);
         const message =
           err instanceof Error ? err.message : "Error cargando variantes";
         setError(message);
@@ -215,6 +223,8 @@ export default function ModalAgregarStock({
             throw new Error(`No se encontró variante para talla ${talla}`);
           }
 
+          console.log(`📦 Agregando ${cantidad} unidades a talla ${talla}`);
+          
           const { error: errRpc } = await supabase.rpc("ajustar_stock", {
             p_variante_id: variante.id,
             p_tipo: "entrada",
@@ -225,13 +235,15 @@ export default function ModalAgregarStock({
         }
       }
 
-      setSuccess(`Stock agregado correctamente: ${totalCantidad} unidades`);
+      console.log('✅ Stock agregado exitosamente');
+      setSuccess(`✅ Stock agregado correctamente: ${totalCantidad} unidades`);
       await cargarVariantes(productoSeleccionado.producto_id);
       await onSuccess();
 
       limpiarFormulario();
-      setTimeout(() => onClose(), 800);
+      setTimeout(() => onClose(), 1000);
     } catch (err: unknown) {
+      console.error('❌ Error al agregar stock:', err);
       const message =
         err instanceof Error ? err.message : "Error al agregar stock";
       setError(message);
@@ -269,7 +281,7 @@ export default function ModalAgregarStock({
             </div>
             <div>
               <p className="text-xs uppercase tracking-wider text-white/80 mb-1">
-                Inventario
+                Inventario Central
               </p>
               <h2 className="text-3xl font-bold">
                 Agregar Stock a Productos
@@ -286,7 +298,7 @@ export default function ModalAgregarStock({
 
         <div className="px-8 py-7 space-y-7 max-h-[calc(90vh-120px)] overflow-y-auto">
           {error && (
-            <div className="rounded-xl border-2 border-red-200 bg-gradient-to-r from-red-50 to-rose-50 p-4 shadow-lg">
+            <div className="rounded-xl border-2 border-red-200 bg-gradient-to-r from-red-50 to-rose-50 p-4 shadow-lg animate-pulse">
               <div className="flex items-start gap-3">
                 <svg className="w-6 h-6 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
