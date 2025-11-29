@@ -76,19 +76,7 @@ export default function ModalAgregarDiseno({
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
 
-  // 👉 helper: obtiene tienda del usuario autenticado
-  const getTiendaIdActual = async (): Promise<number | null> => {
-    const { data: u } = await supabase.auth.getUser();
-    const uid = u.user?.id;
-    if (!uid) return null;
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("tienda_id")
-      .eq("id", uid)
-      .maybeSingle();
-    if (error) throw error;
-    return data?.tienda_id ?? null;
-  };
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

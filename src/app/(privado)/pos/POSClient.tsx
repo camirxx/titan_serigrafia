@@ -302,68 +302,22 @@ const cargarVentasDelDia = async () => {
     setError(null)
     
     try {
-      console.log('🔍 Consultando variantes disponibles en inventario')
+      console.log('🔍 Consultando variantes disponibles en inventario central (tienda_id = 1)')
       
-      // OPCIÓN 1: Intentar con variantes_admin_view
-      let data, error;
-      
-      const result1 = await supabase
+      // SIEMPRE usar tienda_id = 1 para consultar el inventario
+      const { data, error } = await supabase
         .from('variantes_admin_view')
-        .select('tipo_prenda, stock_actual, diseno, color, talla, variante_id, producto_activo')
-        .eq('tienda_id', 1)
+        .select('tipo_prenda, stock_actual, diseno, color')
+        .eq('tienda_id', 1) // ✅ INVENTARIO CENTRAL
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
 
-      console.log('📊 Resultado variantes_admin_view:', result1)
+      console.log('📊 Respuesta Supabase:', { data, error, count: data?.length })
 
-      if (result1.error) {
-        console.log('⚠️ Error en view, intentando con tablas directas...')
-        
-        // OPCIÓN 2: Consultar directamente desde variantes + productos
-        const result2 = await supabase
-          .from('variantes')
-          .select(`
-            id,
-            talla,
-            stock_actual,
-            productos!inner (
-              id,
-              activo,
-              tienda_id,
-              disenos (nombre),
-              tipos_prenda (nombre),
-              colores (nombre)
-            )
-          `)
-          .eq('productos.tienda_id', 1)
-          .eq('productos.activo', true)
-          .gt('stock_actual', 0)
-
-        console.log('📊 Resultado consulta directa:', result2)
-        
-        if (result2.error) throw result2.error
-        
-        // Transformar datos
-        data = result2.data?.map((v: any) => ({
-          tipo_prenda: Array.isArray(v.productos.tipos_prenda) 
-            ? v.productos.tipos_prenda[0]?.nombre 
-            : v.productos.tipos_prenda?.nombre,
-          stock_actual: v.stock_actual,
-          diseno: Array.isArray(v.productos.disenos)
-            ? v.productos.disenos[0]?.nombre
-            : v.productos.disenos?.nombre,
-          color: Array.isArray(v.productos.colores)
-            ? v.productos.colores[0]?.nombre
-            : v.productos.colores?.nombre,
-          variante_id: v.id,
-          talla: v.talla
-        }))
-      } else {
-        data = result1.data
-        error = result1.error
+      if (error) {
+        console.error('❌ Error de Supabase:', JSON.stringify(error, null, 2))
+        throw error
       }
-
-      console.log('✅ Datos finales:', data)
 
       if (!data || data.length === 0) {
         setError('No hay productos disponibles con stock en el inventario. Verifica que hayas agregado productos con stock.')
@@ -371,7 +325,7 @@ const cargarVentasDelDia = async () => {
         return
       }
 
-      const tiposUnicos = [...new Set(data?.map((d: any) => d.tipo_prenda).filter(Boolean))]
+      const tiposUnicos = [...new Set(data.map((d) => d.tipo_prenda).filter(Boolean))]
       console.log('✅ Tipos únicos encontrados:', tiposUnicos)
       
       if (tiposUnicos.length === 0) {
@@ -383,8 +337,7 @@ const cargarVentasDelDia = async () => {
       setTipos(tiposUnicos)
     } catch (err: unknown) {
       console.error('💥 Error completo en iniciarVenta:', err)
-      console.error('💥 Error stringificado:', JSON.stringify(err, null, 2))
-      setError(getErrorMessage(err, 'Error al iniciar la venta. Verifica que las tablas existen'))
+      setError(getErrorMessage(err, 'Error al iniciar la venta'))
       setPaso(0)
     }
   }
@@ -403,7 +356,7 @@ const cargarVentasDelDia = async () => {
 
       if (error) throw error
 
-      const disenosUnicos = [...new Set(data?.map(d => d.diseno).filter(Boolean))]
+  const disenosUnicos = [...new Set(data?.map(d => d.diseno).filter(Boolean))]
       
       if (disenosUnicos.length === 0) {
         setError('No hay diseños disponibles para este tipo de prenda')
