@@ -57,6 +57,82 @@ export default function DevolucionesClient() {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const router = useRouter();
 
+  // Función de validación de RUT chileno
+  const validarRUT = (rut: string): boolean => {
+    if (!rut) return false;
+    
+    // Limpiar el RUT: remover puntos y guiones, convertir a mayúsculas
+    const rutLimpio = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+    
+    // El RUT debe tener entre 8 y 9 caracteres (7-8 números + 1 dígito verificador)
+    if (rutLimpio.length < 8 || rutLimpio.length > 9) return false;
+    
+    // Separar el cuerpo y el dígito verificador
+    const cuerpo = rutLimpio.slice(0, -1);
+    const dv = rutLimpio.slice(-1);
+    
+    // Validar que el cuerpo sea solo números
+    if (!/^[0-9]+$/.test(cuerpo)) return false;
+    
+    // Calcular el dígito verificador esperado
+    let suma = 0;
+    let multiplo = 2;
+    
+    // Recorrer el cuerpo de derecha a izquierda
+    for (let i = cuerpo.length - 1; i >= 0; i--) {
+      suma += parseInt(cuerpo.charAt(i)) * multiplo;
+      multiplo = multiplo === 7 ? 2 : multiplo + 1;
+    }
+    
+    // Calcular el dígito verificador
+    const dvEsperado = 11 - (suma % 11);
+    const dvCalculado = dvEsperado === 11 ? '0' : dvEsperado === 10 ? 'K' : dvEsperado.toString();
+    
+    // Comparar el dígito verificador
+    return dv === dvCalculado;
+  };
+
+  // Función para formatear RUT mientras se escribe
+  const formatearRUT = (rut: string): string => {
+    if (!rut) return '';
+    
+    // Limpiar el RUT
+    const rutLimpio = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+    
+    // Si está vacío, retornar vacío
+    if (rutLimpio.length === 0) return '';
+    
+    // Separar cuerpo y dígito verificador
+    const cuerpo = rutLimpio.slice(0, -1);
+    const dv = rutLimpio.slice(-1);
+    
+    // Formatear el cuerpo con puntos
+    let cuerpoFormateado = '';
+    let contador = 0;
+    
+    for (let i = cuerpo.length - 1; i >= 0; i--) {
+      cuerpoFormateado = cuerpo.charAt(i) + cuerpoFormateado;
+      contador++;
+      if (contador === 3 && i !== 0) {
+        cuerpoFormateado = '.' + cuerpoFormateado;
+        contador = 0;
+      }
+    }
+    
+    // Unir cuerpo formateado con guión y dígito verificador
+    return cuerpoFormateado + (rutLimpio.length > 1 ? '-' + dv : dv);
+  };
+
+  // Manejador de cambios para el RUT
+  const handleRUTChange = (value: string) => {
+    const rutFormateado = formatearRUT(value);
+    setDatosTransferencia({ ...datosTransferencia, rut: rutFormateado });
+    // Limpiar error de RUT cuando el usuario modifica el campo
+    if (errorRUT) {
+      setErrorRUT('');
+    }
+  };
+
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [tiposPrenda, setTiposPrenda] = useState<string[]>([]);
   const [colores, setColores] = useState<string[]>([]);
@@ -122,10 +198,91 @@ export default function DevolucionesClient() {
 
   const [denominaciones, setDenominaciones] = useState<DenominacionCaja[]>([]);
   const [totalEfectivoCaja, setTotalEfectivoCaja] = useState<number>(0);
+  
+  // Estados para manejo de denominaciones en reintegros
+  const [denominacionesReintegro, setDenominacionesReintegro] = useState<Record<string, number>>({
+    '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+  });
+  const [mostrarSelectorDenominaciones, setMostrarSelectorDenominaciones] = useState(false);
+  
+  // Estados para manejo de denominaciones en diferencias de cambios
+  const [denominacionesDiferencia, setDenominacionesDiferencia] = useState<Record<string, number>>({
+    '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+  });
+  const [mostrarSelectorDenominacionesDiferencia, setMostrarSelectorDenominacionesDiferencia] = useState(false);
+  
+  // Estados para manejo de vuelto
+  const [denominacionesVueltoReintegro, setDenominacionesVueltoReintegro] = useState<Record<string, number>>({
+    '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+  });
+  const [denominacionesVueltoDiferencia, setDenominacionesVueltoDiferencia] = useState<Record<string, number>>({
+    '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+  });
+  const [mostrarSelectorVuelto, setMostrarSelectorVuelto] = useState(false);
+  const [mostrarSelectorVueltoDiferencia, setMostrarSelectorVueltoDiferencia] = useState(false);
+  
+  // Estados para manejo de denominaciones cuando cliente paga
+  const [denominacionesClientePaga, setDenominacionesClientePaga] = useState<Record<string, number>>({
+    '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+  });
+  const [mostrarSelectorClientePaga, setMostrarSelectorClientePaga] = useState(false);
+  
+  // Estados para manejo de vuelto cuando cliente paga
+  const [denominacionesVueltoClientePaga, setDenominacionesVueltoClientePaga] = useState<Record<string, number>>({
+    '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+  });
+  const [mostrarSelectorVueltoClientePaga, setMostrarSelectorVueltoClientePaga] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [ok, setOk] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorRUT, setErrorRUT] = useState<string>('');
+
+  // Calculos de totales de denominaciones (después de declarar los estados)
+  const totalDenominacionesReintegro = useMemo(() => {
+    return Object.entries(denominacionesReintegro).reduce((sum, [denom, cant]) => 
+      sum + (parseInt(denom) * cant), 0
+    );
+  }, [denominacionesReintegro]);
+
+  const totalDenominacionesDiferencia = useMemo(() => {
+    return Object.entries(denominacionesDiferencia).reduce((sum, [denom, cant]) => 
+      sum + (parseInt(denom) * cant), 0
+    );
+  }, [denominacionesDiferencia]);
+
+  const totalDenominacionesVueltoReintegro = useMemo(() => {
+    return Object.entries(denominacionesVueltoReintegro).reduce((sum, [denom, cant]) => 
+      sum + (parseInt(denom) * cant), 0
+    );
+  }, [denominacionesVueltoReintegro]);
+
+  const totalDenominacionesVueltoDiferencia = useMemo(() => {
+    return Object.entries(denominacionesVueltoDiferencia).reduce((sum, [denom, cant]) => 
+      sum + (parseInt(denom) * cant), 0
+    );
+  }, [denominacionesVueltoDiferencia]);
+
+  const totalDenominacionesClientePaga = useMemo(() => {
+    return Object.entries(denominacionesClientePaga).reduce((sum, [denom, cant]) => 
+      sum + (parseInt(denom) * cant), 0
+    );
+  }, [denominacionesClientePaga]);
+
+  const totalDenominacionesVueltoClientePaga = useMemo(() => {
+    return Object.entries(denominacionesVueltoClientePaga).reduce((sum, [denom, cant]) => 
+      sum + (parseInt(denom) * cant), 0
+    );
+  }, [denominacionesVueltoClientePaga]);
+
+  // Funciones auxiliares para denominaciones (después de declarar los estados)
+  const denominacionesDisponibles = useMemo(() => {
+    const record: Record<number, number> = {};
+    denominaciones.forEach(d => {
+      record[d.denominacion] = d.cantidad;
+    });
+    return record;
+  }, [denominaciones]);
 
   // Cargar tallas disponibles para la selección de cambio cuando cambia tipo/diseno/color
   useEffect(() => {
@@ -408,9 +565,17 @@ export default function DevolucionesClient() {
       if (montoReintegro > totalEfectivoCaja) {
         return false;
       }
+      // Validar que se hayan seleccionado denominaciones suficientes
+      if (totalDenominacionesReintegro < montoReintegro) {
+        return false;
+      }
     }
     if (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'efectivo') {
       if (montoDiferencia > totalEfectivoCaja) {
+        return false;
+      }
+      // Validar que se hayan seleccionado denominaciones suficientes
+      if (totalDenominacionesDiferencia < montoDiferencia) {
         return false;
       }
     }
@@ -468,9 +633,43 @@ export default function DevolucionesClient() {
 
       if (metodoPagoReintegro === 'transferencia') {
         if (!datosTransferencia.rut || !datosTransferencia.nombre || !datosTransferencia.banco || 
-            !datosTransferencia.numeroCuenta) {
-          setError('Completa todos los datos bancarios obligatorios para la transferencia.');
+            !datosTransferencia.numeroCuenta || !datosTransferencia.email) {
+          setError('Completa todos los datos bancarios obligatorios para la transferencia, incluyendo el correo electrónico.');
           return;
+        }
+        
+        // Validar RUT
+        if (!validarRUT(datosTransferencia.rut)) {
+          setErrorRUT('El RUT ingresado no es válido. Ejemplo: 12.345.678-9');
+          return;
+        } else {
+          setErrorRUT('');
+        }
+      } else if (metodoPagoReintegro === 'efectivo') {
+        // Validar que se hayan seleccionado denominaciones suficientes
+        if (totalDenominacionesReintegro < montoReintegro) {
+          setError('Debes seleccionar billetes/monedas que sumen al menos el monto del reintegro.');
+          return;
+        }
+        
+        // Validar que las denominaciones seleccionadas estén disponibles en caja
+        for (const [denom, cantReintegro] of Object.entries(denominacionesReintegro)) {
+          if (cantReintegro > 0) {
+            const cantDisponible = denominacionesDisponibles[parseInt(denom)] || 0;
+            if (cantReintegro > cantDisponible) {
+              setError(`No hay suficientes billetes de $${parseInt(denom).toLocaleString('es-CL')}. Disponibles: ${cantDisponible}, Solicitados: ${cantReintegro}`);
+              return;
+            }
+          }
+        }
+        
+        // Validar vuelto si hay
+        if (totalDenominacionesReintegro > montoReintegro) {
+          const vueltoEsperado = totalDenominacionesReintegro - montoReintegro;
+          if (totalDenominacionesVueltoReintegro !== vueltoEsperado) {
+            setError(`El vuelto registrado (${totalDenominacionesVueltoReintegro.toLocaleString('es-CL')}) no coincide con el esperado (${vueltoEsperado.toLocaleString('es-CL')}).`);
+            return;
+          }
         }
       }
     }
@@ -483,9 +682,61 @@ export default function DevolucionesClient() {
 
       if (tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'transferencia') {
         if (!datosTransferencia.rut || !datosTransferencia.nombre || !datosTransferencia.banco || 
-            !datosTransferencia.numeroCuenta) {
-          setError('Completa todos los datos bancarios obligatorios para la transferencia.');
+            !datosTransferencia.numeroCuenta || !datosTransferencia.email) {
+          setError('Completa todos los datos bancarios obligatorios para la transferencia, incluyendo el correo electrónico.');
           return;
+        }
+        
+        // Validar RUT
+        if (!validarRUT(datosTransferencia.rut)) {
+          setErrorRUT('El RUT ingresado no es válido. Ejemplo: 12.345.678-9');
+          return;
+        } else {
+          setErrorRUT('');
+        }
+      } else if (tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'efectivo') {
+        // Validar que se hayan seleccionado denominaciones suficientes
+        if (totalDenominacionesDiferencia < montoDiferencia) {
+          setError('Debes seleccionar billetes/monedas que sumen al menos el monto de la diferencia.');
+          return;
+        }
+        
+        // Validar que las denominaciones seleccionadas estén disponibles en caja
+        for (const [denom, cantDiferencia] of Object.entries(denominacionesDiferencia)) {
+          if (cantDiferencia > 0) {
+            const cantDisponible = denominacionesDisponibles[parseInt(denom)] || 0;
+            if (cantDiferencia > cantDisponible) {
+              setError(`No hay suficientes billetes de $${parseInt(denom).toLocaleString('es-CL')}. Disponibles: ${cantDisponible}, Solicitados: ${cantDiferencia}`);
+              return;
+            }
+          }
+        }
+        
+        // Validar vuelto si hay
+        if (totalDenominacionesDiferencia > montoDiferencia) {
+          const vueltoEsperado = totalDenominacionesDiferencia - montoDiferencia;
+          if (totalDenominacionesVueltoDiferencia !== vueltoEsperado) {
+            setError(`El vuelto registrado (${totalDenominacionesVueltoDiferencia.toLocaleString('es-CL')}) no coincide con el esperado (${vueltoEsperado.toLocaleString('es-CL')}).`);
+            return;
+          }
+        }
+      } else if (tipoDiferencia === 'cliente_paga' && metodoPagoDiferencia === 'efectivo') {
+        // Validar que se hayan seleccionado denominaciones suficientes
+        if (totalDenominacionesClientePaga < montoDiferencia) {
+          setError('Debes registrar billetes/monedas que sumen al menos el monto que el cliente debe pagar.');
+          return;
+        }
+        
+        // Validar vuelto si hay
+        if (totalDenominacionesClientePaga > montoDiferencia) {
+          const vueltoEsperado = totalDenominacionesClientePaga - montoDiferencia;
+          console.log('🪙 [CLIENT] Vuelto a dar cliente:', vueltoEsperado);
+          
+          // Validar que el vuelto registrado sea correcto
+          if (totalDenominacionesVueltoClientePaga !== vueltoEsperado) {
+            setError(`El vuelto registrado (${totalDenominacionesVueltoClientePaga.toLocaleString('es-CL')}) no coincide con el esperado (${vueltoEsperado.toLocaleString('es-CL')}).`);
+            return;
+          }
         }
       }
     }
@@ -648,6 +899,80 @@ export default function DevolucionesClient() {
       
       // Enviar email de egreso si es reintegro en efectivo
       if (metodo === 'reintegro_efectivo' && metodoPagoReintegro === 'efectivo' && montoReintegro > 0) {
+        console.log('💸 [CLIENT] Descontando denominaciones de caja por reintegro:', montoReintegro);
+        
+        // Primero descontar las denominaciones de la caja
+        try {
+          // Obtener sesión de caja abierta
+          const { data: sesion } = await supabase
+            .from('caja_sesiones')
+            .select('id')
+            .eq('abierta', true)
+            .single();
+
+          if (sesion) {
+            // Convertir denominaciones de reintegro al formato esperado por la RPC
+            const denominacionesARetirar: Record<number, number> = {};
+            Object.entries(denominacionesReintegro).forEach(([denom, cant]) => {
+              if (cant > 0) {
+                denominacionesARetirar[parseInt(denom)] = cant;
+              }
+            });
+
+            // Retirar denominaciones de la caja
+            const { error: errorRetiro } = await supabase.rpc('caja_retirar_denominaciones', {
+              p_sesion_id: sesion.id,
+              p_denominaciones: denominacionesARetirar,
+              p_concepto: `Reintegro devolución #${data}`,
+            });
+
+            if (errorRetiro) {
+              console.error('❌ [CLIENT] Error al retirar denominaciones:', errorRetiro);
+              throw new Error(`Error al descontar dinero de caja: ${errorRetiro.message}`);
+            }
+
+            console.log('✅ [CLIENT] Denominaciones descontadas exitosamente');
+            
+            // Procesar vuelto si hay
+            if (totalDenominacionesReintegro > montoReintegro && totalDenominacionesVueltoReintegro > 0) {
+              const montoVuelto = totalDenominacionesReintegro - montoReintegro;
+              console.log('🪙 [CLIENT] Procesando vuelto:', montoVuelto);
+              
+              try {
+                // Agregar denominaciones de vuelto a la caja
+                const denominacionesAAgregar: Record<number, number> = {};
+                Object.entries(denominacionesVueltoReintegro).forEach(([denom, cant]) => {
+                  if (cant > 0) {
+                    denominacionesAAgregar[parseInt(denom)] = cant;
+                  }
+                });
+                
+                const { error: errorVuelto } = await supabase.rpc('caja_agregar_denominaciones', {
+                  p_sesion_id: sesion.id,
+                  p_denominaciones: denominacionesAAgregar,
+                  p_concepto: `Vuelto devolución #${data}`,
+                });
+                
+                if (errorVuelto) {
+                  console.error('❌ [CLIENT] Error al agregar vuelto:', errorVuelto);
+                  throw new Error(`Error al registrar vuelto en caja: ${errorVuelto.message}`);
+                }
+                
+                console.log('✅ [CLIENT] Vuelto registrado exitosamente');
+              } catch (err) {
+                console.error('❌ [CLIENT] Error al procesar vuelto:', err);
+                throw new Error('Error al procesar vuelto');
+              }
+            }
+          } else {
+            console.warn('⚠️ [CLIENT] No hay sesión de caja abierta para descontar denominaciones');
+          }
+        } catch (err) {
+          console.error('❌ [CLIENT] Error al descontar denominaciones:', err);
+          throw new Error('Error al descontar dinero de caja');
+        }
+
+        // Enviar email de notificación
         console.log('💸 [CLIENT] Enviando email de egreso por reintegro:', montoReintegro);
         try {
           await fetch('/api/send-caja-egreso-email', {
@@ -665,6 +990,196 @@ export default function DevolucionesClient() {
         } catch (emailError) {
           console.error('❌ [CLIENT] Error al enviar email de egreso:', emailError);
           // No fallar la operación si el email falla
+        }
+      }
+      
+      // Descontar denominaciones de diferencia si es efectivo
+      if (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_recibe' && metodoPagoDiferencia === 'efectivo' && montoDiferencia > 0) {
+        console.log('💸 [CLIENT] Descontando denominaciones de caja por diferencia:', montoDiferencia);
+        
+        try {
+          // Obtener sesión de caja abierta
+          const { data: sesion } = await supabase
+            .from('caja_sesiones')
+            .select('id')
+            .eq('abierta', true)
+            .single();
+
+          if (sesion) {
+            // Convertir denominaciones de diferencia al formato esperado por la RPC
+            const denominacionesARetirar: Record<number, number> = {};
+            Object.entries(denominacionesDiferencia).forEach(([denom, cant]) => {
+              if (cant > 0) {
+                denominacionesARetirar[parseInt(denom)] = cant;
+              }
+            });
+
+            // Retirar denominaciones de la caja
+            const { error: errorRetiro } = await supabase.rpc('caja_retirar_denominaciones', {
+              p_sesion_id: sesion.id,
+              p_denominaciones: denominacionesARetirar,
+              p_concepto: `Diferencia devolución #${data}`,
+            });
+
+            if (errorRetiro) {
+              console.error('❌ [CLIENT] Error al retirar denominaciones de diferencia:', errorRetiro);
+              throw new Error(`Error al descontar dinero de caja: ${errorRetiro.message}`);
+            }
+
+            console.log('✅ [CLIENT] Denominaciones de diferencia descontadas exitosamente');
+            
+            // Procesar vuelto si hay
+            if (totalDenominacionesDiferencia > montoDiferencia && totalDenominacionesVueltoDiferencia > 0) {
+              const montoVuelto = totalDenominacionesDiferencia - montoDiferencia;
+              console.log('🪙 [CLIENT] Procesando vuelto de diferencia:', montoVuelto);
+              
+              try {
+                // Agregar denominaciones de vuelto a la caja
+                const denominacionesAAgregar: Record<number, number> = {};
+                Object.entries(denominacionesVueltoDiferencia).forEach(([denom, cant]) => {
+                  if (cant > 0) {
+                    denominacionesAAgregar[parseInt(denom)] = cant;
+                  }
+                });
+                
+                const { error: errorVuelto } = await supabase.rpc('caja_agregar_denominaciones', {
+                  p_sesion_id: sesion.id,
+                  p_denominaciones: denominacionesAAgregar,
+                  p_concepto: `Vuelto diferencia devolución #${data}`,
+                });
+                
+                if (errorVuelto) {
+                  console.error('❌ [CLIENT] Error al agregar vuelto de diferencia:', errorVuelto);
+                  throw new Error(`Error al registrar vuelto en caja: ${errorVuelto.message}`);
+                }
+                
+                console.log('✅ [CLIENT] Vuelto de diferencia registrado exitosamente');
+              } catch (err) {
+                console.error('❌ [CLIENT] Error al procesar vuelto de diferencia:', err);
+                throw new Error('Error al procesar vuelto');
+              }
+            }
+          } else {
+            console.warn('⚠️ [CLIENT] No hay sesión de caja abierta para descontar denominaciones de diferencia');
+          }
+        } catch (err) {
+          console.error('❌ [CLIENT] Error al descontar denominaciones de diferencia:', err);
+          throw new Error('Error al descontar dinero de caja');
+        }
+
+        // Enviar email de notificación de egreso por diferencia
+        console.log('💸 [CLIENT] Enviando email de egreso por diferencia:', montoDiferencia);
+        try {
+          await fetch('/api/send-caja-egreso-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              monto: montoDiferencia,
+              motivo: `Diferencia devolución #${data}`,
+              usuario: 'Sistema',
+            }),
+          });
+          console.log('✅ [CLIENT] Email de egreso por diferencia enviado exitosamente');
+        } catch (emailError) {
+          console.error('❌ [CLIENT] Error al enviar email de egreso por diferencia:', emailError);
+          // No fallar la operación si el email falla
+        }
+      }
+      
+      // Agregar denominaciones a caja si cliente paga en efectivo
+      if (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_paga' && metodoPagoDiferencia === 'efectivo' && montoDiferencia > 0) {
+        console.log('💰 [CLIENT] Agregando denominaciones a caja por pago del cliente:', montoDiferencia);
+        
+        try {
+          // Obtener sesión de caja abierta
+          const { data: sesion } = await supabase
+            .from('caja_sesiones')
+            .select('id')
+            .eq('abierta', true)
+            .single();
+
+          if (sesion) {
+            // Convertir denominaciones del cliente al formato esperado por la RPC
+            const denominacionesAAgregar: Record<number, number> = {};
+            Object.entries(denominacionesClientePaga).forEach(([denom, cant]) => {
+              if (cant > 0) {
+                denominacionesAAgregar[parseInt(denom)] = cant;
+              }
+            });
+
+            // Agregar denominaciones a la caja
+            const { error: errorAgregar } = await supabase.rpc('caja_agregar_denominaciones', {
+              p_sesion_id: sesion.id,
+              p_denominaciones: denominacionesAAgregar,
+              p_concepto: `Pago diferencia devolución #${data}`,
+            });
+
+            if (errorAgregar) {
+              console.error('❌ [CLIENT] Error al agregar denominaciones:', errorAgregar);
+              throw new Error(`Error al agregar dinero a caja: ${errorAgregar.message}`);
+            }
+
+            console.log('✅ [CLIENT] Denominaciones agregadas exitosamente');
+            
+            // Procesar vuelto si hay
+            if (totalDenominacionesClientePaga > montoDiferencia && totalDenominacionesVueltoClientePaga > 0) {
+              const montoVuelto = totalDenominacionesClientePaga - montoDiferencia;
+              console.log('🪙 [CLIENT] Procesando vuelto a cliente:', montoVuelto);
+              
+              try {
+                // Descontar denominaciones de vuelto de la caja
+                const denominacionesARetirar: Record<number, number> = {};
+                Object.entries(denominacionesVueltoClientePaga).forEach(([denom, cant]) => {
+                  if (cant > 0) {
+                    denominacionesARetirar[parseInt(denom)] = cant;
+                  }
+                });
+                
+                const { error: errorVuelto } = await supabase.rpc('caja_retirar_denominaciones', {
+                  p_sesion_id: sesion.id,
+                  p_denominaciones: denominacionesARetirar,
+                  p_concepto: `Vuelto cliente paga devolución #${data}`,
+                });
+                
+                if (errorVuelto) {
+                  console.error('❌ [CLIENT] Error al descontar vuelto:', errorVuelto);
+                  throw new Error(`Error al descontar vuelto de caja: ${errorVuelto.message}`);
+                }
+                
+                console.log('✅ [CLIENT] Vuelto descontado exitosamente');
+              } catch (err) {
+                console.error('❌ [CLIENT] Error al procesar vuelto:', err);
+                throw new Error('Error al procesar vuelto');
+              }
+            }
+            
+            // Enviar email de notificación de ingreso
+            console.log('💰 [CLIENT] Enviando email de ingreso por diferencia:', montoDiferencia);
+            try {
+              await fetch('/api/send-caja-ingreso-email', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  monto: montoDiferencia,
+                  motivo: `Pago diferencia devolución #${data}`,
+                  usuario: 'Sistema',
+                }),
+              });
+              console.log('✅ [CLIENT] Email de ingreso por diferencia enviado exitosamente');
+            } catch (emailError) {
+              console.error('❌ [CLIENT] Error al enviar email de ingreso:', emailError);
+              // No fallar la operación si el correo falla
+            }
+          } else {
+            console.warn('⚠️ [CLIENT] No hay sesión de caja abierta para agregar denominaciones');
+          }
+        } catch (err) {
+          console.error('❌ [CLIENT] Error al agregar denominaciones:', err);
+          throw new Error('Error al agregar dinero a caja');
         }
       }
       
@@ -725,6 +1240,16 @@ export default function DevolucionesClient() {
       mensajeExito += `\n💸 Se envió notificación por correo de egreso de caja`;
     }
 
+    // Agregar mensaje si se envió email de ingreso por cliente paga
+    if (metodo === 'cambio_producto' && tipoDiferencia === 'cliente_paga' && metodoPagoDiferencia === 'efectivo' && montoDiferencia > 0) {
+      mensajeExito += `\n💰 Se envió notificación por correo de ingreso a caja`;
+      
+      if (totalDenominacionesClientePaga > montoDiferencia && totalDenominacionesVueltoClientePaga > 0) {
+        const montoVuelto = totalDenominacionesClientePaga - montoDiferencia;
+        mensajeExito += `\n🪙 Se descontó vuelto de $${montoVuelto.toLocaleString('es-CL')} de caja`;
+      }
+    }
+
     setOk(mensajeExito);
 
     // Remover los productos devueltos de la tabla
@@ -755,6 +1280,31 @@ export default function DevolucionesClient() {
       numeroCuenta: '',
       email: '',
     });
+    setErrorRUT(''); // Limpiar error de RUT al resetear
+    setDenominacionesReintegro({
+      '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+    }); // Resetear denominaciones de reintegro
+    setMostrarSelectorDenominaciones(false); // Ocultar selector
+    setDenominacionesDiferencia({
+      '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+    }); // Resetear denominaciones de diferencia
+    setMostrarSelectorDenominacionesDiferencia(false); // Ocultar selector de diferencia
+    setDenominacionesVueltoReintegro({
+      '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+    }); // Resetear denominaciones de vuelto reintegro
+    setMostrarSelectorVuelto(false); // Ocultar selector de vuelto
+    setDenominacionesVueltoDiferencia({
+      '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+    }); // Resetear denominaciones de vuelto diferencia
+    setMostrarSelectorVueltoDiferencia(false); // Ocultar selector de vuelto diferencia
+    setDenominacionesClientePaga({
+      '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+    }); // Resetear denominaciones de cliente paga
+    setMostrarSelectorClientePaga(false); // Ocultar selector de cliente paga
+    setDenominacionesVueltoClientePaga({
+      '20000': 0, '10000': 0, '5000': 0, '2000': 0, '1000': 0, '500': 0, '100': 0
+    }); // Resetear denominaciones de vuelto cliente paga
+    setMostrarSelectorVueltoClientePaga(false); // Ocultar selector de vuelto cliente paga
     setProductosVendidos([]);
     setPrecioReemplazoUnitario(0); // Resetear precio de reemplazo
     
@@ -1111,6 +1661,199 @@ export default function DevolucionesClient() {
                                     </div>
                                   )}
                                 </div>
+
+                                <div className="mt-4 pt-4 border-t border-purple-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => setMostrarSelectorDenominaciones(!mostrarSelectorDenominaciones)}
+                                    className="w-full bg-purple-600 text-white rounded-lg p-3 text-sm font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                                  >
+                                    <span>💵</span>
+                                    {mostrarSelectorDenominaciones ? 'Ocultar selector de billetes' : 'Seleccionar billetes para reintegro'}
+                                  </button>
+                                </div>
+
+                                {mostrarSelectorDenominaciones && (
+                                  <div className="mt-4 p-4 bg-white rounded-lg border border-purple-200">
+                                    <h5 className="text-sm font-semibold text-gray-700 mb-3">
+                                      Selecciona los billetes/monedas a entregar (${montoReintegro.toLocaleString('es-CL')})
+                                    </h5>
+                                    
+                                    <div className="space-y-2">
+                                      {Object.keys(denominacionesReintegro).reverse().map((denom) => {
+                                        const cantidad = denominacionesReintegro[denom as keyof typeof denominacionesReintegro];
+                                        const disponible = denominacionesDisponibles[parseInt(denom)] || 0;
+                                        const subtotal = parseInt(denom) * cantidad;
+                                        const esMoneda = parseInt(denom) <= 1000;
+                                        
+                                        return (
+                                          <div key={denom} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-lg">{esMoneda ? '🪙' : '💵'}</span>
+                                              <span className="font-medium text-gray-700">
+                                                ${parseInt(denom).toLocaleString('es-CL')}
+                                              </span>
+                                              <span className="text-xs text-gray-500">
+                                                (Disponibles: {disponible})
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nuevaCantidad = Math.max(0, cantidad - 1);
+                                                  setDenominacionesReintegro(prev => ({
+                                                    ...prev,
+                                                    [denom]: nuevaCantidad
+                                                  }));
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                                disabled={cantidad === 0}
+                                              >
+                                                -
+                                              </button>
+                                              <span className="w-8 text-center font-medium text-gray-700">
+                                                {cantidad}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nuevaCantidad = Math.min(disponible, cantidad + 1);
+                                                  setDenominacionesReintegro(prev => ({
+                                                    ...prev,
+                                                    [denom]: nuevaCantidad
+                                                  }));
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                                disabled={cantidad >= disponible}
+                                              >
+                                                +
+                                              </button>
+                                              <span className="w-16 text-right font-medium text-gray-700">
+                                                ${subtotal.toLocaleString('es-CL')}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    <div className="mt-4 pt-4 border-t border-gray-200">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm font-semibold text-gray-700">Total seleccionado:</span>
+                                        <div className="text-right">
+                                          <div className={`text-lg font-bold ${
+                                            totalDenominacionesReintegro >= montoReintegro ? 'text-green-600' : 'text-red-600'
+                                          }`}>
+                                            ${totalDenominacionesReintegro.toLocaleString('es-CL')}
+                                          </div>
+                                          {totalDenominacionesReintegro < montoReintegro && (
+                                            <div className="text-xs text-orange-500">
+                                              Faltante: ${(montoReintegro - totalDenominacionesReintegro).toLocaleString('es-CL')}
+                                            </div>
+                                          )}
+                                          {totalDenominacionesReintegro === montoReintegro && (
+                                            <div className="text-xs text-green-600">
+                                              ✅ Monto exacto
+                                            </div>
+                                          )}
+                                          {totalDenominacionesReintegro > montoReintegro && (
+                                            <div className="text-xs text-blue-600">
+                                              Vuelto: ${(totalDenominacionesReintegro - montoReintegro).toLocaleString('es-CL')}
+                                              <button
+                                                type="button"
+                                                onClick={() => setMostrarSelectorVuelto(!mostrarSelectorVuelto)}
+                                                className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                                              >
+                                                {mostrarSelectorVuelto ? 'Ocultar' : 'Registrar vuelto'}
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {mostrarSelectorVuelto && totalDenominacionesReintegro > montoReintegro && (
+                                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                    <h5 className="text-sm font-semibold text-blue-800 mb-3">
+                                      🪙 Registrar vuelto entregado (${(totalDenominacionesReintegro - montoReintegro).toLocaleString('es-CL')})
+                                    </h5>
+                                    
+                                    <div className="space-y-2">
+                                      {Object.keys(denominacionesVueltoReintegro).reverse().map((denom) => {
+                                        const cantidad = denominacionesVueltoReintegro[denom as keyof typeof denominacionesVueltoReintegro];
+                                        const subtotal = parseInt(denom) * cantidad;
+                                        const esMoneda = parseInt(denom) <= 1000;
+                                        
+                                        return (
+                                          <div key={denom} className="flex items-center justify-between p-2 bg-white rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-lg">{esMoneda ? '🪙' : '💵'}</span>
+                                              <span className="font-medium text-gray-700">
+                                                ${parseInt(denom).toLocaleString('es-CL')}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nuevaCantidad = Math.max(0, cantidad - 1);
+                                                  setDenominacionesVueltoReintegro(prev => ({
+                                                    ...prev,
+                                                    [denom]: nuevaCantidad
+                                                  }));
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                                disabled={cantidad === 0}
+                                              >
+                                                -
+                                              </button>
+                                              <span className="w-8 text-center font-medium text-gray-700">
+                                                {cantidad}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nuevaCantidad = cantidad + 1;
+                                                  setDenominacionesVueltoReintegro(prev => ({
+                                                    ...prev,
+                                                    [denom]: nuevaCantidad
+                                                  }));
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                              >
+                                                +
+                                              </button>
+                                              <span className="w-16 text-right font-medium text-gray-700">
+                                                ${subtotal.toLocaleString('es-CL')}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    <div className="mt-4 pt-4 border-t border-gray-200">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm font-semibold text-gray-700">Total vuelto:</span>
+                                        <div className="text-right">
+                                          <div className={`text-lg font-bold ${
+                                            totalDenominacionesVueltoReintegro === (totalDenominacionesReintegro - montoReintegro) ? 'text-green-600' : 'text-red-600'
+                                          }`}>
+                                            ${totalDenominacionesVueltoReintegro.toLocaleString('es-CL')}
+                                          </div>
+                                          {totalDenominacionesVueltoReintegro !== (totalDenominacionesReintegro - montoReintegro) && (
+                                            <div className="text-xs text-red-500">
+                                              Esperado: ${(totalDenominacionesReintegro - montoReintegro).toLocaleString('es-CL')}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -1131,11 +1874,19 @@ export default function DevolucionesClient() {
                                 </label>
                                 <input
                                   type="text"
-                                  className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition"
+                                  className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:outline-none transition ${
+                                    errorRUT
+                                      ? 'border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-200'
+                                      : 'border-gray-300 bg-white focus:border-blue-500 focus:ring-blue-200'
+                                  }`}
                                   placeholder="12.345.678-9"
                                   value={datosTransferencia.rut}
-                                  onChange={(e) => setDatosTransferencia({ ...datosTransferencia, rut: e.target.value })}
+                                  onChange={(e) => handleRUTChange(e.target.value)}
+                                  maxLength={12}
                                 />
+                                {errorRUT && (
+                                  <p className="mt-1 text-xs text-red-600">{errorRUT}</p>
+                                )}
                               </div>
 
                               <div>
@@ -1206,7 +1957,7 @@ export default function DevolucionesClient() {
 
                               <div>
                                 <label className="mb-2 block text-xs font-medium text-gray-700">
-                                  Email (opcional)
+                                  Email <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                   type="email"
@@ -1219,7 +1970,7 @@ export default function DevolucionesClient() {
                             </div>
 
                             <div className="mt-3 rounded-lg bg-blue-100 border border-blue-300 p-3 text-xs text-blue-800">
-                              <strong>📌 Nota:</strong> Estos datos se utilizarán para realizar la transferencia bancaria al cliente.
+                              <strong>📌 Nota:</strong> Estos datos se utilizarán para realizar la transferencia bancaria al cliente. El correo electrónico es obligatorio y se usará para notificar al cliente sobre la transferencia.
                             </div>
                           </div>
                         </div>
@@ -1310,7 +2061,7 @@ export default function DevolucionesClient() {
 
                                 <button
                                   type="button"
-                                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 transition"
+                                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
                                   onClick={() => {
                                     setCambioTipoPrenda('');
                                     setCambioDiseno('');
@@ -1327,7 +2078,7 @@ export default function DevolucionesClient() {
                                 {cambioSeleccionado && (
                                   <div className="ml-auto text-sm text-gray-600">
                                     <div className="font-medium text-gray-800">Cambio seleccionado:</div>
-                                    <div className="text-xs">{cambioSeleccionado.tipo_prenda ?? '—'} · {cambioSeleccionado.diseno ?? '—'} · {cambioSeleccionado.color ?? '—'}</div>
+                                    <div className="text-xs text-gray-500">{cambioSeleccionado.tipo_prenda ?? '—'} · {cambioSeleccionado.diseno ?? '—'} · {cambioSeleccionado.color ?? '—'}</div>
                                   </div>
                                 )}
                               </div>
@@ -1430,6 +2181,195 @@ export default function DevolucionesClient() {
                                       <span>Procesar pago con tarjeta de crédito en terminal POS</span>
                                     </div>
                                   )}
+                                  {metodoPagoDiferencia === 'efectivo' && (
+                                    <div className="mt-4 pt-4 border-t border-green-200">
+                                      <button
+                                        type="button"
+                                        onClick={() => setMostrarSelectorClientePaga(!mostrarSelectorClientePaga)}
+                                        className="w-full bg-green-600 text-white rounded-lg p-3 text-sm font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                                      >
+                                        <span>💵</span>
+                                        {mostrarSelectorClientePaga ? 'Ocultar selector de billetes' : 'Registrar dinero recibido'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {mostrarSelectorClientePaga && tipoDiferencia === 'cliente_paga' && metodoPagoDiferencia === 'efectivo' && (
+                            <div className="mt-4 p-4 bg-white rounded-lg border border-green-200">
+                              <h5 className="text-sm font-semibold text-gray-700 mb-3">
+                                💰 Registrar dinero recibido (${montoDiferencia.toLocaleString('es-CL')})
+                              </h5>
+                              
+                              <div className="space-y-2">
+                                {Object.keys(denominacionesClientePaga).reverse().map((denom) => {
+                                  const cantidad = denominacionesClientePaga[denom as keyof typeof denominacionesClientePaga];
+                                  const subtotal = parseInt(denom) * cantidad;
+                                  const esMoneda = parseInt(denom) <= 1000;
+                                  
+                                  return (
+                                    <div key={denom} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-lg">{esMoneda ? '🪙' : '💵'}</span>
+                                        <span className="font-medium text-gray-700">
+                                          ${parseInt(denom).toLocaleString('es-CL')}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nuevaCantidad = Math.max(0, cantidad - 1);
+                                            setDenominacionesClientePaga(prev => ({
+                                              ...prev,
+                                              [denom]: nuevaCantidad
+                                            }));
+                                          }}
+                                          className="w-7 h-7 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                          disabled={cantidad === 0}
+                                        >
+                                          -
+                                        </button>
+                                        <span className="w-8 text-center font-medium text-gray-700">
+                                          {cantidad}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nuevaCantidad = cantidad + 1;
+                                            setDenominacionesClientePaga(prev => ({
+                                              ...prev,
+                                              [denom]: nuevaCantidad
+                                            }));
+                                          }}
+                                          className="w-7 h-7 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                        >
+                                          +
+                                        </button>
+                                        <span className="w-16 text-right font-medium text-gray-700">
+                                          ${subtotal.toLocaleString('es-CL')}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-semibold text-gray-700">Total recibido:</span>
+                                  <div className="text-right">
+                                    <div className={`text-lg font-bold ${
+                                      totalDenominacionesClientePaga >= montoDiferencia ? 'text-green-600' : 'text-red-600'
+                                    }`}>
+                                      ${totalDenominacionesClientePaga.toLocaleString('es-CL')}
+                                    </div>
+                                    {totalDenominacionesClientePaga < montoDiferencia && (
+                                      <div className="text-xs text-orange-500">
+                                        Faltante: ${(montoDiferencia - totalDenominacionesClientePaga).toLocaleString('es-CL')}
+                                      </div>
+                                    )}
+                                    {totalDenominacionesClientePaga === montoDiferencia && (
+                                      <div className="text-xs text-green-600">
+                                        ✅ Monto exacto
+                                      </div>
+                                    )}
+                                    {totalDenominacionesClientePaga > montoDiferencia && (
+                                      <div className="text-xs text-blue-600">
+                                        Vuelto: ${(totalDenominacionesClientePaga - montoDiferencia).toLocaleString('es-CL')}
+                                        <button
+                                          type="button"
+                                          onClick={() => setMostrarSelectorVueltoClientePaga(!mostrarSelectorVueltoClientePaga)}
+                                          className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                                        >
+                                          {mostrarSelectorVueltoClientePaga ? 'Ocultar' : 'Registrar vuelto'}
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {mostrarSelectorVueltoClientePaga && totalDenominacionesClientePaga > montoDiferencia && (
+                            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                              <h5 className="text-sm font-semibold text-blue-800 mb-3">
+                                🪙 Registrar vuelto entregado (${(totalDenominacionesClientePaga - montoDiferencia).toLocaleString('es-CL')})
+                              </h5>
+                              
+                              <div className="space-y-2">
+                                {Object.keys(denominacionesVueltoClientePaga).reverse().map((denom) => {
+                                  const cantidad = denominacionesVueltoClientePaga[denom as keyof typeof denominacionesVueltoClientePaga];
+                                  const subtotal = parseInt(denom) * cantidad;
+                                  const esMoneda = parseInt(denom) <= 1000;
+                                  
+                                  return (
+                                    <div key={denom} className="flex items-center justify-between p-2 bg-white rounded-lg">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-lg">{esMoneda ? '🪙' : '💵'}</span>
+                                        <span className="font-medium text-gray-700">
+                                          ${parseInt(denom).toLocaleString('es-CL')}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nuevaCantidad = Math.max(0, cantidad - 1);
+                                            setDenominacionesVueltoClientePaga(prev => ({
+                                              ...prev,
+                                              [denom]: nuevaCantidad
+                                            }));
+                                          }}
+                                          className="w-7 h-7 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                          disabled={cantidad === 0}
+                                        >
+                                          -
+                                        </button>
+                                        <span className="w-8 text-center font-medium text-gray-700">
+                                          {cantidad}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nuevaCantidad = cantidad + 1;
+                                            setDenominacionesVueltoClientePaga(prev => ({
+                                              ...prev,
+                                              [denom]: nuevaCantidad
+                                            }));
+                                          }}
+                                          className="w-7 h-7 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                        >
+                                          +
+                                        </button>
+                                        <span className="w-16 text-right font-medium text-gray-700">
+                                          ${subtotal.toLocaleString('es-CL')}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-semibold text-gray-700">Total vuelto:</span>
+                                  <div className="text-right">
+                                    <div className={`text-lg font-bold ${
+                                      totalDenominacionesVueltoClientePaga === (totalDenominacionesClientePaga - montoDiferencia) ? 'text-green-600' : 'text-red-600'
+                                    }`}>
+                                      ${totalDenominacionesVueltoClientePaga.toLocaleString('es-CL')}
+                                    </div>
+                                    {totalDenominacionesVueltoClientePaga !== (totalDenominacionesClientePaga - montoDiferencia) && (
+                                      <div className="text-xs text-red-500">
+                                        Esperado: ${(totalDenominacionesClientePaga - montoDiferencia).toLocaleString('es-CL')}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1487,6 +2427,194 @@ export default function DevolucionesClient() {
                                     </div>
                                   )}
                                 </div>
+
+                                <div className="mt-4 pt-4 border-t border-purple-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => setMostrarSelectorDenominacionesDiferencia(!mostrarSelectorDenominacionesDiferencia)}
+                                    className="w-full bg-purple-600 text-white rounded-lg p-3 text-sm font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                                  >
+                                    <span>💵</span>
+                                    {mostrarSelectorDenominacionesDiferencia ? 'Ocultar selector de billetes' : 'Seleccionar billetes para diferencia'}
+                                  </button>
+                                </div>
+
+                                {mostrarSelectorDenominacionesDiferencia && (
+                                  <div className="mt-4 p-4 bg-white rounded-lg border border-purple-200">
+                                    <h5 className="text-sm font-semibold text-gray-700 mb-3">
+                                      Selecciona los billetes/monedas a entregar (${montoDiferencia.toLocaleString('es-CL')})
+                                    </h5>
+                                    
+                                    <div className="space-y-2">
+                                      {Object.keys(denominacionesDiferencia).reverse().map((denom) => {
+                                        const cantidad = denominacionesDiferencia[denom as keyof typeof denominacionesDiferencia];
+                                        const disponible = denominacionesDisponibles[parseInt(denom)] || 0;
+                                        const subtotal = parseInt(denom) * cantidad;
+                                        const esMoneda = parseInt(denom) <= 1000;
+                                        
+                                        return (
+                                          <div key={denom} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-lg">{esMoneda ? '🪙' : '💵'}</span>
+                                              <span className="font-medium text-gray-700">
+                                                ${parseInt(denom).toLocaleString('es-CL')}
+                                              </span>
+                                              <span className="text-xs text-gray-500">
+                                                (Disponibles: {disponible})
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nuevaCantidad = Math.max(0, cantidad - 1);
+                                                  setDenominacionesDiferencia(prev => ({
+                                                    ...prev,
+                                                    [denom]: nuevaCantidad
+                                                  }));
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                                disabled={cantidad === 0}
+                                              >
+                                                -
+                                              </button>
+                                              <span className="w-8 text-center font-medium text-gray-700">
+                                                {cantidad}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nuevaCantidad = Math.min(disponible, cantidad + 1);
+                                                  setDenominacionesDiferencia(prev => ({
+                                                    ...prev,
+                                                    [denom]: nuevaCantidad
+                                                  }));
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                                disabled={cantidad >= disponible}
+                                              >
+                                                +
+                                              </button>
+                                              <span className="w-16 text-right font-medium text-gray-700">
+                                                ${subtotal.toLocaleString('es-CL')}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    <div className="mt-4 pt-4 border-t border-gray-200">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm font-semibold text-gray-700">Total seleccionado:</span>
+                                        <div className="text-right">
+                                          <div className={`text-lg font-bold ${
+                                            totalDenominacionesDiferencia >= montoDiferencia ? 'text-green-600' : 'text-red-600'
+                                          }`}>
+                                            ${totalDenominacionesDiferencia.toLocaleString('es-CL')}
+                                          </div>
+                                          {totalDenominacionesDiferencia < montoDiferencia && (
+                                            <div className="text-xs text-orange-500">
+                                              Faltante: ${(montoDiferencia - totalDenominacionesDiferencia).toLocaleString('es-CL')}
+                                            </div>
+                                          )}
+                                          {totalDenominacionesDiferencia > montoDiferencia && (
+                                            <div className="text-xs text-blue-600">
+                                              Vuelto: ${(totalDenominacionesDiferencia - montoDiferencia).toLocaleString('es-CL')}
+                                              <button
+                                                type="button"
+                                                onClick={() => setMostrarSelectorVueltoDiferencia(!mostrarSelectorVueltoDiferencia)}
+                                                className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                                              >
+                                                {mostrarSelectorVueltoDiferencia ? 'Ocultar' : 'Registrar vuelto'}
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {mostrarSelectorVueltoDiferencia && totalDenominacionesDiferencia > montoDiferencia && (
+                                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                    <h5 className="text-sm font-semibold text-blue-800 mb-3">
+                                      🪙 Registrar vuelto entregado (${(totalDenominacionesDiferencia - montoDiferencia).toLocaleString('es-CL')})
+                                    </h5>
+                                    
+                                    <div className="space-y-2">
+                                      {Object.keys(denominacionesVueltoDiferencia).reverse().map((denom) => {
+                                        const cantidad = denominacionesVueltoDiferencia[denom as keyof typeof denominacionesVueltoDiferencia];
+                                        const subtotal = parseInt(denom) * cantidad;
+                                        const esMoneda = parseInt(denom) <= 1000;
+                                        
+                                        return (
+                                          <div key={denom} className="flex items-center justify-between p-2 bg-white rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-lg">{esMoneda ? '🪙' : '💵'}</span>
+                                              <span className="font-medium text-gray-700">
+                                                ${parseInt(denom).toLocaleString('es-CL')}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nuevaCantidad = Math.max(0, cantidad - 1);
+                                                  setDenominacionesVueltoDiferencia(prev => ({
+                                                    ...prev,
+                                                    [denom]: nuevaCantidad
+                                                  }));
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                                disabled={cantidad === 0}
+                                              >
+                                                -
+                                              </button>
+                                              <span className="w-8 text-center font-medium text-gray-700">
+                                                {cantidad}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nuevaCantidad = cantidad + 1;
+                                                  setDenominacionesVueltoDiferencia(prev => ({
+                                                    ...prev,
+                                                    [denom]: nuevaCantidad
+                                                  }));
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors flex items-center justify-center text-sm font-bold"
+                                              >
+                                                +
+                                              </button>
+                                              <span className="w-16 text-right font-medium text-gray-700">
+                                                ${subtotal.toLocaleString('es-CL')}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    <div className="mt-4 pt-4 border-t border-gray-200">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm font-semibold text-gray-700">Total vuelto:</span>
+                                        <div className="text-right">
+                                          <div className={`text-lg font-bold ${
+                                            totalDenominacionesVueltoDiferencia === (totalDenominacionesDiferencia - montoDiferencia) ? 'text-green-600' : 'text-red-600'
+                                          }`}>
+                                            ${totalDenominacionesVueltoDiferencia.toLocaleString('es-CL')}
+                                          </div>
+                                          {totalDenominacionesVueltoDiferencia !== (totalDenominacionesDiferencia - montoDiferencia) && (
+                                            <div className="text-xs text-red-500">
+                                              Esperado: ${(totalDenominacionesDiferencia - montoDiferencia).toLocaleString('es-CL')}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -1505,11 +2633,19 @@ export default function DevolucionesClient() {
                                     </label>
                                     <input
                                       type="text"
-                                      className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition"
+                                      className={`w-full rounded-lg border p-2.5 text-sm focus:ring-2 focus:outline-none transition ${
+                                        errorRUT
+                                          ? 'border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-200'
+                                          : 'border-gray-300 bg-white focus:border-blue-500 focus:ring-blue-200'
+                                      }`}
                                       placeholder="12.345.678-9"
                                       value={datosTransferencia.rut}
-                                      onChange={(e) => setDatosTransferencia({ ...datosTransferencia, rut: e.target.value })}
+                                      onChange={(e) => handleRUTChange(e.target.value)}
+                                      maxLength={12}
                                     />
+                                    {errorRUT && (
+                                      <p className="mt-1 text-xs text-red-600">{errorRUT}</p>
+                                    )}
                                   </div>
 
                                   <div>
@@ -1640,7 +2776,7 @@ export default function DevolucionesClient() {
                                     {p.tipo_prenda} {p.color ? `· ${p.color}` : ''}
                                   </div>
                                 </td>
-                                <td className="p-3 font-medium">{p.talla}</td>
+                                <td className="p-3 font-medium text-gray-900">{p.talla}</td>
                                 <td className="p-3">
                                   <div className="text-xs font-mono text-gray-600">#{p.venta_id}</div>
                                   {p.numero_boleta && <div className="text-xs text-gray-400">{p.numero_boleta}</div>}
