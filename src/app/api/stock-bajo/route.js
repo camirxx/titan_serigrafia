@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseApi';
 
-export async function GET() {
+export async function GET(request) {
   try {
-    console.log('🔍 Consultando productos con stock bajo (tienda_id=1)...');
+    const { searchParams } = new URL(request.url);
+    const stockCriticoParam = searchParams.get('stock_critico');
+    const stockCriticoLimit = stockCriticoParam ? parseInt(stockCriticoParam) : 5; // Por defecto 5 si no se especifica
+
+    console.log(`🔍 Consultando productos con stock bajo (tienda_id=1, límite=${stockCriticoLimit})...`);
 
     // ✅ FILTRAR POR TIENDA_ID = 1 (Inventario Central)
     const { data: productos, error } = await supabase
@@ -56,7 +60,7 @@ export async function GET() {
 
     console.log(`📋 Variantes encontradas: ${variantes?.length || 0}`);
 
-    // Filtrar y agrupar productos con stock bajo (<= 5 unidades o stock = 0)
+    // Filtrar y agrupar productos con stock bajo (≤ stockCriticoLimit unidades o stock = 0)
     const productosConStockBajo = [];
     
     productos.forEach((producto) => {
@@ -74,11 +78,11 @@ export async function GET() {
       const productoVariantes = variantes?.filter(v => v.producto_id === producto.id) || [];
       const stockTotal = productoVariantes.reduce((sum, v) => sum + (v.stock_actual || 0), 0);
       
-      // Buscar variantes con stock bajo (≤ 5 unidades)
-      const variantesConStockBajo = productoVariantes.filter(v => (v.stock_actual || 0) <= 5);
+      // Buscar variantes con stock bajo (≤ stockCriticoLimit unidades)
+      const variantesConStockBajo = productoVariantes.filter(v => (v.stock_actual || 0) <= stockCriticoLimit);
       
       if (variantesConStockBajo.length > 0) {
-        console.log(`⚠️ ${diseno} ${tipo} ${color} - Stock total: ${stockTotal}`);
+        console.log(`⚠️ ${diseno} ${tipo} ${color} - Stock total: ${stockTotal} (límite: ${stockCriticoLimit})`);
         variantesConStockBajo.forEach(v => {
           console.log(`   - Talla ${v.talla}: ${v.stock_actual} unidades (BAJO)`);
         });
@@ -100,7 +104,7 @@ export async function GET() {
       }
     });
 
-    console.log(`✅ Productos con stock bajo: ${productosConStockBajo.length}`);
+    console.log(`✅ Productos con stock bajo (≤ ${stockCriticoLimit}): ${productosConStockBajo.length}`);
 
     return NextResponse.json({
       productos: productosConStockBajo,

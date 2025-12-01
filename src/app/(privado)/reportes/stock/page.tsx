@@ -58,7 +58,7 @@ type GroupedProduct = {
   tipo_prenda: string;
   color: string;
   tallas: Map<string, number>; // talla -> stock
-  totalStock: number;
+  stock_actual: number;
 };
 
 function toMsg(e: unknown): string {
@@ -66,45 +66,98 @@ function toMsg(e: unknown): string {
 }
 
 export default function EstadoStockPage() {
-  const [critico, setCritico] = useState(5);
+  // Cargar el valor guardado del localStorage o usar 5 como default
+  const [critico, setCritico] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('stock-critico-umbral');
+      return saved ? Number(saved) : 5;
+    }
+    return 5;
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showLowStockNotification, setShowLowStockNotification] = useState(false);
   const [low, setLow] = useState<Row[]>([]);
 
-  // Actualizar productos con stock bajo cuando cambian las filas o el umbral crítico
-  useEffect(() => {
-    setLow(rows.filter((r) => r.stock_actual <= critico));
-  }, [rows, critico]);
+  // Guardar en localStorage cuando cambia el umbral crítico
+  const handleCriticoChange = (value: number) => {
+    setCritico(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('stock-critico-umbral', value.toString());
+    }
+  };
 
   async function cargar() {
     setErrorMsg(null);
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('variantes_admin_view')
-        .select('variante_id,diseno,tipo_prenda,color,talla,stock_actual')
-        .order('stock_actual', { ascending: true })
-        .limit(500);
+      // Usar la misma consulta que inventario para consistencia
+      const { data: todosProductos, error: errProductos } = await supabase
+        .from("productos")
+        .select(`
+          id,
+          disenos!inner(nombre),
+          tipos_prenda!inner(nombre),
+          colores(nombre)
+        `)
+        .eq("activo", true)
+        .eq("tienda_id", 1); // Solo tienda principal
 
-      if (error) throw new Error(error.message);
+      if (errProductos) throw new Error(errProductos.message);
 
-      const list = Array.isArray(data) ? data : [];
-      const cleaned: Row[] = list.map((r) => {
-        const rec = r as Record<string, unknown>;
-        return {
-          variante_id: Number(rec.variante_id ?? 0),
-          diseno: String(rec.diseno ?? ''),
-          tipo_prenda: String(rec.tipo_prenda ?? ''),
-          color: String(rec.color ?? 'Sin color'),
-          talla: String(rec.talla ?? ''),
-          stock_actual: Number(rec.stock_actual ?? 0),
-        };
+      // Map para acceso rápido
+      const productosUnicos = new Map<number, { diseno: string; tipo_prenda: string; color: string }>();
+
+      todosProductos?.forEach((p: {
+        id: string | number;
+        disenos?: { nombre: string }[] | { nombre: string };
+        tipos_prenda?: { nombre: string }[] | { nombre: string };
+        colores?: { nombre: string }[] | { nombre: string };
+      }) => {
+        productosUnicos.set(Number(p.id), {
+          diseno: Array.isArray(p.disenos) ? p.disenos[0]?.nombre || "Sin diseño" : p.disenos?.nombre || "Sin diseño",
+          tipo_prenda: Array.isArray(p.tipos_prenda) ? p.tipos_prenda[0]?.nombre || "Sin tipo" : p.tipos_prenda?.nombre || "Sin tipo",
+          color: Array.isArray(p.colores) ? p.colores[0]?.nombre || "Sin color" : p.colores?.nombre || "Sin color",
+        });
       });
 
-      setRows(cleaned);
+      // Cargar TODAS las variantes paginando (como en inventario)
+      let allVariantes: {id: string, producto_id: string, talla: string, stock_actual: number}[] = [];
+      let start = 0;
+      const batchSize = 1000;
+
+      while (true) {
+        const { data: batch, error } = await supabase
+          .from("variantes")
+          .select("id, producto_id, talla, stock_actual")
+          .order("id", { ascending: true })
+          .range(start, start + batchSize - 1);
+
+        if (error) throw new Error(error.message);
+        if (!batch || batch.length === 0) break;
+
+        allVariantes = allVariantes.concat(batch);
+        if (batch.length < batchSize) break;
+        start += batchSize;
+      }
+
+      // Filtrar y procesar como en inventario
+      const variantesFiltradas = allVariantes
+        .filter((v) => productosUnicos.has(Number(v.producto_id)))
+        .map((v) => {
+          const info = productosUnicos.get(Number(v.producto_id));
+          return {
+            variante_id: Number(v.id),
+            diseno: info?.diseno || "Sin diseño",
+            tipo_prenda: info?.tipo_prenda || "Sin tipo",
+            color: info?.color || "Sin color",
+            talla: v.talla || "N/A",
+            stock_actual: v.stock_actual || 0,
+          };
+        });
+
+      setRows(variantesFiltradas);
     } catch (e: unknown) {
       setRows([]);
       setErrorMsg(toMsg(e));
@@ -117,11 +170,28 @@ export default function EstadoStockPage() {
     cargar();
   }, []);
 
+  // Actualizar productos con stock bajo cuando cambian las filas o el umbral crítico
+  useEffect(() => {
+    setLow(rows.filter((r) => r.stock_actual <= critico));
+  }, [rows, critico]);
+
   // Agrupar productos por diseño + tipo + color
   const groupedProducts = useMemo(() => {
     const groups = new Map<string, GroupedProduct>();
     
-    for (const row of rows) {
+    // Filtrar filas por término de búsqueda ANTES de agrupar
+    let filteredRows = rows;
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase().trim();
+      filteredRows = rows.filter(row => 
+        row.diseno.toLowerCase().includes(term) ||
+        row.tipo_prenda.toLowerCase().includes(term) ||
+        row.color.toLowerCase().includes(term)
+      );
+    }
+    
+    for (const row of filteredRows) {
       const key = `${row.diseno}|${row.tipo_prenda}|${row.color}`;
       
       if (!groups.has(key)) {
@@ -130,53 +200,42 @@ export default function EstadoStockPage() {
           tipo_prenda: row.tipo_prenda,
           color: row.color,
           tallas: new Map(),
-          totalStock: 0,
+          stock_actual: 0,
         });
       }
       
       const group = groups.get(key)!;
-      group.tallas.set(row.talla, row.stock_actual);
-      group.totalStock += row.stock_actual;
+      // Si la talla ya existe, sumar el stock (para evitar duplicados)
+      const currentStock = group.tallas.get(row.talla) || 0;
+      group.tallas.set(row.talla, currentStock + row.stock_actual);
+      group.stock_actual += row.stock_actual;
     }
     
-    // Filtrar por término de búsqueda
-    let filtered = Array.from(groups.values());
-    
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter(product => 
-        product.diseno.toLowerCase().includes(term) ||
-        product.tipo_prenda.toLowerCase().includes(term) ||
-        product.color.toLowerCase().includes(term)
-      );
-    }
-    
-    return filtered.sort((a, b) => a.totalStock - b.totalStock);
+    return Array.from(groups.values()).sort((a, b) => a.stock_actual - b.stock_actual);
   }, [rows, searchTerm]);
   
   // Verificar si hay stock bajo al cargar la página
   useEffect(() => {
-    if (low.length > 0) {
-      setShowLowStockNotification(true);
-    }
+    // No se necesita hacer nada, la notificación se muestra automáticamente con low.length > 0
   }, [low.length]);
 
-  // Obtener todas las tallas únicas ordenadas
+  // Obtener todas las tallas únicas ordenadas (misma lógica que inventario)
   const allSizes = useMemo(() => {
-    const sizes = new Set<string>();
-    for (const row of rows) {
-      sizes.add(row.talla);
-    }
-    // Ordenar tallas de forma lógica
-    const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-    return Array.from(sizes).sort((a, b) => {
-      const indexA = sizeOrder.indexOf(a);
-      const indexB = sizeOrder.indexOf(b);
-      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-      if (indexA !== -1) return -1;
-      if (indexB !== -1) return 1;
-      return a.localeCompare(b);
+    const sizesSet = new Set<string>();
+    rows.forEach((row) => {
+      if (row.talla && row.talla !== "N/A") {
+        sizesSet.add(row.talla);
+      }
     });
+
+    // Ordenar: primero las tallas estándar, luego las adicionales alfabéticamente
+    const tallasEstandar = ["S", "M", "L", "XL", "XXL", "XXXL"];
+    const tallasOrdenadas = tallasEstandar.filter((t) => sizesSet.has(t));
+    const tallasExtras = [...sizesSet].filter(
+      (t) => !tallasEstandar.includes(t)
+    ).sort();
+
+    return [...tallasOrdenadas, ...tallasExtras];
   }, [rows]);
 
   const handleExportCSV = () => {
@@ -206,7 +265,7 @@ export default function EstadoStockPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Notificación de stock bajo */}
-      {showLowStockNotification && low.length > 0 && (
+      {low.length > 0 && (
         <div className="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 p-4 rounded-lg shadow-md">
           <div className="flex justify-between items-start">
             <div className="flex items-start">
@@ -225,7 +284,7 @@ export default function EstadoStockPage() {
             <button
               type="button"
               className="ml-4 text-red-500 hover:text-red-700 focus:outline-none"
-              onClick={() => setShowLowStockNotification(false)}
+              onClick={() => {}}
             >
               <span className="sr-only">Cerrar notificación</span>
               <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -264,7 +323,7 @@ export default function EstadoStockPage() {
               type="number"
               className="w-24 border-2 border-gray-200 rounded-lg px-4 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
               value={critico}
-              onChange={(e) => setCritico(Number(e.target.value || 0))}
+              onChange={(e) => handleCriticoChange(Number(e.target.value || 0))}
             />
           </div>
           
@@ -374,13 +433,15 @@ export default function EstadoStockPage() {
                         return (
                           <td key={size} className="p-4 text-center">
                             {stock !== undefined ? (
-                              <span className={`inline-flex items-center justify-center min-w-[50px] px-3 py-1.5 font-bold rounded-lg transition-all duration-200 ${
-                                isCritical
-                                  ? 'bg-gradient-to-r from-red-100 to-red-200 text-red-700 ring-2 ring-red-300'
-                                  : isEmpty
-                                  ? 'bg-gray-100 text-gray-400'
-                                  : 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700'
-                              }`}>
+                              <span
+                                className={`inline-flex items-center justify-center min-w-[80px] px-4 py-2 font-bold rounded-lg transition-all duration-200 text-base ${
+                                  isCritical
+                                    ? 'bg-gradient-to-r from-red-100 to-red-200 text-red-700 ring-2 ring-red-300'
+                                    : isEmpty
+                                    ? 'bg-gray-100 text-gray-400'
+                                    : 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700'
+                                }`}
+                              >
                                 {stock}
                               </span>
                             ) : (
@@ -390,8 +451,10 @@ export default function EstadoStockPage() {
                         );
                       })}
                       <td className="p-4 text-right">
-                        <span className="inline-flex items-center justify-center min-w-[60px] px-4 py-2 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 font-bold rounded-lg text-base">
-                          {product.totalStock}
+                        <span
+                          className="inline-flex items-center justify-center min-w-[90px] px-4 py-2 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 font-bold rounded-lg text-base"
+                        >
+                          {product.stock_actual}
                         </span>
                       </td>
                     </tr>

@@ -52,7 +52,7 @@ const ChatbotWidget = () => {
       [
         { id: 'inventario-completo', label: '📋 Ver todo' },
         { id: 'buscar-producto', label: '🔍 Buscar producto' },
-        { id: 'stock-bajo', label: '⚠️ Stock bajo' },
+        { id: 'stock-critico', label: '🚨 Stock crítico personalizado' },
         { id: 'volver-main', label: '⬅️ Volver' }
       ]
     );
@@ -181,43 +181,125 @@ const ChatbotWidget = () => {
       } else {
         let mensaje = `⚠️ Encontré ${data.productos.length} productos con stock bajo:\n\n`;
         
-        // Mostrar hasta 5 productos en el chatbot
-        const productosMostrar = data.productos.slice(0, 5);
-        productosMostrar.forEach((producto, index) => {
+        // Mostrar TODOS los productos encontrados
+        data.productos.forEach((producto, index) => {
           const stockTotal = producto.stock_total || 0;
           const estado = stockTotal === 0 ? '🔴' : '🟡';
           mensaje += `${index + 1}. ${producto.nombre} - ${estado} ${stockTotal}u total\n`;
           
-          // Mostrar tallas con bajo stock
+          // Mostrar TODAS las tallas con bajo stock
           if (producto.variantes_bajo && producto.variantes_bajo.length > 0) {
             producto.variantes_bajo.forEach(variante => {
               const icono = variante.stock_actual === 0 ? '❌' : '⚠️';
               mensaje += `   ${icono} Talla ${variante.talla}: ${variante.stock_actual}u\n`;
             });
           }
+          
+          mensaje += '\n';
         });
 
-        // Si hay más de 5 productos, ofrecer redirección
-        if (data.productos.length > 5) {
-          mensaje += `\n📋 Hay ${data.productos.length - 5} productos más.\n`;
-          mensaje += `💹 ¿Quieres ver el listado completo en el inventario?`;
-          
-          addMessage(mensaje, true, [
-            { id: 'ver-inventario-stock', label: '📋 Ver inventario completo' },
-            { id: 'volver-inventario', label: '⬅️ Volver' }
-          ]);
-        } else {
-          addMessage(mensaje);
-        }
+        addMessage(mensaje);
       }
     } catch (error) {
       console.error('❌ Error completo:', error);
       addMessage('❌ Hubo un error al verificar el stock. Por favor intenta de nuevo.');
     } finally {
       setIsLoading(false);
-      if (!data?.productos || data?.productos.length <= 5) {
-        setTimeout(() => showInventoryMenu(), 2000);
+      setConversationState({});
+      setTimeout(() => showInventoryMenu(), 3000);
+    }
+  };
+
+  const handleStockCritico = () => {
+    setConversationState({ waitingFor: 'stock-critico-number' });
+    addMessage('🚨 ¿Cuál es el número máximo de unidades que consideras stock crítico?');
+  };
+
+  const searchStockCritico = async (stockCriticoNumber) => {
+    setIsLoading(true);
+    try {
+      const stockLimit = parseInt(stockCriticoNumber);
+      
+      if (isNaN(stockLimit) || stockLimit < 0) {
+        addMessage('❌ Por favor escribe un número válido (0 o más).');
+        return;
       }
+
+      console.log(`🚨 Buscando productos con stock crítico ≤ ${stockLimit}...`);
+      
+      // Usar la API de stock bajo pero con el parámetro personalizado
+      const response = await fetch(`/api/stock-bajo?tienda_id=1&stock_critico=${stockLimit}`);
+      const data = await response.json();
+
+      console.log('📊 Respuesta API stock crítico:', data);
+
+      if (data.error) {
+        console.error('❌ Error en API:', data.error);
+        addMessage('❌ Hubo un error al verificar el stock crítico.');
+        return;
+      }
+
+      if (!data.productos || data.productos.length === 0) {
+        addMessage(`✅ ¡Buenas noticias! No hay productos con ${stockLimit} o menos unidades en stock.`);
+      } else {
+        let mensaje = `🚨 Encontré ${data.productos.length} productos con stock crítico (≤ ${stockLimit} unidades):\n\n`;
+        
+        // Para cada producto con stock crítico, obtener TODAS sus variantes
+        for (let i = 0; i < data.productos.length; i++) {
+          const producto = data.productos[i];
+          const stockTotal = producto.stock_total || 0;
+          const estado = stockTotal === 0 ? '🔴' : stockTotal <= stockLimit ? '🚨' : '🟡';
+          
+          mensaje += `${i + 1}. ${producto.nombre} - ${estado} ${stockTotal}u total\n`;
+          
+          // Obtener TODAS las variantes de este producto
+          try {
+            const variantesResponse = await fetch(`/api/productos/variantes/${producto.id}`);
+            const variantesData = await variantesResponse.json();
+            
+            if (variantesData.variantes && variantesData.variantes.length > 0) {
+              // Ordenar tallas
+              const ordenTallas = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+              const variantesOrdenadas = [...variantesData.variantes].sort((a, b) => {
+                const indexA = ordenTallas.indexOf(a.talla);
+                const indexB = ordenTallas.indexOf(b.talla);
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                if (indexA !== -1) return -1;
+                if (indexB !== -1) return 1;
+                return a.talla.localeCompare(b.talla);
+              });
+              
+              // Mostrar TODAS las tallas con su stock exacto
+              variantesOrdenadas.forEach(variante => {
+                const stock = variante.stock_actual || 0;
+                const esCritico = stock <= stockLimit;
+                const icono = stock === 0 ? '❌' : esCritico ? '🚨' : '✅';
+                mensaje += `   ${icono} Talla ${variante.talla}: ${stock}u\n`;
+              });
+            }
+          } catch (error) {
+            console.error('❌ Error obteniendo variantes:', error);
+            // Si falla, mostrar al menos las variantes críticas
+            if (producto.variantes_bajo && producto.variantes_bajo.length > 0) {
+              producto.variantes_bajo.forEach(variante => {
+                const icono = variante.stock_actual === 0 ? '❌' : '🚨';
+                mensaje += `   ${icono} Talla ${variante.talla}: ${variante.stock_actual}u\n`;
+              });
+            }
+          }
+          
+          mensaje += '\n';
+        }
+
+        addMessage(mensaje);
+      }
+    } catch (error) {
+      console.error('❌ Error completo:', error);
+      addMessage('❌ Hubo un error al verificar el stock crítico. Por favor intenta de nuevo.');
+    } finally {
+      setIsLoading(false);
+      setConversationState({});
+      setTimeout(() => showInventoryMenu(), 3000);
     }
   };
 
@@ -229,7 +311,7 @@ const ChatbotWidget = () => {
     setInputValue('');
     
     setTimeout(() => {
-      addMessage('✨ Chat borrado exitosamente. ¡Empecemos de nuevo!', true);
+      addMessage('Chat borrado exitosamente. ¡Empecemos de nuevo!', true);
       setTimeout(() => {
         showMainMenu();
       }, 1500);
@@ -249,8 +331,8 @@ const ChatbotWidget = () => {
       handleInventarioCompleto();
     } else if (optionId === 'buscar-producto') {
       handleBuscarProducto();
-    } else if (optionId === 'stock-bajo') {
-      handleStockBajo();
+    } else if (optionId === 'stock-critico') {
+      handleStockCritico();
     } else if (optionId === 'ver-inventario-stock') {
       handleInventarioCompleto();
     } else if (optionId === 'volver-inventario') {
@@ -267,6 +349,8 @@ const ChatbotWidget = () => {
 
     if (conversationState.waitingFor === 'product-name') {
       searchProduct(userMessage);
+    } else if (conversationState.waitingFor === 'stock-critico-number') {
+      searchStockCritico(userMessage);
     } else {
       addMessage('Selecciona una opción de arriba 👆');
     }
