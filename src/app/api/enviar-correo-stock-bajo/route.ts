@@ -49,29 +49,27 @@ function getNombre(relacion: Array<{ nombre: string }> | { nombre: string } | nu
 // Genera un mensaje de texto plano con el resumen de productos con stock crítico
 function generarMensajeTextoPlano(lista: ProductoBajoStock[], umbral: number): string {
   // Filtramos productos que tienen al menos una talla con stock crítico
-  const productosCriticos = lista.filter(p => 
-    p.todas_variantes.some(v => v.es_critico)
+  const productosFiltrados = lista.filter(p => 
+    p.todas_variantes.some(v => v.stock_actual <= umbral)
   );
 
-  let txt = `Se detectaron ${productosCriticos.length} productos con stock crítico (≤ ${umbral}).\n\n`;
+  let txt = `Se detectaron ${productosFiltrados.length} productos con stock crítico (≤ ${umbral}).\n\n`;
 
-  productosCriticos.forEach((p, i) => {
-    // Filtramos solo las tallas con stock crítico
-    const tallasCriticas = p.todas_variantes
-      .filter(v => v.es_critico)
-      .map(v => `${v.talla}:${v.stock_actual}`);
+  // Mostrar TODOS los productos en el correo
+  productosFiltrados.forEach((p, index) => {
+    // Obtener todas las tallas con su stock, no solo las críticas
+    const tallasTexto = p.todas_variantes
+      .map(v => {
+        const critico = v.stock_actual <= umbral;
+        return `${v.talla}: ${v.stock_actual}${critico ? ' ⚠️' : ''}`;
+      })
+      .join(', ');
     
-    const tallasTexto = tallasCriticas.length > 0 
-      ? tallasCriticas.join(', ')
-      : 'Ninguna';
-
     // Formato: "1. Diseño - Tipo (Color)"
-    txt += `${i + 1}. ${p.diseno} - ${p.tipo_prenda} (${p.color})\n`;
+    txt += `${index + 1}. ${p.diseno} - ${p.tipo_prenda} (${p.color})\n`;
     
-    // Línea con stock total y tallas críticas
-    txt += `Stock total: ${p.stock_total} | `;
-    txt += `Tallas críticas (≤${umbral}): `;
-    txt += tallasTexto;
+    // Línea con stock total y tallas
+    txt += `   Stock total: ${p.stock_total} | Tallas: ${tallasTexto}`;
     
     // Espacio entre productos
     txt += '\n\n';
