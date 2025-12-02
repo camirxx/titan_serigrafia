@@ -56,6 +56,7 @@ export async function POST(req: Request) {
     // Crear mensaje de texto (igual que el formulario)
     const mensajeGenerado = generarMensajeTextoPlano(productosBajoStock, umbral);
 
+<<<<<<< HEAD
     // Crear HTML del detalle
     const htmlProductos = productosBajoStock
       .map(
@@ -78,6 +79,92 @@ export async function POST(req: Request) {
               )
               .join("")}
           </ul>
+=======
+    // Generar HTML del correo
+    const generarHtmlCorreo = () => {
+      const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; background: #ffffff; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0;">
+            <h1 style="margin: 0; font-size: 28px;">🚨 ALERTA DE STOCK CRÍTICO</h1>
+            <p style="margin: 10px 0 0 0; font-size: 16px;">Umbral: ≤ ${umbral} unidades</p>
+          </div>
+          
+          <div style="padding: 30px; background: #F9FAFB;">
+            ${message ? `<div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #7C3AED;">
+              <p style="margin: 0; color: #374151;">${message}</p>
+            </div>` : ''}
+            
+            <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h2 style="color: #1F2937; margin-top: 0;">📊 Resumen</h2>
+              <p style="font-size: 18px; color: #374151;">
+                <strong style="color: #DC2626; font-size: 24px;">${productosBajoStock.length}</strong> productos con stock crítico detectados
+              </p>
+            </div>
+
+            ${productosBajoStock.length > 0 ? `
+              <div style="background: white; padding: 20px; border-radius: 8px;">
+                <h2 style="color: #1F2937; margin-top: 0;">📋 Detalle de Productos</h2>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <thead>
+                    <tr style="background: #F3F4F6; border-bottom: 2px solid #E5E7EB;">
+                      <th style="padding: 12px; text-align: left; font-size: 14px; color: #6B7280;">#</th>
+                      <th style="padding: 12px; text-align: left; font-size: 14px; color: #6B7280;">Producto</th>
+                      <th style="padding: 12px; text-align: center; font-size: 14px; color: #6B7280;">Stock Total</th>
+                      <th style="padding: 12px; text-align: left; font-size: 14px; color: #6B7280;">Tallas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${productosBajoStock.map((p, i) => `
+                      <tr style="border-bottom: 1px solid #E5E7EB;">
+                        <td style="padding: 12px; color: #6B7280;">${i + 1}</td>
+                        <td style="padding: 12px;">
+                          <div style="font-weight: 600; color: #1F2937;">${p.nombre}</div>
+                          <div style="font-size: 12px; color: #6B7280;">${p.tipo_prenda}</div>
+                        </td>
+                        <td style="padding: 12px; text-align: center; font-weight: 600; color: #1F2937;">${p.stock_total}</td>
+                        <td style="padding: 12px;">
+                          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${p.todas_variantes.map(v => `
+                              <span style="
+                                display: inline-block;
+                                padding: 4px 10px;
+                                border-radius: 6px;
+                                font-size: 13px;
+                                font-weight: 500;
+                                ${v.es_critico 
+                                  ? 'background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5;' 
+                                  : 'background: #E0E7FF; color: #4338CA; border: 1px solid #C7D2FE;'}
+                              ">
+                                ${v.talla}: ${v.stock_actual}
+                              </span>
+                            `).join('')}
+                          </div>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : '<div style="background: white; padding: 20px; border-radius: 8px; text-align: center; color: #6B7280;">No hay productos con stock bajo.</div>'}
+            
+            <div style="margin-top: 20px; padding: 15px; background: #FEF3C7; border-radius: 8px; border-left: 4px solid #F59E0B;">
+              <p style="margin: 0; color: #92400E; font-size: 14px;">
+                <strong>⚠️ Nota:</strong> Los productos marcados en rojo tienen tallas con stock igual o menor a ${umbral} unidades.
+              </p>
+            </div>
+          </div>
+          
+          <div style="padding: 20px; text-align: center; color: #6B7280; font-size: 12px; border-top: 1px solid #E5E7EB;">
+            <p style="margin: 0;">Taller Serigrafía - Sistema de Gestión de Inventario</p>
+            <p style="margin: 5px 0 0 0;">Correo generado automáticamente el ${new Date().toLocaleDateString('es-ES', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}</p>
+          </div>
+>>>>>>> parent of 6f7d2d9 (prueba 5)
         </div>
       `
       )
