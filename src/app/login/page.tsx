@@ -157,10 +157,11 @@ export default function LoginPage() {
           {submitting ? "Ingresando..." : "Entrar"}
         </button>
 
-        {/* Extra opcional: enlace para volver al home */}
-        {/* <p className="text-sm text-center">
-          <a href="/" className="underline">Volver al inicio</a>
-        </p> */}
+        <p className="text-sm text-center">
+          <a href="/forgot-password" className="underline text-gray-600 hover:text-gray-800">
+            ¿Olvidaste tu contraseña?
+          </a>
+        </p>
       </form>
     </div>
   );
