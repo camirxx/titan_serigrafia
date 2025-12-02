@@ -91,10 +91,10 @@ export default function ModalEnviarMensaje({
     try {
       const body = {
         to: correoTaller,
-        subject: `🚨 ALERTA DE STOCK CRÍTICO (≤ ${umbral}) - ${productosFiltrados.length} productos`,
-        message: mensajeExtra || `Se detectaron ${productosFiltrados.length} productos con al menos una talla con stock crítico.`,
+        subject: `ALERTA DE STOCK CRÍTICO (≤ ${umbral}) - ${productosFiltrados.length} producto${productosFiltrados.length > 1 ? 's' : ''}`,
+        message: generarResumenTexto(),  // ← ESTE ES EL TEXTO PERFECTO QUE VES EN "VISTA PREVIA"
         includeExcel: incluyeExcel,
-        umbral
+        // ya NO enviamos umbral ni nada más, no lo necesitamos
       };
 
       const resp = await fetch('/api/enviar-correo-stock-bajo', {
