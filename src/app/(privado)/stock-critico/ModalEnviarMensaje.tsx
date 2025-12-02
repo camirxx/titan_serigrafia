@@ -1,6 +1,6 @@
 // ModalEnviarMensaje.tsx
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { X } from 'lucide-react';
 
@@ -17,22 +17,36 @@ type ModalEnviarMensajeProps = {
   onClose: () => void;
   productos: GroupedProduct[];
   correoTaller: string;
+<<<<<<< HEAD
   umbralActual: number;
+=======
+>>>>>>> parent of 1a99f2d (prueba 4 final)
 };
 
 export default function ModalEnviarMensaje({
   isOpen,
   onClose,
   productos,
-  correoTaller,
-  umbralActual
+  correoTaller
 }: ModalEnviarMensajeProps) {
+<<<<<<< HEAD
+=======
+  
+  // Detectar el umbral actual desde los productos filtrados
+  const umbralActual = useMemo(() => {
+    // Buscar el umbral más común en los productos (el que está en la URL o filtro actual)
+    const stocks = productos.flatMap(p => Array.from(p.tallas.values()));
+    const maxStock = Math.max(...stocks.filter(s => s <= 10), 1);
+    return maxStock <= 5 ? maxStock : 5;
+  }, [productos]);
+>>>>>>> parent of 1a99f2d (prueba 4 final)
 
   const [umbral, setUmbral] = useState<number>(umbralActual);
   const [mensajeExtra, setMensajeExtra] = useState('');
   const [incluyeExcel, setIncluyeExcel] = useState(true);
   const [enviando, setEnviando] = useState(false);
 
+<<<<<<< HEAD
   useEffect(() => {
     if (isOpen) {
       setUmbral(umbralActual);
@@ -50,6 +64,30 @@ export default function ModalEnviarMensaje({
   const mensajeParaCorreo = useMemo(() => {
     const generarResumenTexto = () => {
       let texto = `Se han detectado ${productosFiltrados.length} productos con stock crítico (≤ ${umbral} unidades):\n\n`;
+=======
+  // Filtrar productos que tengan AL MENOS UNA talla con stock <= umbral
+  const productosFiltrados = useMemo(() => {
+    return productos.filter(p => {
+      // Verifica si al menos una talla tiene stock <= umbral
+      return Array.from(p.tallas.values()).some(stock => stock <= umbral);
+    });
+  }, [productos, umbral]);
+
+  const generarResumenTexto = () => {
+    let texto = `Se detectaron ${productosFiltrados.length} productos con stock crítico (≤ ${umbral}).\n\n`;
+    
+    productosFiltrados.slice(0, 50).forEach((p, index) => {
+      const tallasTexto = Array.from(p.tallas.entries())
+        .map(([talla, stock]) => {
+          const critico = stock <= umbral;
+          return `${talla}: ${stock}${critico ? ' ⚠️' : ''}`;
+        })
+        .join(', ');
+      
+      texto += `${index + 1}. ${p.diseno} - ${p.tipo_prenda} (${p.color})\n`;
+      texto += `   Stock total: ${p.stock_actual} | Tallas: ${tallasTexto}\n\n`;
+    });
+>>>>>>> parent of 1a99f2d (prueba 4 final)
 
       productosFiltrados.forEach((p, index) => {
         const tallasTexto = Array.from(p.tallas.entries())
@@ -153,7 +191,11 @@ export default function ModalEnviarMensaje({
         {/* FORM */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
 
+<<<<<<< HEAD
           {/* UMBRAL */}
+=======
+          {/* Umbral de stock */}
+>>>>>>> parent of 1a99f2d (prueba 4 final)
           <div className="bg-purple-50 border-l-4 border-purple-600 p-4 rounded-r-lg">
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               🎯 Umbral de stock crítico
@@ -172,8 +214,6 @@ export default function ModalEnviarMensaje({
                 <option value={4}>≤ 4</option>
                 <option value={5}>≤ 5</option>
                 <option value={10}>≤ 10</option>
-                <option value={15}>≤ 15</option>
-                <option value={20}>≤ 20</option>
               </select>
               <span className="text-sm text-gray-600">
                 Se incluirán productos con <strong>al menos una talla</strong> igual o menor al umbral
@@ -195,20 +235,23 @@ export default function ModalEnviarMensaje({
                 {productosFiltrados.map((p, index) => {
                   const tallasCriticas = Array.from(p.tallas.entries())
                     .filter(([, stock]) => stock <= umbral);
+<<<<<<< HEAD
 
                   const tallasTexto = tallasCriticas.length > 0
                     ? tallasCriticas.map(([t, s]) => `${t}:${s}`).join(', ')
                     : 'Ninguna';
 
+=======
+                  
+>>>>>>> parent of 1a99f2d (prueba 4 final)
                   return (
                     <div key={index} className="text-sm bg-gray-50 p-3 rounded-md border border-gray-100">
                       <div className="font-medium text-gray-800">
                         {index + 1}. {p.diseno} - {p.tipo_prenda} ({p.color})
                       </div>
                       <div className="text-xs text-gray-600 mt-1">
-                        Stock total: <span className="font-semibold">{p.stock_actual}</span>
-                        {' | '}
-                        Tallas críticas (≤{umbral}): <span className="font-semibold text-red-600">{tallasTexto}</span>
+                        Stock total: <span className="font-semibold">{p.stock_actual}</span> | 
+                        Tallas críticas: {tallasCriticas.map(([t, s]) => `${t}:${s}`).join(', ')}
                       </div>
                     </div>
                   );
