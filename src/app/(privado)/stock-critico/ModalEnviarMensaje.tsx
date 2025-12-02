@@ -18,10 +18,33 @@ export async function POST(request: NextRequest) {
 
     const attachments: { filename: string; content: string }[] = [];
 
+<<<<<<< HEAD
     if (includeExcel && totalProductos > 0) {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Stock Crítico", {
         pageSetup: { orientation: "landscape", fitToPage: true },
+=======
+    if (productosFiltrados.length === 0) {
+      toast.error(`No hay productos con stock crítico (≤ ${umbral})`);
+      return;
+    }
+
+    setEnviando(true);
+
+    try {
+      const body = {
+        to: correoTaller,
+        subject: `🚨 ALERTA DE STOCK CRÍTICO (≤ ${umbral}) - ${productosFiltrados.length} productos`,
+        message: mensajeExtra || `Se detectaron ${productosFiltrados.length} productos con al menos una talla con stock crítico.`,
+        includeExcel: incluyeExcel,
+        umbral
+      };
+
+      const resp = await fetch('/api/enviar-correo-stock-bajo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+>>>>>>> parent of 837bcc2 (prueba 11)
       });
 
       // Columnas exactas como querés
