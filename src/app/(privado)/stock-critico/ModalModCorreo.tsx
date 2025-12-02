@@ -12,11 +12,16 @@ type ModalModCorreoProps = {
   onSuccess?: (nuevoCorreo: string) => void;
 };
 
-export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSuccess }: ModalModCorreoProps) {
+export default function ModalModCorreo({ 
+  isOpen, 
+  onClose, 
+  correoActualProp, 
+  onSuccess 
+}: ModalModCorreoProps) {
   const [correoActual, setCorreoActual] = useState(correoActualProp);
   const [nuevoCorreo, setNuevoCorreo] = useState('');
   const [confirmarCorreo, setConfirmarCorreo] = useState('');
-  const [cargando] = useState(true);
+  const [cargando, setCargando] = useState(true); // ← Ahora sí cambia
   const [guardando, setGuardando] = useState(false);
 
   const TABLE = 'configuracion_taller';
@@ -27,10 +32,9 @@ export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSu
       setCorreoActual(correoActualProp);
       setNuevoCorreo(correoActualProp);
       setConfirmarCorreo(correoActualProp);
+      setCargando(false); // ← ¡EL FIX!
     }
   }, [isOpen, correoActualProp]);
-
-  // No necesitamos cargar el correo ya que lo recibimos como prop
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,7 +45,7 @@ export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSu
     setGuardando(true);
 
     try {
-      const res = await supabase
+      const { error } = await supabase
         .from(TABLE)
         .upsert(
           {
@@ -50,23 +54,16 @@ export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSu
             updated_at: new Date().toISOString()
           },
           { onConflict: 'id' }
-        )
-        .select()
-        .single();
+        );
 
-      console.log('[ModalModCorreo] upsert:', res);
-
-      if (res.error) {
-        toast.error('No se pudo guardar el correo');
-        return;
-      }
+      if (error) throw error;
 
       toast.success('Correo actualizado correctamente');
       onSuccess?.(nuevoCorreo);
       onClose();
     } catch (err) {
-      console.error('Error guardando correo (catch):', err);
-      toast.error('Error inesperado guardando correo');
+      console.error('Error guardando correo:', err);
+      toast.error('Error al guardar el correo');
     } finally {
       setGuardando(false);
     }
@@ -80,11 +77,10 @@ export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSu
 
         <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-t-2xl flex items-center justify-between">
           <h2 className="text-xl font-bold">Modificar correo del taller</h2>
-
           <button
             onClick={onClose}
             disabled={guardando}
-            className="p-2 hover:bg-white/20 rounded-full"
+            className="p-2 hover:bg-white/20 rounded-full transition"
           >
             <X className="w-6 h-6" />
           </button>
@@ -92,14 +88,14 @@ export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSu
 
         <div className="p-6">
           {cargando ? (
-            <div className="flex justify-center py-10">
+            <div className="flex justify-center py-16">
               <div className="animate-spin w-10 h-10 border-4 border-purple-300 border-t-purple-700 rounded-full" />
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="text-sm font-medium text-gray-700">Correo actual</label>
-                <div className="mt-1 bg-gray-100 border text-black p-3 rounded-lg">
+                <div className="mt-1 bg-gray-100 border border-gray-300 text-black p-3 rounded-lg font-medium">
                   {correoActual || 'No configurado'}
                 </div>
               </div>
@@ -110,7 +106,8 @@ export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSu
                   type="email"
                   value={nuevoCorreo}
                   onChange={(e) => setNuevoCorreo(e.target.value)}
-                  className="w-full border rounded-lg p-3"
+                  className="w-full mt-1 border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  placeholder="nuevo@correo.com"
                   required
                 />
               </div>
@@ -121,16 +118,18 @@ export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSu
                   type="email"
                   value={confirmarCorreo}
                   onChange={(e) => setConfirmarCorreo(e.target.value)}
-                  className="w-full border rounded-lg p-3"
+                  className="w-full mt-1 border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  placeholder="Repetir correo"
                   required
                 />
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-6">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 border p-3 rounded-lg"
+                  disabled={guardando}
+                  className="flex-1 border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 transition"
                 >
                   Cancelar
                 </button>
@@ -138,15 +137,24 @@ export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSu
                 <button
                   type="submit"
                   disabled={guardando}
-                  className="flex-1 bg-purple-600 text-white p-3 rounded-lg"
+                  className="flex-1 bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {guardando ? 'Guardando…' : 'Guardar'}
+                  {guardando ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Guardando...
+                    </>
+                  ) : (
+                    'Guardar cambios'
+                  )}
                 </button>
               </div>
             </form>
           )}
         </div>
-
       </div>
     </div>
   );
