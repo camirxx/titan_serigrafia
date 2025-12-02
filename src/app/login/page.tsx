@@ -158,7 +158,7 @@ export default function LoginPage() {
         </button>
 
         <p className="text-sm text-center">
-          <a href="/forgot-password" className="underline text-gray-600 hover:text-gray-800">
+          <a href="/recuperar-contrasena" className="underline text-gray-600 hover:text-gray-800">
             ¿Olvidaste tu contraseña?
           </a>
         </p>

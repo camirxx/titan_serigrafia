@@ -13,7 +13,7 @@ export default function ConditionalChatbot() {
   const pathname = usePathname();
   
   // No mostrar el chatbot en estas páginas
-  const hideChatbotRoutes = ["/login", "/acceso-denegado", "/acceso-restringido"];
+  const hideChatbotRoutes = ["/login", "/forgot-password", "/reset-password", "/recuperar-contrasena", "/nueva-contrasena", "/acceso-denegado", "/acceso-restringido"];
   
   if (hideChatbotRoutes.includes(pathname)) {
     return null;

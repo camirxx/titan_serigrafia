@@ -96,6 +96,8 @@ export async function middleware(req: NextRequest) {
     "/login",
     "/forgot-password",
     "/reset-password",
+    "/recuperar-contrasena",
+    "/nueva-contrasena",
     "/auth/callback",
     "/api/auth",
     "/acceso-restringido",
@@ -105,24 +107,24 @@ export async function middleware(req: NextRequest) {
     "/sitemap.xml",
   ];
 
-  // Verificar si la ruta es pública
-  const isPublic =
-    publicRoutes.some((p) => url.pathname.startsWith(p)) ||
-    url.pathname.startsWith("/_next") ||
-    url.pathname.startsWith("/images") ||
-    url.pathname.startsWith("/public");
-
   // Caso especial: rutas de reseteo con hash de autenticación
   const hasAuthHash = url.hash && (
     url.hash.includes('access_token') || 
     url.hash.includes('refresh_token')
   );
-  const isResetRoute = url.pathname.startsWith("/reset-password");
+  const isResetRoute = url.pathname.startsWith("/reset-password") || url.pathname.startsWith("/nueva-contrasena");
   
-  // Si es ruta de reseteo con hash de autenticación, permitir acceso
+  // Si es ruta de reseteo con hash de autenticación, permitir acceso sin verificar usuario
   if (isResetRoute && hasAuthHash) {
     return res;
   }
+
+  // Verificar si la ruta es pública (sin hash de autenticación)
+  const isPublic =
+    publicRoutes.some((p) => url.pathname.startsWith(p)) ||
+    url.pathname.startsWith("/_next") ||
+    url.pathname.startsWith("/images") ||
+    url.pathname.startsWith("/public");
 
   // Sin usuario → redirigir a login
   if (!user && !isPublic) {

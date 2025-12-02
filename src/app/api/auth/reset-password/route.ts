@@ -21,14 +21,27 @@ export async function POST(request: NextRequest) {
     // Usar el método estándar de Supabase para enviar email de reseteo
     // Esto generará el enlace y lo enviará automáticamente
     const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/reset-password`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/nueva-contrasena`,
     });
 
     if (error) {
       console.error("Error sending reset email:", error);
+      // Fallback: usar el método estándar de Supabase
+      const { error: fallbackError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/nueva-contrasena`,
+      });
+
+      if (fallbackError) {
+        console.error("Error sending fallback reset email:", fallbackError);
+        return NextResponse.json(
+          { error: "No se pudo enviar el email de reseteo" },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json(
-        { error: "No se pudo enviar el email de reseteo" },
-        { status: 500 }
+        { message: "Email de reseteo enviado correctamente" },
+        { status: 200 }
       );
     }
 
@@ -37,7 +50,7 @@ export async function POST(request: NextRequest) {
     try {
       // Generar un enlace base para nuestro email personalizado
       const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-      const customResetLink = `${baseUrl}/reset-password?email=${encodeURIComponent(email)}`;
+      const customResetLink = `${baseUrl}/nueva-contrasena?email=${encodeURIComponent(email)}`;
       
       // Enviar nuestro email personalizado de forma asíncrona (no bloqueante)
       fetch(`${baseUrl}/api/auth/send-reset-email`, {
