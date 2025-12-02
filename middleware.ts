@@ -110,13 +110,20 @@ export async function middleware(req: NextRequest) {
   // Caso especial: rutas de reseteo con hash de autenticación
   const hasAuthHash = url.hash && (
     url.hash.includes('access_token') || 
-    url.hash.includes('refresh_token')
+    url.hash.includes('refresh_token') ||
+    url.hash.includes('type=recovery')
   );
   const isResetRoute = url.pathname.startsWith("/reset-password") || url.pathname.startsWith("/nueva-contrasena");
   
   // Si es ruta de reseteo con hash de autenticación, permitir acceso sin verificar usuario
   if (isResetRoute && hasAuthHash) {
     return res;
+  }
+
+  // Si viene con hash de autenticación pero no es ruta de reseteo, verificar si debería ser redirigido
+  if (hasAuthHash && url.pathname === "/") {
+    // Si viene a / con tokens de recuperación, redirigir a nueva-contrasena
+    return NextResponse.redirect(new URL("/nueva-contrasena" + url.hash, url));
   }
 
   // Verificar si la ruta es pública (sin hash de autenticación)

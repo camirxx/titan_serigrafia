@@ -98,7 +98,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 p-8 rounded-2xl shadow-xl bg-white border border-gray-100"
+        className="w-full max-w-sm space-y-4 p-8 rounded-2xl shadow-xl bg-white/90 backdrop-blur-sm border border-gray-100"
       >
         <h1 className="text-2xl font-semibold">Recuperar contraseña</h1>
         <p className="text-sm text-gray-600">

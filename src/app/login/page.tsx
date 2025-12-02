@@ -93,19 +93,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 p-8 rounded-2xl shadow-xl bg-white border border-gray-100"
+        className="w-full max-w-sm space-y-4 p-8 rounded-2xl shadow-xl bg-white/90 backdrop-blur-sm border border-gray-100"
       >
         <h1 className="text-2xl font-semibold">Iniciar sesión</h1>
-
-        {/* Mensaje contextual si venías redirigido desde una ruta privada */}
-        {typeof window !== "undefined" && new URLSearchParams(window.location.search).get("next") && (
-          <p className="text-xs text-gray-500">
-            Inicia sesión para continuar a{" "}
-            <span className="font-mono">
-              {new URLSearchParams(window.location.search).get("next")}
-            </span>
-          </p>
-        )}
 
         <div className="space-y-2">
           <label className="block text-sm">Email</label>
