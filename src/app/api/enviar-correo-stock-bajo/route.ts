@@ -48,31 +48,33 @@ function getNombre(relacion: Array<{ nombre: string }> | { nombre: string } | nu
 
 // Genera un mensaje de texto plano con el resumen de productos con stock crítico
 function generarMensajeTextoPlano(lista: ProductoBajoStock[], umbral: number): string {
-  // Primero filtramos los productos que tienen al menos una talla crítica
-  const productosConTallasCriticas = lista.filter(p => 
+  // Filtramos productos que tienen al menos una talla con stock crítico
+  const productosCriticos = lista.filter(p => 
     p.todas_variantes.some(v => v.es_critico)
   );
 
-  let txt = `Se detectaron ${productosConTallasCriticas.length} productos con stock crítico (≤ ${umbral}).\n\n`;
+  let txt = `Se detectaron ${productosCriticos.length} productos con stock crítico (≤ ${umbral}).\n\n`;
 
-  productosConTallasCriticas.forEach((p, i) => {
-    // Obtenemos solo las tallas críticas
+  productosCriticos.forEach((p, i) => {
+    // Filtramos solo las tallas con stock crítico
     const tallasCriticas = p.todas_variantes
       .filter(v => v.es_critico)
-      .map(v => `${v.talla}: ${v.stock_actual}`);
+      .map(v => `${v.talla}:${v.stock_actual}`);
     
-    // Si no hay tallas críticas (por si acaso), mostramos 'Ninguna'
     const tallasTexto = tallasCriticas.length > 0 
       ? tallasCriticas.join(', ')
       : 'Ninguna';
 
-    // Solo mostramos el producto si tiene tallas críticas
-    if (tallasCriticas.length > 0) {
-      txt += `${i + 1}. ${p.nombre}\n`;
-      txt += `Stock total: ${p.stock_total} | `;
-      txt += `Tallas críticas (≤${umbral}): ${tallasTexto}`;
-      txt += `\n\n`;
-    }
+    // Formato: "1. Diseño - Tipo (Color)"
+    txt += `${i + 1}. ${p.diseno} - ${p.tipo_prenda} (${p.color})\n`;
+    
+    // Línea con stock total y tallas críticas
+    txt += `Stock total: ${p.stock_total} | `;
+    txt += `Tallas críticas (≤${umbral}): `;
+    txt += tallasTexto;
+    
+    // Espacio entre productos
+    txt += '\n\n';
   });
 
   return `<pre style="white-space:pre-wrap;">${txt}</pre>`;
