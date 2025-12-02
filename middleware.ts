@@ -94,6 +94,8 @@ export async function middleware(req: NextRequest) {
   // Rutas públicas
   const publicRoutes = [
     "/login",
+    "/forgot-password",
+    "/reset-password",
     "/auth/callback",
     "/api/auth",
     "/acceso-restringido",
