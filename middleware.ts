@@ -112,6 +112,18 @@ export async function middleware(req: NextRequest) {
     url.pathname.startsWith("/images") ||
     url.pathname.startsWith("/public");
 
+  // Caso especial: rutas de reseteo con hash de autenticación
+  const hasAuthHash = url.hash && (
+    url.hash.includes('access_token') || 
+    url.hash.includes('refresh_token')
+  );
+  const isResetRoute = url.pathname.startsWith("/reset-password");
+  
+  // Si es ruta de reseteo con hash de autenticación, permitir acceso
+  if (isResetRoute && hasAuthHash) {
+    return res;
+  }
+
   // Sin usuario → redirigir a login
   if (!user && !isPublic) {
     const redirectUrl = new URL("/login", url);

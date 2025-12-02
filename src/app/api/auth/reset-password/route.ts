@@ -18,7 +18,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generar el enlace de reseteo con la URL de tu aplicación
+    // Usar el método estándar de Supabase para enviar email de reseteo
+    // Esto generará el enlace y lo enviará automáticamente
     const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
       redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/reset-password`,
     });
@@ -29,6 +30,32 @@ export async function POST(request: NextRequest) {
         { error: "No se pudo enviar el email de reseteo" },
         { status: 500 }
       );
+    }
+
+    // Opcional: intentar enviar nuestro email personalizado como complemento
+    // pero sin depender de él para la funcionalidad principal
+    try {
+      // Generar un enlace base para nuestro email personalizado
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+      const customResetLink = `${baseUrl}/reset-password?email=${encodeURIComponent(email)}`;
+      
+      // Enviar nuestro email personalizado de forma asíncrona (no bloqueante)
+      fetch(`${baseUrl}/api/auth/send-reset-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          resetLink: customResetLink
+        }),
+      }).catch(err => {
+        // Ignorar errores del email personalizado ya que el principal ya fue enviado
+        console.log("Custom email failed, but main email was sent:", err);
+      });
+    } catch (customEmailError) {
+      // Ignorar errores del email personalizado
+      console.log("Custom email error, but main email was sent:", customEmailError);
     }
 
     return NextResponse.json(
