@@ -1,371 +1,166 @@
 // src/app/api/enviar-correo-stock-bajo/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
-import ExcelJS from 'exceljs';
-
-interface Variante {
-  id: string;
-  producto_id: string;
-  talla: string | null;
-  stock_actual: number | null;
-}
-
-interface ProductoRelaciones {
-  id: string;
-  disenos: Array<{ nombre: string }> | { nombre: string } | null;
-  tipos_prenda: Array<{ nombre: string }> | { nombre: string } | null;
-  colores: Array<{ nombre: string }> | { nombre: string } | null;
-  activo: boolean;
-}
-
-interface VarianteConCritico {
-  id: string;
-  talla: string;
-  stock_actual: number;
-  es_critico: boolean;
-}
-
-interface ProductoBajoStock {
-  id: string;
-  nombre: string;
-  diseno: string;
-  tipo_prenda: string;
-  color: string;
-  stock_total: number;
-  todas_variantes: VarianteConCritico[];
-  total_variantes: number;
-}
-
-// Helper para obtener nombre de relación (puede ser array o objeto)
-function getNombre(relacion: Array<{ nombre: string }> | { nombre: string } | null): string {
-  if (!relacion) return '';
-  if (Array.isArray(relacion)) {
-    return relacion[0]?.nombre || '';
-  }
-  return relacion.nombre || '';
-}
-
-// Genera un mensaje de texto plano con el resumen de productos con stock crítico
-function generarMensajeTextoPlano(lista: ProductoBajoStock[], umbral: number): string {
-  // Filtramos productos que tienen al menos una talla con stock crítico
-  const productosFiltrados = lista.filter(p => 
-    p.todas_variantes.some(v => v.stock_actual <= umbral)
-  );
-
-  let txt = `Se detectaron ${productosFiltrados.length} productos con stock crítico (≤ ${umbral}).\n\n`;
-
-  // Mostrar TODOS los productos en el correo
-  productosFiltrados.forEach((p, index) => {
-    // Obtener todas las tallas con su stock, no solo las críticas
-    const tallasTexto = p.todas_variantes
-      .map(v => {
-        const critico = v.stock_actual <= umbral;
-        return `${v.talla}: ${v.stock_actual}${critico ? ' ⚠️' : ''}`;
-      })
-      .join(', ');
-    
-    // Formato: "1. Diseño - Tipo (Color)"
-    txt += `${index + 1}. ${p.diseno} - ${p.tipo_prenda} (${p.color})\n`;
-    
-    // Línea con stock total y tallas
-    txt += `   Stock total: ${p.stock_total} | Tallas: ${tallasTexto}`;
-    
-    // Espacio entre productos
-    txt += '\n\n';
-  });
-
-  return `<pre style="white-space:pre-wrap;">${txt}</pre>`;
-}
+import { Resend } from "resend";
+import ExcelJS from "exceljs";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const { to, subject, message, includeExcel, umbral } = body as {
+    const body = await request.json();
+    const { to, subject, message, includeExcel } = body as {
       to: string;
-      subject?: string;
+      subject: string;
       message: string;
       includeExcel: boolean;
-      umbral: number;
     };
 
     if (!to || !message) {
-      return NextResponse.json(
-        { success: false, message: "Faltan datos requeridos (destinatario y mensaje)" },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, message: "Faltan datos" }, { status: 400 });
     }
 
-<<<<<<< HEAD
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    // Obtener productos activos
-    const { data: productos, error: errorProductos } = await supabase
-      .from("productos")
-      .select(`
-        id,
-        disenos!inner(nombre),
-        tipos_prenda!inner(nombre),
-        colores(nombre),
-        activo
-      `)
-      .eq("activo", true);
-=======
-    // Extraemos cuántos productos dice el mensaje
     const totalMatch = message.match(/Se detectaron (\d+) productos/);
-    const totalProductos = totalMatch ? parseInt(totalMatch[1]) : 0;
+    const umbralMatch = message.match(/≤ (\d+)\)/);
+    const totalProductos = totalMatch ? parseInt(totalMatch[1], 10) : 0;
+    const umbral = umbralMatch ? parseInt(umbralMatch[1], 10) : 1;
 
-    // Excel con tipos correctos (sin any)
-    const attachments: {
-      filename: string;
-      content: string;
-    }[] = [];
->>>>>>> parent of 11adbcc (preuab 12)
+    const attachments: { filename: string; content: string }[] = [];
 
-    if (errorProductos) throw new Error(errorProductos.message);
-
-    const productoIds = productos?.map((p: ProductoRelaciones) => p.id) || [];
-    const { data: variantes, error: errorVariantes } = await supabase
-      .from("variantes")
-      .select("id, producto_id, talla, stock_actual")
-      .in("producto_id", productoIds);
-
-    if (errorVariantes) throw new Error(errorVariantes.message);
-
-    // Filtrar productos que tengan AL MENOS UNA talla con stock <= umbral
-    const productosBajoStock = (productos as ProductoRelaciones[])
-      .map((producto) => {
-        const productoVariantes = (variantes as Variante[]).filter(v => v.producto_id === producto.id);
-        const stockTotal = productoVariantes.reduce((sum, v) => sum + (v.stock_actual ?? 0), 0);
-        
-        // Verificar si tiene al menos una variante con stock bajo
-        const tieneStockBajo = productoVariantes.some(v => (v.stock_actual ?? 0) <= umbral);
-        
-        if (!tieneStockBajo) return null;
-
-        // Ordenar tallas por el orden estándar
-        const ordenTallas = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-        const variantesOrdenadas = productoVariantes
-          .map(v => ({
-            id: v.id,
-            talla: v.talla || 'N/A',
-            stock_actual: v.stock_actual || 0,
-            es_critico: (v.stock_actual ?? 0) <= umbral
-          }))
-          .sort((a, b) => {
-            const indexA = ordenTallas.indexOf(a.talla);
-            const indexB = ordenTallas.indexOf(b.talla);
-            if (indexA === -1 && indexB === -1) return 0;
-            if (indexA === -1) return 1;
-            if (indexB === -1) return -1;
-            return indexA - indexB;
-          });
-
-        return {
-          id: producto.id,
-          nombre: `${getNombre(producto.disenos)} ${getNombre(producto.tipos_prenda)} ${getNombre(producto.colores)}`.trim(),
-          diseno: getNombre(producto.disenos),
-          tipo_prenda: getNombre(producto.tipos_prenda),
-          color: getNombre(producto.colores) || 'Sin color',
-          stock_total: stockTotal,
-          todas_variantes: variantesOrdenadas,
-          total_variantes: productoVariantes.length
-        };
-      })
-      .filter(p => p !== null);
-
-    // Preparar Excel si se solicita
-    const attachments: { filename: string; content: Buffer }[] = [];
-    if (includeExcel && productosBajoStock.length > 0) {
+    if (includeExcel && totalProductos > 0) {
       const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet('Stock Crítico');
+      const sheet = workbook.addWorksheet("Stock Crítico", {
+        pageSetup: { orientation: "landscape", fitToPage: true },
+      });
 
       sheet.columns = [
-<<<<<<< HEAD
-        { header: 'Producto', key: 'nombre', width: 35 },
-        { header: 'Diseño', key: 'diseno', width: 20 },
-        { header: 'Tipo', key: 'tipo_prenda', width: 20 },
-        { header: 'Color', key: 'color', width: 15 },
-        { header: 'Stock Total', key: 'stock_total', width: 12 },
-        { header: 'S', key: 's', width: 8 },
-        { header: 'M', key: 'm', width: 8 },
-        { header: 'L', key: 'l', width: 8 },
-        { header: 'XL', key: 'xl', width: 8 },
-        { header: 'XXL', key: 'xxl', width: 8 },
-        { header: 'XXXL', key: 'xxxl', width: 8 },
+        { header: "Producto", key: "producto", width: 45 },
+        { header: "Diseño", key: "diseno", width: 20 },
+        { header: "Tipo", key: "tipo", width: 18 },
+        { header: "Color", key: "color", width: 12 },
+        { header: "Stock Total", key: "total", width: 12 },
+        { header: "S", key: "S", width: 8 },
+        { header: "M", key: "M", width: 8 },
+        { header: "L", key: "L", width: 8 },
+        { header: "XL", key: "XL", width: 8 },
+        { header: "XXL", key: "XXL", width: 9 },
+        { header: "XXXL", key: "XXXL", width: 9 },
       ];
 
-      // Estilo para header
-      sheet.getRow(1).font = { bold: true };
-      sheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF7C3AED' }
-      };
+      // Header violeta
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7C3AED" } };
+      headerRow.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
 
-      productosBajoStock.forEach(p => {
-        const tallasMap: Record<string, number> = {};
-        p.todas_variantes.forEach(v => {
-          tallasMap[v.talla.toUpperCase()] = v.stock_actual;
-        });
+      const lineas = message.split("\n");
 
-        const row = sheet.addRow({
-          nombre: p.nombre,
-          diseno: p.diseno,
-          tipo_prenda: p.tipo_prenda,
-          color: p.color,
-          stock_total: p.stock_total,
-          s: tallasMap['S'] ?? '-',
-          m: tallasMap['M'] ?? '-',
-          l: tallasMap['L'] ?? '-',
-          xl: tallasMap['XL'] ?? '-',
-          xxl: tallasMap['XXL'] ?? '-',
-          xxxl: tallasMap['XXXL'] ?? '-',
-        });
-
-        // Aplicar color rojo a las celdas con stock crítico
-        ['s', 'm', 'l', 'xl', 'xxl', 'xxxl'].forEach((key, index) => {
-          const cellIndex = index + 6; // Columnas S-XXXL empiezan en la columna 6
-          const cell = row.getCell(cellIndex);
-          const value = cell.value as number | string;
-          if (typeof value === 'number' && value <= umbral) {
-            cell.fill = {
-              type: 'pattern',
-              pattern: 'solid',
-              fgColor: { argb: 'FFFECACA' }
-            };
-            cell.font = { bold: true, color: { argb: 'FFDC2626' } };
-          }
-        });
-      });
-=======
-        { header: '#', key: 'num', width: 6 },
-        { header: 'Producto', key: 'nombre', width: 45 },
-        { header: 'Stock Total', key: 'stock', width: 14 },
-        { header: 'Tallas', key: 'tallas', width: 55 },
-      ];
-
-      sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } };
-
-      const lineas = message.split('\n');
-      let num = 1;
-      let producto = '';
-      let stock = '';
-      let tallas = '';
+      let productoCompleto = "";
+      let diseno = "";
+      let tipo = "";
+      let color = "";
+      let stockTotal = 0;
+      let tallas: Record<string, number> = {};
 
       for (const linea of lineas) {
+        const trimmed = linea.trim();
+
+        // Nuevo producto
         if (/^\d+\.\s/.test(linea)) {
-          if (producto) {
-            sheet.addRow({ num: num - 1, nombre: producto.trim(), stock: stock.trim(), tallas: tallas.trim() });
+          if (productoCompleto) {
+            const row = sheet.addRow({
+              producto: productoCompleto,
+              diseno,
+              tipo,
+              color,
+              total: stockTotal,
+              S: tallas["S"] ?? "",
+              M: tallas["M"] ?? "",
+              L: tallas["L"] ?? "",
+              XL: tallas["XL"] ?? "",
+              XXL: tallas["XXL"] ?? "",
+              XXXL: tallas["XXXL"] ?? "",
+            });
+
+            (["S", "M", "L", "XL", "XXL", "XXXL"] as const).forEach((t) => {
+              const cell = row.getCell(t);
+              const val = tallas[t];
+              if (val !== undefined && val <= umbral) {
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFECACA" } };
+                cell.font = { bold: true, color: { argb: "FFDC2626" } };
+              }
+            });
           }
-          producto = linea.replace(/^\d+\.\s*/, '').trim();
-          stock = '';
-          tallas = '';
-          num++;
-        } else if (linea.includes('Stock total:')) {
-          stock = linea.replace('Stock total:', '').trim();
-        } else if (linea.includes('Tallas:')) {
-          tallas = linea.replace('Tallas:', '').trim();
+
+          const texto = linea.replace(/^\d+\.\s*/, "").trim();
+          const match = texto.match(/^(.*?) - (.*?) \((.*?)\)$/);
+          if (match) {
+            diseno = match[1].trim();
+            tipo = match[2].trim();
+            color = match[3].trim();
+          } else {
+            diseno = texto;
+            tipo = "";
+            color = "";
+          }
+          productoCompleto = texto;
+          stockTotal = 0;
+          tallas = {};
+        }
+
+        // Stock total
+        else if (trimmed.startsWith("Stock total:")) {
+          const match = trimmed.match(/:\s*(\d+)/);
+          stockTotal = match ? parseInt(match[1], 10) : 0;
+        }
+
+        // Tallas → sin any!
+        else if (trimmed.startsWith("Tallas:")) {
+          const tallasTexto = trimmed.replace("Tallas:", "").trim();
+          tallasTexto.split(",").forEach((item: string) => {
+            const parts = item.split(":").map((s: string) => s.trim());
+            const tallaRaw = parts[0];
+            const stockStr = parts[1] || "";
+            const talla = tallaRaw.toUpperCase();
+            const stock = parseInt(stockStr.replace(/[^\d]/g, ""), 10) || 0;
+            if (talla) {
+              tallas[talla] = stock;
+            }
+          });
         }
       }
-      if (producto) {
-        sheet.addRow({ num: num - 1, nombre: producto.trim(), stock: stock.trim(), tallas: tallas.trim() });
+
+      // Última fila
+      if (productoCompleto) {
+        const row = sheet.addRow({
+          producto: productoCompleto,
+          diseno,
+          tipo,
+          color,
+          total: stockTotal,
+          S: tallas["S"] ?? "",
+          M: tallas["M"] ?? "",
+          L: tallas["L"] ?? "",
+          XL: tallas["XL"] ?? "",
+          XXL: tallas["XXL"] ?? "",
+          XXXL: tallas["XXXL"] ?? "",
+        });
+
+        (["S", "M", "L", "XL", "XXL", "XXXL"] as const).forEach((t) => {
+          const cell = row.getCell(t);
+          const val = tallas[t];
+          if (val !== undefined && val <= umbral) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFECACA" } };
+            cell.font = { bold: true, color: { argb: "FFDC2626" } };
+          }
+        });
       }
->>>>>>> parent of 11adbcc (preuab 12)
 
       const buffer = await workbook.xlsx.writeBuffer();
       attachments.push({
-        filename: `stock_critico_${new Date().toISOString().split('T')[0]}.xlsx`,
-        content: Buffer.from(buffer)
+        filename: `stock_critico_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        content: Buffer.from(buffer).toString("base64"),
       });
     }
 
-<<<<<<< HEAD
-    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY no configurada');
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
-    // Generar HTML del correo
-    const generarHtmlCorreo = () => {
-      const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; background: #ffffff; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0;">
-            <h1 style="margin: 0; font-size: 28px;">📦 Notificación de Stock Crítico</h1>
-            <p style="margin: 10px 0 0 0; font-size: 16px;">Umbral: ≤ ${umbral} unidades</p>
-          </div>
-          
-          <div style="padding: 30px; background: #F9FAFB;">
-           ${generarMensajeTextoPlano(productosBajoStock, umbral)}
- 
-           
-            
-            <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-              <h2 style="color: #1F2937; margin-top: 0;">📊 Resumen</h2>
-              <p style="font-size: 18px; color: #374151;">
-                <strong style="color: #DC2626; font-size: 24px;">${productosBajoStock.length}</strong> productos con stock crítico detectados
-              </p>
-            </div>
-
-            ${productosBajoStock.length > 0 ? `
-              <div style="background: white; padding: 20px; border-radius: 8px;">
-                <h2 style="color: #1F2937; margin-top: 0;">📋 Detalle de Productos</h2>
-                
-                ${productosBajoStock.map((p, i) => {
-                  const tallasHtml = p.todas_variantes.map(v => {
-                    const bgColor = v.es_critico ? '#FEE2E2' : '#E0E7FF';
-                    const textColor = v.es_critico ? '#DC2626' : '#4338CA';
-                    const borderColor = v.es_critico ? '#FCA5A5' : '#C7D2FE';
-                    return `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; background: ${bgColor}; color: ${textColor}; border: 1px solid ${borderColor}; margin: 2px;">${v.talla}: ${v.stock_actual}</span>`;
-                  }).join(' ');
-                  
-                  return `
-                    <div style="padding: 15px; border-bottom: 1px solid #E5E7EB; ${i === 0 ? 'border-top: 1px solid #E5E7EB;' : ''}">
-                      <div style="display: flex; align-items: start; gap: 15px;">
-                        <div style="font-weight: 600; color: #6B7280; min-width: 30px;">${i + 1}.</div>
-                        <div style="flex: 1;">
-                          <div style="font-weight: 600; color: #1F2937; font-size: 16px; margin-bottom: 5px;">${p.nombre}</div>
-                          <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">${p.tipo_prenda}</div>
-                          <div style="margin-bottom: 8px;">
-                            <span style="font-size: 13px; color: #6B7280;">Stock Total: </span>
-                            <span style="font-weight: 600; color: #1F2937; font-size: 14px;">${p.stock_total}</span>
-                          </div>
-                          <div>
-                            <div style="font-size: 13px; color: #6B7280; margin-bottom: 5px;">Tallas:</div>
-                            <div>${tallasHtml}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            ` : '<div style="background: white; padding: 20px; border-radius: 8px; text-align: center; color: #6B7280;">No hay productos con stock bajo.</div>'}
-            
-            <div style="margin-top: 20px; padding: 15px; background: #FEF3C7; border-radius: 8px; border-left: 4px solid #F59E0B;">
-              <p style="margin: 0; color: #92400E; font-size: 14px;">
-                <strong>⚠️ Nota:</strong> Los productos marcados en rojo tienen tallas con stock igual o menor a ${umbral} unidades.
-              </p>
-            </div>
-          </div>
-          
-          <div style="padding: 20px; text-align: center; color: #6B7280; font-size: 12px; border-top: 1px solid #E5E7EB;">
-            <p style="margin: 0;">Taller Serigrafía - Sistema de Gestión de Inventario</p>
-            <p style="margin: 5px 0 0 0;">Correo generado automáticamente el ${new Date().toLocaleDateString('es-ES', { 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}</p>
-          </div>
-        </div>
-      `;
-      return html;
-    };
-=======
+    // Email
     const resend = new Resend(process.env.RESEND_API_KEY!);
 
     const html = `
@@ -374,68 +169,40 @@ export async function POST(request: NextRequest) {
           <h1 style="margin:0; font-size:32px; font-weight:bold;">Notificación de Stock Crítico</h1>
           <p style="margin:10px 0 0; font-size:18px; opacity:0.9;">Productos con bajo inventario</p>
         </div>
-
         <div style="padding: 35px; background: #fafaff;">
           <div style="text-align:center; margin-bottom:35px;">
-            <div style="font-size:64px; font-weight:900; color:#DC2626; line-height:1;">${totalProductos}</div>
-            <div style="font-size:22px; color:#374151; font-weight:600;">productos con stock crítico detectados</div>
+            <div style="font-size:64px; font-weight:900; color:#DC2626;">${totalProductos}</div>
+            <div style="font-size:22px; color:#374151; font-weight:600;">productos con stock crítico</div>
           </div>
-
-          <div style="background:white; padding:30px; border-radius:14px; border:1px solid #e2e8f0; box-shadow:0 4px 20px rgba(0,0,0,0.05);">
+          <div style="background:white; padding:30px; border-radius:14px; border:1px solid #e2e8f0;">
             <pre style="margin:0; font-size:15.5px; line-height:2; color:#1f2937; white-space:pre-wrap; font-family: 'Courier New', monospace;">
 ${message.trim()}
             </pre>
           </div>
-
           <div style="margin-top:30px; padding:18px; background:#FFFBEB; border-left:6px solid #F59E0B; border-radius:10px;">
-            <p style="margin:0; color:#92400E; font-size:15px; line-height:1.6;">
+            <p style="margin:0; color:#92400E; font-size:15px;">
               <strong>Nota:</strong> Las tallas marcadas con advertencia tienen stock igual o menor al umbral seleccionado.
             </p>
           </div>
         </div>
-
         <div style="text-align:center; padding:25px; background:#f1f5f9; color:#64748b; font-size:13px;">
           <p style="margin:0;">Taller Serigrafía • Sistema de Gestión de Inventario</p>
-          <p style="margin:8px 0 0;">${new Date().toLocaleString('es-ES', { dateStyle: 'full', timeStyle: 'short' })}</p>
+          <p style="margin:8px 0 0;">${new Date().toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" })}</p>
         </div>
       </div>
     `;
->>>>>>> parent of 11adbcc (preuab 12)
 
     await resend.emails.send({
-      from: 'Taller Serigrafía <noreply@titanserigrafia.com>',
+      from: "Taller Serigrafía <noreply@titanserigrafia.com>",
       to: [to],
-      subject: subject || `🚨 ALERTA DE STOCK CRÍTICO (≤ ${umbral}) - ${productosBajoStock.length} productos`,
-      html: generarHtmlCorreo(),
-      attachments: attachments.length > 0 ? attachments.map(a => ({
-        filename: a.filename,
-        content: a.content.toString('base64'),
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      })) : undefined
+      subject: subject || `ALERTA STOCK CRÍTICO - ${totalProductos} productos`,
+      html,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    return NextResponse.json({ 
-      success: true, 
-<<<<<<< HEAD
-      message: 'Alerta enviada correctamente', 
-      totalProductosCriticos: productosBajoStock.length 
-    });
-
+    return NextResponse.json({ success: true, totalProductosCriticos: totalProductos });
   } catch (err) {
-    console.error('Error en endpoint de alerta de stock:', err);
-    return NextResponse.json({ 
-      success: false, 
-      message: (err as Error).message || 'Error desconocido' 
-=======
-      totalProductosCriticos: totalProductos 
-    });
-
-  } catch (err) {
-    console.error('Error enviando alerta:', err);
-    return NextResponse.json({ 
-      success: false, 
-      message: (err as Error).message 
->>>>>>> parent of 11adbcc (preuab 12)
-    }, { status: 500 });
+    console.error("Error enviando alerta:", err);
+    return NextResponse.json({ success: false, message: (err as Error).message }, { status: 500 });
   }
 }
