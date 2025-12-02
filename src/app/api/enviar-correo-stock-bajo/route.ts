@@ -48,23 +48,31 @@ function getNombre(relacion: Array<{ nombre: string }> | { nombre: string } | nu
 
 // Genera un mensaje de texto plano con el resumen de productos con stock crítico
 function generarMensajeTextoPlano(lista: ProductoBajoStock[], umbral: number): string {
-  let txt = `Se detectaron ${lista.length} productos con stock crítico (≤ ${umbral}).\n\n`;
+  // Primero filtramos los productos que tienen al menos una talla crítica
+  const productosConTallasCriticas = lista.filter(p => 
+    p.todas_variantes.some(v => v.es_critico)
+  );
 
-  lista.forEach((p, i) => {
-    // Filtrar solo las variantes con stock crítico
+  let txt = `Se detectaron ${productosConTallasCriticas.length} productos con stock crítico (≤ ${umbral}).\n\n`;
+
+  productosConTallasCriticas.forEach((p, i) => {
+    // Obtenemos solo las tallas críticas
     const tallasCriticas = p.todas_variantes
       .filter(v => v.es_critico)
-      .map(v => `${v.talla}:${v.stock_actual}`);
+      .map(v => `${v.talla}: ${v.stock_actual}`);
     
+    // Si no hay tallas críticas (por si acaso), mostramos 'Ninguna'
     const tallasTexto = tallasCriticas.length > 0 
       ? tallasCriticas.join(', ')
       : 'Ninguna';
 
-    txt += `${i + 1}. ${p.nombre}\n`;
-    txt += `Stock total: ${p.stock_total}`;
-    txt += ` | Tallas críticas (≤${umbral}): `;
-    txt += tallasTexto;
-    txt += `\n\n`;
+    // Solo mostramos el producto si tiene tallas críticas
+    if (tallasCriticas.length > 0) {
+      txt += `${i + 1}. ${p.nombre}\n`;
+      txt += `Stock total: ${p.stock_total} | `;
+      txt += `Tallas críticas (≤${umbral}): ${tallasTexto}`;
+      txt += `\n\n`;
+    }
   });
 
   return `<pre style="white-space:pre-wrap;">${txt}</pre>`;
