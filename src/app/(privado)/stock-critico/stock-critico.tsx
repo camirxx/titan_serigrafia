@@ -10,7 +10,6 @@ import ModalEnviarMensaje from './ModalEnviarMensaje';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-
 // Mapeo de colores
 const COLOR_MAP: Record<string, string> = {
   'NEGRO': '#000000', 'BLANCO': '#FFFFFF', 'ROJO': '#DC2626',
@@ -48,9 +47,8 @@ type GroupedProduct = {
 
 export const EstadoStockPage: React.FC = () => {
   
-   // Guardar el correo del taller
-const [correoTaller, setCorreoTaller] = useState<string>('');
-
+  // ✅ Guardar el correo del taller
+  const [correoTaller, setCorreoTaller] = useState<string>('');
 
   // Estados del componente
   const [critico, setCritico] = useState<number>(() => {
@@ -76,11 +74,36 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
 
   const handleCriticoChange = (value: number) => {
     setCritico(value);
-    setCurrentPage(1); // Reset a primera página
+    setCurrentPage(1);
     if (typeof window !== 'undefined') {
       localStorage.setItem('stock-critico-umbral', value.toString());
     }
   };
+
+  // ✅ Cargar el correo del taller al inicio
+  async function cargarCorreoTaller() {
+    try {
+      const { data, error } = await supabase
+        .from('configuracion_taller')
+        .select('correo')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error cargando correo del taller:', error);
+        return;
+      }
+
+      if (data?.correo) {
+        setCorreoTaller(data.correo);
+        console.log('✅ Correo del taller cargado:', data.correo);
+      } else {
+        console.log('⚠️ No hay correo configurado');
+      }
+    } catch (err) {
+      console.error('Error inesperado cargando correo:', err);
+    }
+  }
 
   async function cargar() {
     setErrorMsg(null);
@@ -165,15 +188,16 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
     }
   }
 
+  // ✅ Cargar datos al montar el componente
   useEffect(() => {
     cargar();
+    cargarCorreoTaller();
   }, []);
 
-  // Agrupar y filtrar productos con stock crítico
-  const groupedProducts: GroupedProduct[] = useMemo(() => {
+  // Agrupar productos (SIN filtrar por stock crítico aún)
+  const allGroupedProducts: GroupedProduct[] = useMemo(() => {
     const groups = new Map<string, GroupedProduct>();
     
-    // Aplicar búsqueda
     let filteredRows = rows;
     if (searchTerm) {
       const term = searchTerm.toLowerCase().trim();
@@ -184,7 +208,7 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
       );
     }
     
-    // Agrupar productos
+    // Agrupar TODOS los productos
     for (const row of filteredRows) {
       const key = `${row.diseno}|${row.tipo_prenda}|${row.color}`;
       
@@ -204,15 +228,17 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
       group.stock_actual += row.stock_actual;
     }
     
-    // FILTRAR SOLO productos que tengan AL MENOS UNA talla con stock crítico
     return Array.from(groups.values())
-      .filter(product => 
-        Array.from(product.tallas.values()).some(stock => stock <= critico)
-      )
       .sort((a, b) => a.stock_actual - b.stock_actual);
-  }, [rows, searchTerm, critico]);
+  }, [rows, searchTerm]);
 
-  // Obtener todas las tallas únicas
+  // ✅ Filtrar para mostrar en la tabla según umbral actual
+  const groupedProducts: GroupedProduct[] = useMemo(() => {
+    return allGroupedProducts.filter(product => {
+      return Array.from(product.tallas.values()).some(stock => stock <= critico);
+    });
+  }, [allGroupedProducts, critico]);
+
   const allSizes = useMemo(() => {
     const sizesSet = new Set<string>();
     rows.forEach((row) => {
@@ -230,21 +256,17 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
     return [...tallasOrdenadas, ...tallasExtras];
   }, [rows]);
 
-  // ✅ Paginación
   const totalPages = Math.ceil(groupedProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentProducts = groupedProducts.slice(startIndex, endIndex);
 
-  // Reset página cuando cambian filtros
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, critico, itemsPerPage]);
 
-
   return (
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-        {/* Notificación de stock bajo */}
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {groupedProducts.length > 0 && (
         <div className="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 p-4 rounded-lg shadow-md">
           <div className="flex items-start">
@@ -273,23 +295,29 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
             <button
               onClick={() => setModalCorreoAbierto(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-purple-700 font-semibold shadow hover:shadow-lg transition"
-              disabled={groupedProducts.length === 0}
             >
-              <Mail className="h-4 w-4 mr-2" />
-              Modificar correo
+              <Mail className="h-4 w-4" />
+              {correoTaller ? 'Modificar correo' : 'Configurar correo'}
             </button>
             <button
-              onClick={() => setModalMensajeAbierto(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-purple-700 font-semibold shadow hover:shadow-lg transition"
+              onClick={() => {
+                if (!correoTaller) {
+                  toast.warning('⚠️ Primero configura el correo del taller');
+                  setModalCorreoAbierto(true);
+                } else {
+                  setModalMensajeAbierto(true);
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 text-white font-semibold shadow hover:shadow-lg transition disabled:opacity-50"
+              disabled={groupedProducts.length === 0}
             >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Enviar mensaje
+              <MessageSquare className="h-4 w-4" />
+              Enviar alerta
             </button>
           </div>
         }
       />
 
-      {/* Controles y filtros */}
       <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex-1 min-w-[250px]">
@@ -335,8 +363,6 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
               <option value={100}>100</option>
             </select>
           </div>
-
-          
         </div>
       </div>
 
@@ -351,7 +377,6 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
         </div>
       )}
 
-      {/* Tabla */}
       <div className="bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100">
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -365,9 +390,8 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
           </div>
         </div>
 
-        {/* Paginación */}
         {groupedProducts.length > 0 && (
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <div className="text-sm text-gray-600">
               Mostrando <span className="font-semibold">{startIndex + 1}</span> - <span className="font-semibold">{Math.min(endIndex, groupedProducts.length)}</span> de <span className="font-semibold">{groupedProducts.length}</span> productos
             </div>
@@ -379,7 +403,7 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <span className="px-4 py-2 text-black font-semibold ">
+              <span className="px-4 py-2 text-black font-semibold">
                 Página {currentPage} de {totalPages}
               </span>
               <button
@@ -480,7 +504,6 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
           </table>
         </div>
 
-        {/* Paginación */}
         {groupedProducts.length > 0 && (
           <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
             <div className="text-sm text-gray-600">
@@ -494,7 +517,7 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <span className="px-4 py-2 text-black font-semibold ">
+              <span className="px-4 py-2 text-black font-semibold">
                 Página {currentPage} de {totalPages}
               </span>
               <button
@@ -505,38 +528,29 @@ const [correoTaller, setCorreoTaller] = useState<string>('');
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
-
-
-            {/* Modales */}
-            {/* Modal Modificar Correo */}
-            <ModalModCorreo
-              isOpen={modalCorreoAbierto}
-              onClose={() => setModalCorreoAbierto(false)}
-              // IMPORTANTE: esperamos que ModalModCorreo llame onSuccess(nuevoCorreo)
-              onSuccess={(nuevoCorreo: string) => {
-                setCorreoTaller(nuevoCorreo); // ← actualizamos el estado del padre
-                toast.success("Correo actualizado correctamente", { position: "top-right", autoClose: 2500 });
-                cargar(); // si ya tienes esa función para recargar, la dejamos
-                setModalCorreoAbierto(false);
-              }}
-            />
-
-            {/* Modal Enviar Mensaje (ahora enviará EMAIL usando correoTaller) */}
-            <ModalEnviarMensaje
-              isOpen={modalMensajeAbierto}
-              onClose={() => setModalMensajeAbierto(false)}
-              productos={groupedProducts}
-              correoTaller={correoTaller}   // ← pase el correo que ahora existe
-            />
-
-
-
-
-
           </div>
         )}
       </div>
-    </div>
 
-    
-); }
+      {/* ✅ Modales */}
+      <ModalModCorreo
+        isOpen={modalCorreoAbierto}
+        onClose={() => setModalCorreoAbierto(false)}
+        correoActualProp={correoTaller}
+        onSuccess={(nuevoCorreo: string) => {
+          setCorreoTaller(nuevoCorreo);
+          toast.success("✅ Correo actualizado correctamente");
+          setModalCorreoAbierto(false);
+        }}
+      />
+
+      <ModalEnviarMensaje
+        isOpen={modalMensajeAbierto}
+        onClose={() => setModalMensajeAbierto(false)}
+        productos={allGroupedProducts}
+        correoTaller={correoTaller}
+        umbralActual={critico}
+      />
+    </div>
+  );
+}

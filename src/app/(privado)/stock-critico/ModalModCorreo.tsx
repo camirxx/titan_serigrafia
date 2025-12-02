@@ -8,52 +8,29 @@ import { X } from 'lucide-react';
 type ModalModCorreoProps = {
   isOpen: boolean;
   onClose: () => void;
+  correoActualProp: string;
   onSuccess?: (nuevoCorreo: string) => void;
 };
 
-export default function ModalModCorreo({ isOpen, onClose, onSuccess }: ModalModCorreoProps) {
-  const [correoActual, setCorreoActual] = useState('');
+export default function ModalModCorreo({ isOpen, onClose, correoActualProp, onSuccess }: ModalModCorreoProps) {
+  const [correoActual, setCorreoActual] = useState(correoActualProp);
   const [nuevoCorreo, setNuevoCorreo] = useState('');
   const [confirmarCorreo, setConfirmarCorreo] = useState('');
-  const [cargando, setCargando] = useState(true);
+  const [cargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
   const TABLE = 'configuracion_taller';
   const CONFIG_ID = 1;
 
   useEffect(() => {
-    if (isOpen) cargarCorreo();
-  }, [isOpen]);
-
-  async function cargarCorreo() {
-    try {
-      setCargando(true);
-
-      const res = await supabase
-        .from(TABLE)
-        .select('correo')
-        .eq('id', CONFIG_ID)
-        .single();
-
-      console.log('[ModalModCorreo] cargarCorreo()', res);
-
-      if (res.error) {
-        toast.error('Error cargando correo');
-        return;
-      }
-
-      const correo = res.data?.correo ?? '';
-
-      setCorreoActual(correo);
-      setNuevoCorreo(correo);
-      setConfirmarCorreo(correo);
-    } catch (err) {
-      console.error('[ModalModCorreo] excepción:', err);
-      toast.error('Error inesperado cargando correo');
-    } finally {
-      setCargando(false);
+    if (isOpen) {
+      setCorreoActual(correoActualProp);
+      setNuevoCorreo(correoActualProp);
+      setConfirmarCorreo(correoActualProp);
     }
-  }
+  }, [isOpen, correoActualProp]);
+
+  // No necesitamos cargar el correo ya que lo recibimos como prop
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
