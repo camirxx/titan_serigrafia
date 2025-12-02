@@ -1,21 +1,8 @@
+// src/app/api/enviar-correo-stock-bajo/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
-
-interface ProductoConStockBajo {
-  id: string;
-  nombre: string;
-  diseno: string;
-  tipo_prenda: string;
-  color: string;
-  stock_total: number;
-  variantes_bajo: Array<{
-    id: string;
-    talla: string;
-    stock_actual: number;
-  }>;
-  total_variantes: number;
-}
+import ExcelJS from 'exceljs';
 
 interface Variante {
   id: string;
@@ -32,45 +19,25 @@ interface ProductoRelaciones {
   activo: boolean;
 }
 
-interface ProductoFiltradoFrontend {
-  diseno: string;
-  tipo_prenda: string;
-  color: string;
-  stock_actual: number;
-  tallas: Map<string, number>;
-}
-
-interface EmailAttachment {
-  filename: string;
-  content: string;
-}
-
-// Helper para obtener el nombre desde relaciones que vienen como objeto o arreglo
+// Helper para obtener nombre de relación (puede ser array o objeto)
 function getNombre(relacion: Array<{ nombre: string }> | { nombre: string } | null): string {
   if (!relacion) return '';
-  if (Array.isArray(relacion)) return relacion[0]?.nombre ?? '';
-  return relacion.nombre ?? '';
+  if (Array.isArray(relacion)) {
+    return relacion[0]?.nombre || '';
+  }
+  return relacion.nombre || '';
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-
-    const {
-      to,
-      subject,
-      message,
-      includeExcel,
-      productosFiltrados,
-      umbral
-    }: {
+    const { to, subject, message, includeExcel, umbral } = body as {
       to: string;
-      subject: string;
+      subject?: string;
       message: string;
       includeExcel: boolean;
-      productosFiltrados?: ProductoFiltradoFrontend[];
-      umbral?: number;
-    } = body;
+      umbral: number;
+    };
 
     if (!to || !message) {
       return NextResponse.json(
@@ -79,178 +46,125 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const umbralFinal = Number(umbral) || 5;
-
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    let productosBajoStock: ProductoConStockBajo[] = [];
+    // Obtener productos activos
+    const { data: productos, error: errorProductos } = await supabase
+      .from("productos")
+      .select(`
+        id,
+        disenos!inner(nombre),
+        tipos_prenda!inner(nombre),
+        colores(nombre),
+        activo
+      `)
+      .eq("activo", true);
 
-    // ===================================================
-    //  🔥 1) USAR PRODUCTOS FILTRADOS DESDE EL FRONTEND
-    // ===================================================
-    if (Array.isArray(productosFiltrados) && productosFiltrados.length > 0) {
-      productosBajoStock = productosFiltrados.map((p) => {
-        const tallasEntries = Array.from(p.tallas.entries()) as Array<[string, number]>;
+    if (errorProductos) throw new Error(errorProductos.message);
 
-        const variantesBajo = tallasEntries
-          .filter((entry) => entry[1] <= umbralFinal)
-          .map(([talla, stock]) => ({
-            id: `${p.diseno}-${talla}`,
-            talla,
-            stock_actual: stock,
-          }));
+    const productoIds = productos?.map((p: ProductoRelaciones) => p.id) || [];
+    const { data: variantes, error: errorVariantes } = await supabase
+      .from("variantes")
+      .select("id, producto_id, talla, stock_actual")
+      .in("producto_id", productoIds);
 
-        return {
-          id: p.diseno,
-          nombre: `${p.diseno} ${p.tipo_prenda} ${p.color}`,
+    if (errorVariantes) throw new Error(errorVariantes.message);
+
+    // Filtrar productos con stock bajo según umbral
+    const productosBajoStock = (productos as ProductoRelaciones[]).flatMap((producto) => {
+      const productoVariantes = (variantes as Variante[]).filter(v => v.producto_id === producto.id);
+      const stockTotal = productoVariantes.reduce((sum, v) => sum + (v.stock_actual ?? 0), 0);
+      const variantesConStockBajo = productoVariantes.filter(v => (v.stock_actual ?? 0) <= umbral);
+
+      if (variantesConStockBajo.length === 0) return [];
+
+      return [{
+        id: producto.id,
+        nombre: `${getNombre(producto.disenos)} ${getNombre(producto.tipos_prenda)} ${getNombre(producto.colores)}`.trim(),
+        diseno: getNombre(producto.disenos),
+        tipo_prenda: getNombre(producto.tipos_prenda),
+        color: getNombre(producto.colores) || 'Sin color',
+        stock_total: stockTotal,
+        variantes_bajo: variantesConStockBajo.map(v => ({
+          id: v.id,
+          talla: v.talla || 'N/A',
+          stock_actual: v.stock_actual || 0
+        })),
+        total_variantes: productoVariantes.length
+      }];
+    });
+
+    // Preparar Excel si se solicita
+    const attachments: { filename: string; content: Buffer }[] = [];
+    if (includeExcel && productosBajoStock.length > 0) {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Stock Crítico');
+
+      sheet.columns = [
+        { header: 'Producto', key: 'nombre', width: 30 },
+        { header: 'Diseño', key: 'diseno', width: 20 },
+        { header: 'Tipo', key: 'tipo_prenda', width: 20 },
+        { header: 'Color', key: 'color', width: 15 },
+        { header: 'Stock Total', key: 'stock_total', width: 15 },
+        { header: 'Tallas con stock bajo', key: 'tallas', width: 30 },
+      ];
+
+      productosBajoStock.forEach(p => {
+        sheet.addRow({
+          nombre: p.nombre,
           diseno: p.diseno,
           tipo_prenda: p.tipo_prenda,
           color: p.color,
-          stock_total: p.stock_actual,
-          variantes_bajo: variantesBajo,
-          total_variantes: tallasEntries.length,
-        };
+          stock_total: p.stock_total,
+          tallas: p.variantes_bajo.map(v => `${v.talla}:${v.stock_actual}`).join('; '),
+        });
       });
-    } else {
-      // ===================================================
-      // 🔥 2) Si no hay productos en frontend → fallback Supabase
-      // ===================================================
-      const { data: productos, error } = await supabase
-        .from("productos")
-        .select(`
-          id,
-          disenos!inner(nombre),
-          tipos_prenda!inner(nombre),
-          colores(nombre),
-          activo
-        `)
-        .eq("activo", true);
 
-      if (error) {
-        console.error("Error obteniendo productos:", error);
-        return NextResponse.json(
-          { success: false, message: "Error al obtener productos" },
-          { status: 500 }
-        );
-      }
-
-      const productoIds = (productos ?? []).map((p) => p.id);
-
-      const { data: variantes } = await supabase
-        .from("variantes")
-        .select("id, producto_id, talla, stock_actual")
-        .in("producto_id", productoIds);
-
-      productosBajoStock = [];
-
-      (productos as ProductoRelaciones[])?.forEach((producto) => {
-        const productoVariantes = (variantes ?? []).filter(
-          (v: Variante) => v.producto_id === producto.id
-        );
-
-        const stockTotal = productoVariantes.reduce(
-          (sum, v) => sum + (v.stock_actual ?? 0),
-          0
-        );
-
-        const variantesConStockBajo = productoVariantes.filter(
-          (v) => (v.stock_actual ?? 0) <= umbralFinal
-        );
-
-        if (variantesConStockBajo.length > 0) {
-          const diseno = getNombre(producto.disenos);
-          const tipo = getNombre(producto.tipos_prenda);
-          const color = getNombre(producto.colores);
-
-          productosBajoStock.push({
-            id: producto.id,
-            nombre: `${diseno} ${tipo} ${color ?? ''}`.trim(),
-            diseno,
-            tipo_prenda: tipo,
-            color: color ?? 'Sin color',
-            stock_total: stockTotal,
-            variantes_bajo: variantesConStockBajo.map((v) => ({
-              id: v.id,
-              talla: v.talla ?? 'N/A',
-              stock_actual: v.stock_actual ?? 0,
-            })),
-            total_variantes: productoVariantes.length,
-          });
-        }
-      });
-    }
-
-    // ==================================
-    //  📎 Crear archivo CSV si aplica
-    // ==================================
-    const attachments: EmailAttachment[] = [];
-
-    if (includeExcel && productosBajoStock.length > 0) {
-      const csvContent = [
-        ['Producto', 'Diseño', 'Tipo', 'Color', 'Stock Total', 'Tallas Bajo Stock'],
-        ...productosBajoStock.map((p) => [
-          p.nombre,
-          p.diseno,
-          p.tipo_prenda,
-          p.color,
-          p.stock_total.toString(),
-          p.variantes_bajo.map((v) => `${v.talla}:${v.stock_actual}`).join('; ')
-        ])
-      ]
-        .map((row) => row.join(','))
-        .join('\n');
-
+      const buffer = await workbook.xlsx.writeBuffer();
       attachments.push({
-        filename: `stock_bajo_${new Date().toISOString().split('T')[0]}.csv`,
-        content: csvContent,
+        filename: `stock_bajo_${new Date().toISOString().split('T')[0]}.xlsx`,
+        content: Buffer.from(buffer)
       });
     }
 
-    // ======================
-    //  📧 ENVIAR EMAIL
-    // ======================
-    if (!process.env.RESEND_API_KEY) {
-      return NextResponse.json(
-        { success: false, message: "Falta RESEND_API_KEY" },
-        { status: 500 }
-      );
-    }
-
+    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY no configurada');
     const resend = new Resend(process.env.RESEND_API_KEY);
 
-    const sendResult = await resend.emails.send({
-      from: "Taller Serigrafía <noreply@titanserigrafia.com>",
+    await resend.emails.send({
+      from: 'Taller Serigrafía <noreply@titanserigrafia.com>',
       to: [to],
-      subject: subject || `🚨 ALERTA DE STOCK CRÍTICO`,
+      subject: subject || `🚨 ALERTA DE STOCK CRÍTICO (≤ ${umbral})`,
       html: `
-        <h2>⚠ Productos Críticos ≤ ${umbralFinal}</h2>
-        <p>${message}</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1>🚨 ALERTA DE STOCK CRÍTICO (≤ ${umbral})</h1>
+          <p>${message}</p>
+          ${productosBajoStock.length > 0 ? `
+            <h2>📋 Productos con stock bajo:</h2>
+            <ul>
+              ${productosBajoStock.map((p, i) => `
+                <li>
+                  <strong>${i + 1}. ${p.nombre}</strong> — Total: ${p.stock_total}<br/>
+                  Tallas críticas: ${p.variantes_bajo.map(v => `${v.talla}:${v.stock_actual}`).join(', ')}
+                </li>
+              `).join('')}
+            </ul>
+          ` : '<p>No hay productos con stock bajo.</p>'}
+        </div>
       `,
-      attachments: attachments.length > 0 ? attachments : undefined,
+      attachments: attachments.length > 0 ? attachments.map(a => ({
+        filename: a.filename,
+        content: a.content.toString('base64'),
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })) : undefined
     });
 
-    if (sendResult.error) {
-      console.error(sendResult.error);
-      return NextResponse.json(
-        { success: false, message: sendResult.error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Alerta enviada correctamente",
-      cantidad: productosBajoStock.length,
-    });
+    return NextResponse.json({ success: true, message: 'Alerta enviada correctamente', totalProductosCriticos: productosBajoStock.length });
 
   } catch (err) {
-    console.error("Error interno:", err);
-    return NextResponse.json(
-      { success: false, message: "Error interno del servidor" },
-      { status: 500 }
-    );
+    console.error('Error en endpoint de alerta de stock:', err);
+    return NextResponse.json({ success: false, message: (err as Error).message || 'Error desconocido' }, { status: 500 });
   }
 }

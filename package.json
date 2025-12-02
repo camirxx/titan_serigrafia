@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.83.0",
     "@types/react-toastify": "^4.0.2",
     "autoprefixer": "^10.4.21",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.544.0",
     "next": "^15.5.3",
