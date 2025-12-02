@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import ReportHeader from '@/components/ReportHeader';
 import { Boxes, ChevronLeft, ChevronRight, Mail, MessageSquare } from 'lucide-react';
 import ModalModCorreo from './ModalModCorreo';
-import ModalEnviarMensaje from './ModalEnviarMensaje';
+import ModalEnviarMensaje from './components/ModalEnviarMensaje';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
