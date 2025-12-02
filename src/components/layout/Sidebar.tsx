@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
   ShoppingCart,
   Package,
   Undo2,
   BarChart2,
   Users2,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -16,7 +16,7 @@ const navItems = [
   { href: "/pos", label: "Punto de Venta", icon: ShoppingCart, roles: ["admin", "vendedor", "desarrollador"] },
   { href: "/inventario", label: "Inventario", icon: Package, roles: ["admin", "vendedor", "desarrollador"] },
   { href: "/devoluciones", label: "Devoluciones", icon: Undo2, roles: ["admin", "vendedor", "desarrollador"] },
-  { href: "/dashboard", label: "Panel de Control", icon: LayoutDashboard, roles: ["admin", "vendedor", "desarrollador"] },
+  { href: "/stock-critico", label: "Stock Crítico", icon: AlertTriangle, roles: ["admin", "vendedor", "desarrollador"] },
   { href: "/reportes", label: "Reportes", icon: BarChart2, roles: ["admin", "desarrollador"] },
   { href: "/trabajadores", label: "Trabajadores", icon: Users2, roles: ["admin", "desarrollador"] },
 ];

@@ -25,13 +25,7 @@ const tiles = [
     cta: 'Ver devoluciones',
     color: 'red'
   },
-  { 
-    slug: 'stock', 
-    title: '📦 Estado del Stock', 
-    desc: 'Stock en tiempo real con alertas de stock crítico.', 
-    cta: 'Ver stock',
-    color: 'blue'
-  },
+ 
   { 
     slug: 'ingresos', 
     title: '💰 Ingresos y Tendencias', 
@@ -43,12 +37,30 @@ const tiles = [
 ];
 
 const colorClasses = {
-  purple: 'hover:border-purple-300 focus:ring-purple-400/40 group-hover:text-purple-700 text-purple-700',
-  pink: 'hover:border-pink-300 focus:ring-pink-400/40 group-hover:text-pink-700 text-pink-700',
-  red: 'hover:border-red-300 focus:ring-red-400/40 group-hover:text-red-700 text-red-700',
-  blue: 'hover:border-blue-300 focus:ring-blue-400/40 group-hover:text-blue-700 text-blue-700',
-  green: 'hover:border-green-300 focus:ring-green-400/40 group-hover:text-green-700 text-green-700',
-  indigo: 'hover:border-indigo-300 focus:ring-indigo-400/40 group-hover:text-indigo-700 text-indigo-700',
+  purple: 'border-purple-100 bg-gradient-to-br from-purple-50 to-white hover:border-purple-200 focus:ring-2 focus:ring-purple-100',
+  pink: 'border-pink-100 bg-gradient-to-br from-pink-50 to-white hover:border-pink-200 focus:ring-2 focus:ring-pink-100',
+  red: 'border-red-100 bg-gradient-to-br from-red-50 to-white hover:border-red-200 focus:ring-2 focus:ring-red-100',
+  blue: 'border-blue-100 bg-gradient-to-br from-blue-50 to-white hover:border-blue-200 focus:ring-2 focus:ring-blue-100',
+  green: 'border-green-100 bg-gradient-to-br from-green-50 to-white hover:border-green-200 focus:ring-2 focus:ring-green-100',
+  indigo: 'border-indigo-100 bg-gradient-to-br from-indigo-50 to-white hover:border-indigo-200 focus:ring-2 focus:ring-indigo-100',
+};
+
+const textColors = {
+  purple: 'text-purple-700',
+  pink: 'text-pink-700',
+  red: 'text-red-700',
+  blue: 'text-blue-700',
+  green: 'text-green-700',
+  indigo: 'text-indigo-700',
+};
+
+const iconBackgrounds = {
+  purple: 'bg-purple-100 text-purple-600',
+  pink: 'bg-pink-100 text-pink-600',
+  red: 'bg-red-100 text-red-600',
+  blue: 'bg-blue-100 text-blue-600',
+  green: 'bg-green-100 text-green-600',
+  indigo: 'bg-indigo-100 text-indigo-600',
 };
 
 export default function ReportesHubPage() {
@@ -92,33 +104,43 @@ export default function ReportesHubPage() {
       </div>
 
       {/* Grid de reportes */}
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {tiles.map((t) => (
-          <button
-            key={t.slug}
-            onClick={() => router.push(`/reportes/${t.slug}`)}
-            className={`group rounded-2xl border-2 border-white/20 bg-white/90 p-5 text-left shadow-xl
-                       backdrop-blur transition-all hover:-translate-y-0.5
-                       focus:outline-none focus:ring-2 ${colorClasses[t.color as keyof typeof colorClasses]}`}
-          >
-            <div className="mb-1 text-lg font-semibold text-gray-900 group-hover:opacity-90">
-              {t.title}
-            </div>
-            <div className="mb-4 text-sm text-gray-600">{t.desc}</div>
-            <span className={`inline-flex items-center gap-2 text-sm font-semibold group-hover:underline ${
-              t.color === 'purple' ? 'text-purple-700' :
-              t.color === 'pink' ? 'text-pink-700' :
-              t.color === 'red' ? 'text-red-700' :
-              t.color === 'blue' ? 'text-blue-700' :
-              t.color === 'green' ? 'text-green-700' :
-              t.color === 'orange' ? 'text-orange-700' :
-              'text-indigo-700'
-            }`}>
-              {t.cta} →
-            </span>
-          </button>
-          ))}
-        </div>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        {tiles.map((t) => {
+          // Extraer el emoji del título
+          const emoji = t.title.match(/^[\p{Emoji}\p{Emoji_Modifier}]+/u)?.[0] || '📊';
+          const titleWithoutEmoji = t.title.replace(/^[\p{Emoji}\p{Emoji_Modifier}\s]+/u, '').trim();
+          
+          return (
+          <div key={t.slug} className="group relative">
+            <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r opacity-70 blur transition duration-1000 group-hover:opacity-100 group-hover:duration-200" />
+            <button
+              onClick={() => router.push(`/reportes/${t.slug}`)}
+              className={`relative flex h-full w-full flex-col rounded-2xl border p-6 text-left transition-all duration-200 
+                         hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2
+                         ${colorClasses[t.color as keyof typeof colorClasses]}`}
+            >
+              <div className={`mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl text-2xl ${iconBackgrounds[t.color as keyof typeof iconBackgrounds]}`}>
+                {emoji}
+              </div>
+              <h3 className={`mb-2 text-xl font-bold ${textColors[t.color as keyof typeof textColors]}`}>
+                {titleWithoutEmoji}
+              </h3>
+              <p className="mb-6 text-sm text-gray-600">
+                {t.desc}
+              </p>
+              <div className="mt-auto">
+                <span className={`inline-flex items-center text-sm font-medium ${textColors[t.color as keyof typeof textColors]} group-hover:underline`}>
+                  {t.cta}
+                  <svg className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </span>
+              </div>
+            </button>
+          </div>
+        )})}
+      
+      </div>
 
        
     </div>

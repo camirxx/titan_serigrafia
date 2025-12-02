@@ -74,6 +74,11 @@ export default function ReporteDevolucionesClient() {
   const [vistaActual, setVistaActual] = useState<'resumen' | 'transferencias'>('resumen');
   const [actualizando, setActualizando] = useState<number | null>(null);
 
+  const [currentPageResumen, setCurrentPageResumen] = useState(1);
+  const [currentPagePendientes, setCurrentPagePendientes] = useState(1);
+  const [currentPageRealizadas, setCurrentPageRealizadas] = useState(1);
+  const itemsPerPage = 10;
+
   const buscar = useCallback(async () => {
     setErrorMsg(null);
     setLoading(true);
@@ -315,6 +320,113 @@ export default function ReporteDevolucionesClient() {
     const filename = `devoluciones_${vistaActual}_${new Date().toISOString().split('T')[0]}`;
     exportToExcel(preparedData, filename);
   };
+
+  const Pagination = ({ currentPage, totalItems, onPageChange, itemsPerPage }: {
+    currentPage: number;
+    totalItems: number;
+    onPageChange: (page: number) => void;
+    itemsPerPage: number;
+  }) => {
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    
+    if (totalPages <= 1) return null;
+
+    return (
+      <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6 rounded-b-lg">
+        <div className="flex-1 flex justify-between sm:hidden">
+          <button
+            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <button
+            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+        </div>
+        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm text-gray-700">
+              Mostrando <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> a{' '}
+              <span className="font-medium">
+                {Math.min(currentPage * itemsPerPage, totalItems)}
+              </span>{' '}
+              de <span className="font-medium">{totalItems}</span> resultados
+            </p>
+          </div>
+          <div>
+            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+              <button
+                onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="sr-only">Anterior</span>
+                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                if (pageNum < 1 || pageNum > totalPages) return null;
+                
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => onPageChange(pageNum)}
+                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                      currentPage === pageNum 
+                        ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' 
+                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="sr-only">Siguiente</span>
+                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </nav>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const indexOfLastItemResumen = currentPageResumen * itemsPerPage;
+  const indexOfFirstItemResumen = indexOfLastItemResumen - itemsPerPage;
+  const currentItemsResumen = devoluciones.slice(indexOfFirstItemResumen, indexOfLastItemResumen);
+
+  const indexOfLastItemPendientes = currentPagePendientes * itemsPerPage;
+  const indexOfFirstItemPendientes = indexOfLastItemPendientes - itemsPerPage;
+  const currentItemsPendientes = transferenciasPendientes.slice(indexOfFirstItemPendientes, indexOfLastItemPendientes);
+
+  const indexOfLastItemRealizadas = currentPageRealizadas * itemsPerPage;
+  const indexOfFirstItemRealizadas = indexOfLastItemRealizadas - itemsPerPage;
+  const currentItemsRealizadas = transferenciasRealizadas.slice(indexOfFirstItemRealizadas, indexOfLastItemRealizadas);
 
   return (
 
@@ -564,6 +676,12 @@ export default function ReporteDevolucionesClient() {
       {/* Tabla Resumen */}
       {vistaActual === 'resumen' && (
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <Pagination 
+            currentPage={currentPageResumen} 
+            totalItems={devoluciones.length} 
+            onPageChange={setCurrentPageResumen} 
+            itemsPerPage={itemsPerPage} 
+          />
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -579,7 +697,7 @@ export default function ReporteDevolucionesClient() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {devoluciones.map((d) => (
+                {currentItemsResumen.map((d) => (
                   <tr key={d.devolucion_id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
                       #{d.devolucion_id}
@@ -614,7 +732,7 @@ export default function ReporteDevolucionesClient() {
                     </td>
                   </tr>
                 ))}
-                {!devoluciones.length && !loading && (
+                {!currentItemsResumen.length && !loading && (
                   <tr>
                     <td colSpan={8} className="px-6 py-12 text-center">
                       <div className="text-gray-400 text-4xl mb-2">📊</div>
@@ -652,6 +770,12 @@ export default function ReporteDevolucionesClient() {
                 </span>
               </h3>
             </div>
+            <Pagination 
+              currentPage={currentPagePendientes} 
+              totalItems={transferenciasPendientes.length} 
+              onPageChange={setCurrentPagePendientes} 
+              itemsPerPage={itemsPerPage} 
+            />
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -666,7 +790,7 @@ export default function ReporteDevolucionesClient() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {transferenciasPendientes.map((d) => (
+                  {currentItemsPendientes.map((d) => (
                     <tr key={d.devolucion_id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
                         #{d.devolucion_id}
@@ -708,7 +832,7 @@ export default function ReporteDevolucionesClient() {
                       </td>
                     </tr>
                   ))}
-                  {transferenciasPendientes.length === 0 && (
+                  {currentItemsPendientes.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-6 py-12 text-center">
                         <div className="text-gray-400 text-4xl mb-2">✅</div>
@@ -734,6 +858,12 @@ export default function ReporteDevolucionesClient() {
                 </span>
               </h3>
             </div>
+            <Pagination 
+              currentPage={currentPageRealizadas} 
+              totalItems={transferenciasRealizadas.length} 
+              onPageChange={setCurrentPageRealizadas} 
+              itemsPerPage={itemsPerPage} 
+            />
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -748,7 +878,7 @@ export default function ReporteDevolucionesClient() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {transferenciasRealizadas.map((d) => (
+                  {currentItemsRealizadas.map((d) => (
                     <tr key={d.devolucion_id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
                         #{d.devolucion_id}
@@ -785,7 +915,7 @@ export default function ReporteDevolucionesClient() {
                       </td>
                     </tr>
                   ))}
-                  {transferenciasRealizadas.length === 0 && (
+                  {currentItemsRealizadas.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-6 py-12 text-center">
                         <div className="text-gray-400 text-4xl mb-2">📋</div>

@@ -77,13 +77,13 @@ export default function HomeClient({ userRole }: HomeClientProps) {
             </button>
 
             <button
-              onClick={() => handleNavigation('/dashboard')}
+              onClick={() => handleNavigation('/stock-critico')}
               className="group min-h-[170px] rounded-2xl border-2 border-slate-200 bg-white/90 p-6 text-slate-800 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-400 hover:bg-indigo-50/80 hover:shadow-xl sm:min-h-[210px] sm:p-10"
             >
               <div className="flex h-full flex-col items-center justify-center gap-4">
-                <div className="text-6xl sm:text-7xl">📊</div>
+                <div className="text-6xl sm:text-7xl">⚠️</div>
                 <h3 className="text-xl font-bold tracking-wide text-slate-800 group-hover:text-indigo-600 sm:text-2xl">
-                  Dashboard
+                  Stock Crítico
                 </h3>
               </div>
             </button>
