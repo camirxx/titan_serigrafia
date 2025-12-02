@@ -17,13 +17,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "Faltan datos" }, { status: 400 });
     }
 
-    const totalMatch = message.match(/Se detectaron (\d+) productos/);
-    const umbralMatch = message.match(/≤ (\d+)\)/);
+    // Extraer correctamente la cantidad (más flexible con espacios)
+    const totalMatch = message.match(/Se detectaron\s+(\d+)\s+productos?/i);
+    const umbralMatch = message.match(/≤\s*(\d+)\)/);
     const totalProductos = totalMatch ? parseInt(totalMatch[1], 10) : 0;
     const umbral = umbralMatch ? parseInt(umbralMatch[1], 10) : 1;
 
+    // Debug opcional (puedes borrarlo después)
+    console.log("Productos detectados:", totalProductos, "| Umbral:", umbral);
+
     const attachments: { filename: string; content: string }[] = [];
 
+    // === GENERAR EXCEL PERFECTO ===
     if (includeExcel && totalProductos > 0) {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Stock Crítico", {
@@ -44,7 +49,7 @@ export async function POST(request: NextRequest) {
         { header: "XXXL", key: "XXXL", width: 9 },
       ];
 
-      // Header violeta
+      // Header violeta hermoso
       const headerRow = sheet.getRow(1);
       headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
       headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7C3AED" } };
@@ -62,7 +67,7 @@ export async function POST(request: NextRequest) {
       for (const linea of lineas) {
         const trimmed = linea.trim();
 
-        // Nuevo producto
+        // Nuevo producto: "1. TRUENO NEGRO - poleron canguro (NEGRO)"
         if (/^\d+\.\s/.test(linea)) {
           if (productoCompleto) {
             const row = sheet.addRow({
@@ -111,7 +116,7 @@ export async function POST(request: NextRequest) {
           stockTotal = match ? parseInt(match[1], 10) : 0;
         }
 
-        // Tallas → sin any!
+        // Tallas
         else if (trimmed.startsWith("Tallas:")) {
           const tallasTexto = trimmed.replace("Tallas:", "").trim();
           tallasTexto.split(",").forEach((item: string) => {
@@ -120,9 +125,7 @@ export async function POST(request: NextRequest) {
             const stockStr = parts[1] || "";
             const talla = tallaRaw.toUpperCase();
             const stock = parseInt(stockStr.replace(/[^\d]/g, ""), 10) || 0;
-            if (talla) {
-              tallas[talla] = stock;
-            }
+            if (talla) tallas[talla] = stock;
           });
         }
       }
@@ -160,7 +163,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Email
+    // === EMAIL HERMOSO ===
     const resend = new Resend(process.env.RESEND_API_KEY!);
 
     const html = `
@@ -202,7 +205,7 @@ ${message.trim()}
 
     return NextResponse.json({ success: true, totalProductosCriticos: totalProductos });
   } catch (err) {
-    console.error("Error enviando alerta:", err);
+    console.error("Error enviando correo:", err);
     return NextResponse.json({ success: false, message: (err as Error).message }, { status: 500 });
   }
 }
