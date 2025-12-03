@@ -205,7 +205,7 @@ const cargarVentasDelDia = async () => {
       const { data: ses, error: eSes } = await supabase
         .from('v_caja_sesion_abierta')
         .select('id, saldo_inicial')
-        .eq('tienda_id', tId)
+        .eq('tienda_id', 1)
         .maybeSingle()
       
       if (eSes) throw eSes
@@ -371,7 +371,7 @@ const cargarVentasDelDia = async () => {
         return
       }
 
-      const tiposUnicos = [...new Set(data.map((d) => d.tipo_prenda).filter(Boolean))]
+      const tiposUnicos = [...new Set(data.map((d: { tipo_prenda: string }) => d.tipo_prenda).filter(Boolean))] as string[]
       console.log(' Tipos únicos encontrados:', tiposUnicos)
       
       if (tiposUnicos.length === 0) {
@@ -395,14 +395,14 @@ const cargarVentasDelDia = async () => {
         .from('variantes_admin_view')
         .select('diseno, stock_actual')
         .eq('tipo_prenda', tipo)
-        .eq('tienda_id', tiendaId as number)
+        .eq('tienda_id', 1)
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
         .not('stock_actual', 'is', null)
 
       if (error) throw error
 
-  const disenosUnicos = [...new Set(data?.map(d => d.diseno).filter(Boolean))]
+  const disenosUnicos = [...new Set(data?.map((d: { diseno: string }) => d.diseno).filter(Boolean))] as string[]
       
       if (disenosUnicos.length === 0) {
         setError('No hay diseños disponibles para este tipo de prenda')
@@ -426,14 +426,14 @@ const cargarVentasDelDia = async () => {
         .select('color, stock_actual')
         .eq('tipo_prenda', tipoSel)
         .eq('diseno', diseno)
-        .eq('tienda_id', tiendaId as number)
+        .eq('tienda_id', 1)
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
         .not('stock_actual', 'is', null)
 
       if (error) throw error
 
-      const coloresUnicos = [...new Set(data?.map(d => d.color).filter(Boolean))]
+      const coloresUnicos = [...new Set(data?.map((d: { color: string }) => d.color).filter(Boolean))] as string[]
       
       if (coloresUnicos.length === 0) {
         setError('No hay colores disponibles para este diseño')
@@ -455,7 +455,7 @@ const cargarVentasDelDia = async () => {
         .eq('tipo_prenda', tipoSel)
         .eq('diseno', disenoSel)
         .eq('color', color)
-        .eq('tienda_id', tiendaId as number)
+        .eq('tienda_id', 1)
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
         .order('talla')
