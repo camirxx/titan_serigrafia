@@ -272,7 +272,7 @@ export default function IngresosTendenciasPage() {
                chartType === 'ventas_dia' ? 'Ventas Diarias' : 
                chartType === 'ventas_mes' ? 'Ventas Mensuales' : 'Selecciona un gráfico'}
             </h2>
-            <p className="text-gray-600 mt-2">
+            <p className="text-black-600 mt-2">
               {chartType === 'ingresos_dia' ? 'Evolución de ingresos diarios' : 
                chartType === 'ingresos_mes' ? 'Ingresos totales por mes' :
                chartType === 'ventas_dia' ? 'Cantidad de ventas por día' : 
@@ -284,7 +284,7 @@ export default function IngresosTendenciasPage() {
             <button
               type="button"
               onClick={() => setShowDropdown(!showDropdown)}
-              className="flex items-center justify-between w-full sm:w-64 px-4 py-3 text-left bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              className="flex items-center justify-between w-full sm:w-64 px-4 py-3 text-left text-black border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             >
               <span className="truncate">
                 {chartType === 'ingresos_dia' ? 'Ingresos Diarios' : 
