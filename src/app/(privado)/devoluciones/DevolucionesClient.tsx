@@ -31,6 +31,22 @@ type ProductoVendido = {
   numero_boleta: string | null;
 };
 
+type ItemSeleccionado = {
+  detalle_venta_id: number;
+  venta_id: number;
+  variante_id: number;
+  producto_id: number;
+  diseno: string;
+  tipo_prenda: string;
+  color: string | null;
+  talla: string;
+  cantidad: number;
+  precio_unitario: number;
+  fecha_venta: string;
+  metodo_pago: MetodoPago;
+  numero_boleta: string | null;
+};
+
 type CantidadesSeleccion = Record<number, number>;
 
 type ProductoConVariantes = {
@@ -752,6 +768,107 @@ export default function DevolucionesClient() {
       return;
     }
 
+    // Validaciones adicionales para cambios de producto
+    if (metodo === 'cambio_producto' && cambioSeleccionado) {
+      // Validar que los campos obligatorios estén completos
+      if (!cambioSeleccionado.tipo_prenda) {
+        setError('El tipo de prenda es obligatorio para el cambio.');
+        return;
+      }
+      
+      if (!cambioSeleccionado.diseno) {
+        setError('El diseño es obligatorio para el cambio.');
+        return;
+      }
+
+      // Validar stock disponible antes de procesar
+      try {
+        const itemsSeleccionados: ItemSeleccionado[] = productosVendidos
+          .map((p) => {
+            const q = Number(cantSel[p.detalle_venta_id] ?? 0);
+            if (q > 0) {
+              return {
+                detalle_venta_id: p.detalle_venta_id,
+                venta_id: p.venta_id,
+                variante_id: p.variante_id,
+                producto_id: p.producto_id,
+                diseno: p.diseno,
+                tipo_prenda: p.tipo_prenda,
+                color: p.color,
+                talla: p.talla,
+                cantidad: q,
+                precio_unitario: p.precio_unitario,
+                fecha_venta: p.fecha_venta,
+                metodo_pago: p.metodo_pago,
+                numero_boleta: p.numero_boleta,
+              };
+            }
+            return null;
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+        
+        const totalCantidad = itemsSeleccionados.reduce((acc: number, item: ItemSeleccionado) => acc + item.cantidad, 0);
+        
+        // Construir query para verificar stock actual
+        let query = supabase
+          .from('productos')
+          .select(`id, disenos!inner(nombre), tipos_prenda!inner(nombre), colores!inner(nombre), variantes(id, talla, stock_actual, costo_unitario)`)
+          .limit(1);
+
+        if (cambioSeleccionado.diseno) {
+          query = query.eq('disenos.nombre', cambioSeleccionado.diseno);
+        }
+        if (cambioSeleccionado.tipo_prenda) {
+          query = query.eq('tipos_prenda.nombre', cambioSeleccionado.tipo_prenda);
+        }
+        if (cambioSeleccionado.color) {
+          query = query.eq('colores.nombre', cambioSeleccionado.color);
+        }
+
+        const { data: prods, error: prodErr } = await query;
+        if (prodErr || !prods || prods.length === 0) {
+          setError('No se puede verificar el stock del producto de reemplazo. Intente nuevamente.');
+          return;
+        }
+
+        const variantesArr: Variante[] = prods[0].variantes || [];
+        let variante: Variante | undefined;
+        
+        if (cambioSeleccionado.talla) {
+          // Buscar variante con talla específica
+          variante = variantesArr.find((v) => v.talla === cambioSeleccionado.talla);
+          
+          if (!variante) {
+            setError(`No existe la talla ${cambioSeleccionado.talla} para este producto.`);
+            return;
+          }
+          
+          // Validar stock disponible
+          if (variante.stock_actual < totalCantidad) {
+            setError(`Stock insuficiente para realizar el cambio. Disponible: ${variante.stock_actual} unidades, Solicitado: ${totalCantidad} unidades.`);
+            return;
+          }
+        } else {
+          // Si no se seleccionó talla, buscar cualquier variante con stock suficiente
+          variante = variantesArr.find((v) => v.stock_actual >= totalCantidad);
+          
+          if (!variante) {
+            const stockTotal = variantesArr.reduce((sum, v) => sum + v.stock_actual, 0);
+            if (stockTotal > 0) {
+              setError(`Ninguna talla tiene stock suficiente para completar el cambio. Stock total disponible: ${stockTotal} unidades, Solicitado: ${totalCantidad} unidades.`);
+            } else {
+              setError('No hay stock disponible para este producto.');
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error verificando stock para cambio:', err);
+        setError('Error al verificar stock disponible. Intente nuevamente.');
+        return;
+      }
+    }
+
     console.log('📝 [CLIENT] Iniciando creación de devolución:', {
       tipo,
       metodo,
@@ -1319,8 +1436,14 @@ export default function DevolucionesClient() {
 
   // Nueva función async para seleccionar el producto de cambio y calcular precio
   const seleccionarProductoCambio = async () => {
-    if (!cambioTipoPrenda && !cambioDiseno && !cambioColor) {
-      setError('Seleccione al menos un campo para el producto de cambio.');
+    // Validar campos obligatorios
+    if (!cambioTipoPrenda) {
+      setError('Seleccione el tipo de prenda para el cambio.');
+      return;
+    }
+    
+    if (!cambioDiseno) {
+      setError('Seleccione el diseño para el cambio.');
       return;
     }
 
@@ -1352,13 +1475,65 @@ export default function DevolucionesClient() {
 
       const prod: ProductoConVariantes = prods[0];
       const variantesArr: Variante[] = prod.variantes || [];
+      
+      // Calcular cantidad total que se necesita para el cambio
+      const itemsSeleccionados: ItemSeleccionado[] = productosVendidos
+        .map((p) => {
+          const q = Number(cantSel[p.detalle_venta_id] ?? 0);
+          if (q > 0) {
+            return {
+              detalle_venta_id: p.detalle_venta_id,
+              venta_id: p.venta_id,
+              variante_id: p.variante_id,
+              producto_id: p.producto_id,
+              diseno: p.diseno,
+              tipo_prenda: p.tipo_prenda,
+              color: p.color,
+              talla: p.talla,
+              cantidad: q,
+              precio_unitario: p.precio_unitario,
+              fecha_venta: p.fecha_venta,
+              metodo_pago: p.metodo_pago,
+              numero_boleta: p.numero_boleta,
+            };
+          }
+          return null;
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null);
+      
+      const totalCantidad = itemsSeleccionados.reduce((acc: number, item: ItemSeleccionado) => acc + item.cantidad, 0);
+      
       let variante: Variante | undefined;
       if (cambioTalla) {
-        variante = variantesArr.find((v) => v.talla === cambioTalla && v.stock_actual > 0) || variantesArr.find((v) => v.talla === cambioTalla);
+        // Buscar variante con talla específica
+        variante = variantesArr.find((v) => v.talla === cambioTalla);
+        
+        if (!variante) {
+          setError(`No existe la talla ${cambioTalla} para este producto.`);
+          return;
+        }
+        
+        // Validar stock disponible
+        if (variante.stock_actual < totalCantidad) {
+          setError(`Stock insuficiente. Disponible: ${variante.stock_actual} unidades, Solicitado: ${totalCantidad} unidades.`);
+          return;
+        }
+      } else {
+        // Si no se seleccionó talla, buscar cualquier variante con stock suficiente
+        variante = variantesArr.find((v) => v.stock_actual >= totalCantidad);
+        
+        if (!variante) {
+          // Verificar si hay alguna variante con stock (pero insuficiente)
+          const algunaConStock = variantesArr.find((v) => v.stock_actual > 0);
+          if (algunaConStock) {
+            setError(`Ninguna talla tiene stock suficiente. Disponible total: ${variantesArr.reduce((sum, v) => sum + v.stock_actual, 0)} unidades, Solicitado: ${totalCantidad} unidades.`);
+          } else {
+            setError('No hay stock disponible para este producto.');
+          }
+          return;
+        }
       }
-      if (!variante) {
-        variante = variantesArr.find((v) => v.stock_actual > 0) || variantesArr[0];
-      }
+      
       if (!variante) {
         setError('No se encontraron variantes disponibles para el producto de reemplazo.');
         return;
