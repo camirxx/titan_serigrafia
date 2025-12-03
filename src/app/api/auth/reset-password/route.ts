@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
 
     // Opcional: intentar enviar nuestro email personalizado como complemento
     // pero sin depender de él para la funcionalidad principal
+    // TEMPORALMENTE DESACTIVADO PARA PROBAR SOLO CON SUPABASE
+    /*
     try {
       // Generar un enlace base para nuestro email personalizado
       const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
@@ -70,6 +72,7 @@ export async function POST(request: NextRequest) {
       // Ignorar errores del email personalizado
       console.log("Custom email error, but main email was sent:", customEmailError);
     }
+    */
 
     return NextResponse.json(
       { message: "Email de reseteo enviado correctamente" },
