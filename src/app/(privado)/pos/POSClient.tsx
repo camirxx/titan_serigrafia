@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from 'react'
+import { obtenerFechaChile, formatearFechaChile, formatearHoraChile } from '@/lib/fechaUtils';
 import { supabaseBrowser } from '@/lib/supabaseClient'
 import { ChevronLeft, Check, AlertCircle } from 'lucide-react'
 
@@ -1137,8 +1138,8 @@ function Header({
             {(() => {
               const [year, month, day] = fechaSeleccionada.split('-').map(Number);
               const fecha = new Date(year, month - 1, day);
-              return fecha.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' });
-            })()} · {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+              return formatearFechaChile(fecha);
+            })()} · {formatearHoraChile(obtenerFechaChile())}
           </p>
         </div>
         

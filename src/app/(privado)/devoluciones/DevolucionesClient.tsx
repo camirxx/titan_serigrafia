@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
+import { obtenerFechaChile, formatearFechaChile, formatearHoraChile } from '@/lib/fechaUtils';
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'regalo';
 type TipoOperacion = 'devolucion' | 'cambio';
@@ -356,9 +357,9 @@ export default function DevolucionesClient() {
 
   useEffect(() => {
     const tick = () => {
-      const now = new Date();
-      setFecha(now.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' }));
-      setHora(now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }));
+      const fechaChile = obtenerFechaChile();
+      setFecha(formatearFechaChile(fechaChile));
+      setHora(formatearHoraChile(fechaChile));
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -2957,7 +2958,7 @@ export default function DevolucionesClient() {
                                   {p.numero_boleta && <div className="text-xs text-gray-400">{p.numero_boleta}</div>}
                                 </td>
                                 <td className="p-3 text-xs text-gray-600">
-                                  {new Date(p.fecha_venta).toLocaleDateString('es-CL')}
+                                  {formatearFechaChile(p.fecha_venta)}
                                 </td>
                                 <td className="p-3 font-semibold text-gray-700">${p.precio_unitario.toFixed(0)}</td>
                                 <td className="p-3">

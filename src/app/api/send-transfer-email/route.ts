@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { formatearFechaHoraChile } from '@/lib/fechaUtils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
 
             <div class="footer">
               <p>Este es un correo automático generado por el sistema de gestión Titan Serigrafía</p>
-              <p>Fecha: ${new Date().toLocaleString('es-CL')}</p>
+              <p>Fecha: ${formatearFechaHoraChile(new Date())}</p>
             </div>
           </div>
         </body>
