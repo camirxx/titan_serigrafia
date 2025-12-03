@@ -118,16 +118,22 @@ export async function POST(request: NextRequest) {
           stockTotal = parseInt(trimmed.match(/(\d+)/)?.[1] || '0');
         }
 
-        // Tallas: "S: 1, M: 2, L: 1"
-        else if (trimmed.startsWith('Tallas:')) {
-          const parteTallas = trimmed.replace('Tallas:', '').trim();
-          parteTallas.split(',').forEach((item: string) => {
-            const parts = item.trim().split(':').map((s: string) => s.trim());
-            const talla = parts[0];
-            const stockStr = parts[1] || '';
-            const stock = parseInt(stockStr.replace(/[^\d]/g, '')) || 0;
-            if (talla) {
-              tallas[talla.toUpperCase()] = stock;
+        // Tallas: ahora funciona con cualquiera de estos formatos:
+        //   Tallas: S:0, M:1...
+        //   | Tallas: S:0, M:1...
+        //   Tallas:S:0,M:1...
+        else if (trimmed.includes('Tallas:')) {
+          // Extraer todo lo que venga después de "Tallas:"
+          const desdeTallas = trimmed.split('Tallas:')[1] || '';
+          
+          // Separar por comas
+          desdeTallas.split(',').forEach((item: string) => {
+            // Buscar patrón: letra(s) seguido de : y número → ej: S:0  o  XL : 5  o  M:1
+            const match = item.match(/([A-Za-zXL]+)\s*:\s*(\d+)/);
+            if (match) {
+              const talla = match[1].trim().toUpperCase();
+              const stock = parseInt(match[2]);
+              tallas[talla] = stock;
             }
           });
         }
