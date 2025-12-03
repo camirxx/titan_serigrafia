@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
 
         // Tallas: "S: 1, M: 2, L: 1"
         else if (trimmed.startsWith('Tallas:')) {
+          
           const parteTallas = trimmed.replace('Tallas:', '').trim();
           parteTallas.split(',').forEach((item: string) => {
             const parts = item.trim().split(':').map((s: string) => s.trim());

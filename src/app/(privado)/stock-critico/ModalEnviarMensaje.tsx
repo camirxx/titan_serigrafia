@@ -56,11 +56,8 @@ export default function ModalEnviarMensaje({
     // Mostrar TODOS los productos en el correo
     productosFiltrados.forEach((p, index) => {
       const tallasTexto = Array.from(p.tallas.entries())
-        .map(([talla, stock]) => {
-          const critico = stock <= umbral;
-          return `${talla}: ${stock}${critico ? ' ⚠️' : ''}`;
-        })
-        .join(', ');
+      .map(([talla, stock]) => `${talla}:${stock}`)
+      .join(', ');
       
       texto += `${index + 1}. ${p.diseno} - ${p.tipo_prenda} (${p.color})\n`;
       texto += `   Stock total: ${p.stock_actual} | Tallas: ${tallasTexto}\n\n`;
@@ -92,7 +89,8 @@ export default function ModalEnviarMensaje({
       const body = {
         to: correoTaller,
         subject: `ALERTA DE STOCK CRÍTICO (≤ ${umbral}) - ${productosFiltrados.length} producto${productosFiltrados.length > 1 ? 's' : ''}`,
-        message: generarResumenTexto(),  // ← ESTE ES EL TEXTO PERFECTO QUE VES EN "VISTA PREVIA" includeExcel: incluyeExcel,
+        message: generarResumenTexto(),  // ← ESTE ES EL TEXTO PERFECTO QUE VES EN "VISTA PREVIA" 
+        includeExcel: incluyeExcel,
         
       };
 
