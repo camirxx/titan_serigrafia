@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from 'react'
+import { obtenerFechaChile, formatearFechaChile, formatearHoraChile } from '@/lib/fechaUtils';
 import { supabaseBrowser } from '@/lib/supabaseClient'
 import { ChevronLeft, Check, AlertCircle } from 'lucide-react'
 
@@ -1016,7 +1017,7 @@ const cargarVentasDelDia = async () => {
               )
               return Math.abs(totalVueltoSeleccionado - Math.abs(faltante)) > 0.01
             })())}
-            className="w-full py-4 mt-8 bg-gradient-to-r from-indigo-600 to-purple-600 text-black text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
+            className="w-full py-4 mt-8 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
           >
             {loading ? 'Registrando...' : 
              faltante > 0 ? 'Falta dinero por ingresar' :
@@ -1137,8 +1138,8 @@ function Header({
             {(() => {
               const [year, month, day] = fechaSeleccionada.split('-').map(Number);
               const fecha = new Date(year, month - 1, day);
-              return fecha.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' });
-            })()} · {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+              return formatearFechaChile(fecha);
+            })()} · {formatearHoraChile(obtenerFechaChile())}
           </p>
         </div>
         

@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
+import { obtenerFechaChile, formatearFechaChile, formatearHoraChile } from '@/lib/fechaUtils';
 
 type MetodoPago = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'regalo';
 type TipoOperacion = 'devolucion' | 'cambio';
@@ -356,9 +357,9 @@ export default function DevolucionesClient() {
 
   useEffect(() => {
     const tick = () => {
-      const now = new Date();
-      setFecha(now.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' }));
-      setHora(now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }));
+      const fechaChile = obtenerFechaChile();
+      setFecha(formatearFechaChile(fechaChile));
+      setHora(formatearHoraChile(fechaChile));
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -1787,13 +1788,23 @@ export default function DevolucionesClient() {
                                 $
                               </span>
                               <input
-                                type="number"
-                                min={0}
-                                className="w-full rounded-lg border border-gray-300 bg-white p-3 pl-8 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition"
-                                value={montoReintegro}
-                                onChange={(e) => setMontoReintegro(Math.max(0, Number(e.target.value || 0)))}
+                                type="text"
+                                value={montoReintegro === 0 ? "" : montoReintegro}
                                 placeholder="0"
+                                onChange={(e) => {
+                                  const val = e.target.value;
+
+                                  // Permitir solo números
+                                  if (!/^\d*$/.test(val)) return;
+
+                                  // Evitar 0 a la izquierda
+                                  const clean = val.replace(/^0+(?=\d)/, "");
+
+                                  setMontoReintegro(clean === "" ? 0 : Number(clean));
+                                }}
+                                className="border rounded-md pl-8 pr-3 py-2 w-full"
                               />
+
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
                                 Máx: ${totalSeleccionado.toFixed(0)}
                               </span>
@@ -2957,7 +2968,7 @@ export default function DevolucionesClient() {
                                   {p.numero_boleta && <div className="text-xs text-gray-400">{p.numero_boleta}</div>}
                                 </td>
                                 <td className="p-3 text-xs text-gray-600">
-                                  {new Date(p.fecha_venta).toLocaleDateString('es-CL')}
+                                  {formatearFechaChile(p.fecha_venta)}
                                 </td>
                                 <td className="p-3 font-semibold text-gray-700">${p.precio_unitario.toFixed(0)}</td>
                                 <td className="p-3">
