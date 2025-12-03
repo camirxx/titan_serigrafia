@@ -1788,13 +1788,23 @@ export default function DevolucionesClient() {
                                 $
                               </span>
                               <input
-                                type="number"
-                                min={0}
-                                className="w-full rounded-lg border border-gray-300 bg-white p-3 pl-8 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition"
-                                value={montoReintegro}
-                                onChange={(e) => setMontoReintegro(Math.max(0, Number(e.target.value || 0)))}
+                                type="text"
+                                value={montoReintegro === 0 ? "" : montoReintegro}
                                 placeholder="0"
+                                onChange={(e) => {
+                                  const val = e.target.value;
+
+                                  // Permitir solo números
+                                  if (!/^\d*$/.test(val)) return;
+
+                                  // Evitar 0 a la izquierda
+                                  const clean = val.replace(/^0+(?=\d)/, "");
+
+                                  setMontoReintegro(clean === "" ? 0 : Number(clean));
+                                }}
+                                className="border rounded-md pl-8 pr-3 py-2 w-full"
                               />
+
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
                                 Máx: ${totalSeleccionado.toFixed(0)}
                               </span>
