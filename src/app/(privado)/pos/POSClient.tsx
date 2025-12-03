@@ -46,6 +46,7 @@ export default function POSModerno() {
   const [totalDia, setTotalDia] = useState(0)
   const [saldoInicialCaja, setSaldoInicialCaja] = useState(0)
   const [sesionCajaId, setSesionCajaId] = useState<number | null>(null)
+  const [tiendaId, setTiendaId] = useState<number | null>(null)
   
   const [tipos, setTipos] = useState<string[]>([])
   const [disenos, setDisenos] = useState<string[]>([])
@@ -189,7 +190,18 @@ const cargarVentasDelDia = async () => {
       const uid = u.user?.id
       if (!uid) return
       
-      // No necesitamos cargar la tienda del usuario ya que usamos tienda_id = 1
+      const { data: usr, error: eUsr } = await supabase
+        .from('usuarios')
+        .select('tienda_id')
+        .eq('id', uid)
+        .maybeSingle()
+      if (eUsr) throw eUsr
+      
+      const tId = usr?.tienda_id as number | null
+      setTiendaId(tId ?? null)
+      
+      if (!tId) return
+      
       const { data: ses, error: eSes } = await supabase
         .from('v_caja_sesion_abierta')
         .select('id, saldo_inicial')
