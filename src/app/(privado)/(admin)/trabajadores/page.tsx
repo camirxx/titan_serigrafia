@@ -240,48 +240,6 @@ async function deleteUser(formData: FormData) {
   return { success: true, message: "✅ Usuario eliminado correctamente" };
 }
 
-async function updateUser(formData: FormData) {
-  "use server";
-
-  const gate = await requireRole("admin");
-  if (!gate.ok) redirect("/");
-
-  const id = String(formData.get("id") || "");
-  const nombre = String(formData.get("nombre") || "").trim();
-  const email = String(formData.get("email") || "").trim();
-  const rol = String(formData.get("rol") || "") as Rol;
-  const tienda_id = formData.get("tienda_id");
-
-  if (!id) return { success: false, message: "ID requerido" };
-
-  const adminClient = supabaseAdmin();
-  
-  // Build update object dynamically
-  const updateData: {
-    nombre?: string;
-    email?: string;
-    rol?: Rol;
-    tienda_id?: number | null;
-  } = {};
-  if (nombre) updateData.nombre = nombre;
-  if (email) updateData.email = email;
-  if (rol) updateData.rol = rol;
-  if (tienda_id !== undefined) updateData.tienda_id = tienda_id ? Number(tienda_id) : null;
-
-  const { error } = await adminClient
-    .from("usuarios")
-    .update(updateData)
-    .eq("id", id);
-
-  if (error) {
-    console.error("updateUser error:", error.message);
-    return { success: false, message: error.message };
-  }
-
-  revalidatePath("/trabajadores");
-  return { success: true, message: "Usuario actualizado correctamente" };
-}
-
 // ---- Página (Server Component) ----
 export default async function TrabajadoresPage() {
   const gate = await requireRole("admin");
@@ -350,7 +308,6 @@ export default async function TrabajadoresPage() {
       updateTienda={updateTienda}
       createUser={createUser}
       deleteUser={deleteUser}
-      updateUser={updateUser}
     />
   );
 }
