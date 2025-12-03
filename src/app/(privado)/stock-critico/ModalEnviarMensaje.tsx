@@ -90,7 +90,7 @@ export default function ModalEnviarMensaje({
         to: correoTaller,
         subject: `ALERTA DE STOCK CRÍTICO (≤ ${umbral}) - ${productosFiltrados.length} producto${productosFiltrados.length > 1 ? 's' : ''}`,
         message: generarResumenTexto(),  // ← ESTE ES EL TEXTO PERFECTO QUE VES EN "VISTA PREVIA" 
-        includeExcel: incluyeExcel,
+        //includeExcel: incluyeExcel,
         
       };
 
@@ -231,8 +231,8 @@ export default function ModalEnviarMensaje({
           </div>
 
           {/* Opciones adicionales */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 bg-purple-50 p-3 rounded-lg">
+         {/*  <div className="space-y-3">
+           <div className="flex items-center gap-3 bg-purple-50 p-3 rounded-lg">
               <input
                 id="incluirExcel"
                 checked={incluyeExcel}
@@ -255,7 +255,7 @@ export default function ModalEnviarMensaje({
               )}
             </div>
           </div>
-
+*/}
           {/* Vista previa del texto */}
           {productosFiltrados.length > 0 && (
             <details className="bg-gray-50 rounded-lg border border-gray-200">
