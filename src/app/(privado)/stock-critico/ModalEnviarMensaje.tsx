@@ -231,7 +231,7 @@ export default function ModalEnviarMensaje({
           </div>
 
           {/* Opciones adicionales */}
-         {/*  <div className="space-y-3">
+         /*  <div className="space-y-3">
            <div className="flex items-center gap-3 bg-purple-50 p-3 rounded-lg">
               <input
                 id="incluirExcel"
@@ -255,7 +255,7 @@ export default function ModalEnviarMensaje({
               )}
             </div>
           </div>
-*/}
+
           {/* Vista previa del texto */}
           {productosFiltrados.length > 0 && (
             <details className="bg-gray-50 rounded-lg border border-gray-200">
