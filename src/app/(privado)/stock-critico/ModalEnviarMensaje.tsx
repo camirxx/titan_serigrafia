@@ -56,10 +56,7 @@ export default function ModalEnviarMensaje({
     // Mostrar TODOS los productos en el correo
     productosFiltrados.forEach((p, index) => {
       const tallasTexto = Array.from(p.tallas.entries())
-        .map(([talla, stock]) => {
-          const critico = stock <= umbral;
-          return `${talla}: ${stock}${critico ? ' ⚠️' : ''}`;
-        })
+        .map(([talla, stock]) => `${talla}:${stock}`)
         .join(', ');
       
       texto += `${index + 1}. ${p.diseno} - ${p.tipo_prenda} (${p.color})\n`;
