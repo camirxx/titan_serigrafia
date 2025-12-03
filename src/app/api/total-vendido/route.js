@@ -121,14 +121,22 @@ function crearDatosEjemplo(fecha) {
 
   const cantidad_total = categorias.reduce((sum, cat) => sum + cat.cantidad, 0);
 
-  return NextResponse.json({
-    fecha,
-    cantidad_total,
-    categorias: categorias,
-    resumen: {
-      total_categorias: categorias.length,
-      categoria_mas_vendida: 'poleras'
-    },
-    debug: 'Usando datos de ejemplo - no se encontraron ventas reales'
-  });
+// Calcular total y cantidad como en el POS
+const totalDelDia = ventasProcesadas.reduce((sum, v) => sum + Number(v.total || 0), 0);
+const cantidadTransacciones = ventasProcesadas.length;
+
+return NextResponse.json({
+  fecha,
+  total: totalDelDia,          // 👈 ESTO ES LO QUE EL CHATBOT NECESITA
+  cantidad: cantidadTransacciones,
+  categorias: categoriasArray,
+  cantidad_total,
+  resumen: {
+    total_categorias: categoriasArray.length,
+    categoria_mas_vendida: categoriasArray[0]?.categoria || 'N/A'
+  },
+  debug: 'Usando datos reales del POS'
+});
+
+
 }
