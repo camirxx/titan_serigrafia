@@ -114,9 +114,11 @@ const cargarDenominacionesCaja = async () => {
   if (!sesionCajaId) return
   
   try {
-    const { data, error } = await supabase.rpc('caja_obtener_denominaciones', {
-      p_sesion_id: sesionCajaId
-    })
+    const { data, error } = await supabase
+      .from('caja_denominaciones')
+      .select('denominacion, cantidad')
+      .eq('sesion_id', sesionCajaId)
+      .order('denominacion', { ascending: false })
     
     if (error) throw error
     
@@ -216,26 +218,42 @@ const cargarVentasDelDia = async () => {
     }
   }
 
-  const registrarIngresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
+  const registrarIngresoCaja = async (denominaciones: Record<string, number>) => {
     if (!sesionCajaId) { setError('Abre la caja antes de registrar ingresos'); return }
     setError(null); setLoading(true)
     try {
-      // Convertir las claves de string a number para el JSON
-      const denomsJSON: Record<number, number> = {}
-      Object.entries(denominaciones).forEach(([key, value]) => {
-        if (value > 0) {
-          denomsJSON[parseInt(key)] = value
+      // Insertar directamente en caja_denominaciones
+      for (const [denom, cantidad] of Object.entries(denominaciones)) {
+        if (cantidad > 0) {
+          const denomInt = parseInt(denom)
+          
+          // Verificar si ya existe esa denominación
+          const { data: existingDenom } = await supabase
+            .from('caja_denominaciones')
+            .select('cantidad')
+            .eq('sesion_id', sesionCajaId)
+            .eq('denominacion', denomInt)
+            .single()
+          
+          if (existingDenom) {
+            // Si existe, sumar la cantidad
+            const nuevaCantidad = existingDenom.cantidad + cantidad
+            await supabase
+              .from('caja_denominaciones')
+              .update({ cantidad: nuevaCantidad })
+              .eq('sesion_id', sesionCajaId)
+              .eq('denominacion', denomInt)
+          } else {
+            // Si no existe, insertar nuevo registro
+            await supabase
+              .from('caja_denominaciones')
+              .insert({
+                sesion_id: sesionCajaId,
+                denominacion: denomInt,
+                cantidad: cantidad
+              })
+          }
         }
-      })
-      
-      const { error } = await supabase.rpc('caja_agregar_denominaciones', {
-        p_sesion_id: sesionCajaId,
-        p_denominaciones: denomsJSON,
-        p_concepto: concepto || 'Ingreso manual',
-      })
-      if (error) {
-        console.error('Error RPC:', error)
-        throw error
       }
       
       await cargarVentasDelDia()
@@ -247,7 +265,7 @@ const cargarVentasDelDia = async () => {
       setLoading(false)
     }
   }
-  
+
   const registrarEgresoCaja = async (denominaciones: Record<string, number>, concepto: string) => {
     if (!sesionCajaId) { setError('Abre la caja antes de registrar egresos'); return }
     setError(null); setLoading(true)
@@ -257,18 +275,46 @@ const cargarVentasDelDia = async () => {
         sum + (parseInt(denom) * cant), 0
       );
 
-      const { error } = await supabase.rpc('caja_retirar_denominaciones', {
-        p_sesion_id: sesionCajaId,
-        p_denominaciones: denominaciones,
-        p_concepto: concepto || 'retiro',
-      })
-      if (error) {
-        console.error('Error RPC:', error)
-        throw error
+      // Procesar cada denominación
+      for (const [denom, cantidad] of Object.entries(denominaciones)) {
+        if (cantidad > 0) {
+          const denomInt = parseInt(denom)
+          
+          // Verificar cantidad disponible
+          const { data: currentDenom } = await supabase
+            .from('caja_denominaciones')
+            .select('cantidad')
+            .eq('sesion_id', sesionCajaId)
+            .eq('denominacion', denomInt)
+            .single()
+          
+          if (!currentDenom || currentDenom.cantidad < cantidad) {
+            throw new Error(`No hay suficientes billetes de $${denom}. Disponibles: ${currentDenom?.cantidad || 0}, Solicitados: ${cantidad}`)
+          }
+          
+          // Restar la cantidad
+          const nuevaCantidad = currentDenom.cantidad - cantidad
+          
+          if (nuevaCantidad > 0) {
+            // Actualizar con la nueva cantidad
+            await supabase
+              .from('caja_denominaciones')
+              .update({ cantidad: nuevaCantidad })
+              .eq('sesion_id', sesionCajaId)
+              .eq('denominacion', denomInt)
+          } else {
+            // Eliminar si la cantidad es 0
+            await supabase
+              .from('caja_denominaciones')
+              .delete()
+              .eq('sesion_id', sesionCajaId)
+              .eq('denominacion', denomInt)
+          }
+        }
       }
 
       // Enviar email de notificación de egreso
-      console.log('💸 Enviando email de egreso por retiro de efectivo:', totalEgreso);
+      console.log(' Enviando email de egreso por retiro de efectivo:', totalEgreso);
       try {
         await fetch('/api/send-caja-egreso-email', {
           method: 'POST',
@@ -278,13 +324,12 @@ const cargarVentasDelDia = async () => {
           body: JSON.stringify({
             monto: totalEgreso,
             motivo: concepto || 'Retiro manual de efectivo',
-            usuario: 'Usuario del POS', // Podríamos obtener el nombre real del usuario
+            usuario: 'Usuario del POS',
           }),
         });
-        console.log('✅ Email de egreso enviado exitosamente');
+        console.log(' Email de egreso enviado exitosamente');
       } catch (emailError) {
-        console.error('❌ Error al enviar email de egreso:', emailError);
-        // No fallar la operación si el email falla
+        console.error(' Error al enviar email de egreso:', emailError);
       }
 
       await cargarVentasDelDia()
@@ -302,20 +347,20 @@ const cargarVentasDelDia = async () => {
     setError(null)
     
     try {
-      console.log('🔍 Consultando variantes disponibles en inventario central (tienda_id = 1)')
+      console.log(' Consultando variantes disponibles en inventario central (tienda_id = 1)')
       
       // SIEMPRE usar tienda_id = 1 para consultar el inventario
       const { data, error } = await supabase
         .from('variantes_admin_view')
         .select('tipo_prenda, stock_actual, diseno, color')
-        .eq('tienda_id', 1) // ✅ INVENTARIO CENTRAL
+        .eq('tienda_id', 1) // INVENTARIO CENTRAL
         .eq('producto_activo', true)
         .gt('stock_actual', 0)
 
-      console.log('📊 Respuesta Supabase:', { data, error, count: data?.length })
+      console.log(' Respuesta Supabase:', { data, error, count: data?.length })
 
       if (error) {
-        console.error('❌ Error de Supabase:', JSON.stringify(error, null, 2))
+        console.error(' Error de Supabase:', JSON.stringify(error, null, 2))
         throw error
       }
 
@@ -326,7 +371,7 @@ const cargarVentasDelDia = async () => {
       }
 
       const tiposUnicos = [...new Set(data.map((d) => d.tipo_prenda).filter(Boolean))]
-      console.log('✅ Tipos únicos encontrados:', tiposUnicos)
+      console.log(' Tipos únicos encontrados:', tiposUnicos)
       
       if (tiposUnicos.length === 0) {
         setError('No hay productos disponibles con stock en el inventario')
@@ -336,7 +381,7 @@ const cargarVentasDelDia = async () => {
       
       setTipos(tiposUnicos)
     } catch (err: unknown) {
-      console.error('💥 Error completo en iniciarVenta:', err)
+      console.error(' Error completo en iniciarVenta:', err)
       setError(getErrorMessage(err, 'Error al iniciar la venta'))
       setPaso(0)
     }
@@ -512,7 +557,7 @@ const cargarVentasDelDia = async () => {
 
       // Si es pago en efectivo, registrar el ingreso de los billetes del cliente
       if (metodo === 'efectivo' && Object.values(billetes).some(cant => cant > 0)) {
-        await registrarIngresoCaja(billetes, `Ingreso venta - ${tipoSel} ${disenoSel} ${colorSel} ${tallaSel.talla}`)
+        await registrarIngresoCaja(billetes)
       }
 
       // Si hay vuelto que entregar, registrar el egreso de caja
@@ -956,9 +1001,9 @@ const cargarVentasDelDia = async () => {
             {faltante < 0 && (
               <VueltoSelector
                 vuelto={Math.abs(faltante)}
-                denominacionesDisponibles={denominacionesReales}
                 billetesVuelto={billetesVuelto}
                 onBilletesChange={setBilletesVuelto}
+                denominacionesReales={denominacionesReales}
               />
             )}
           </div>
@@ -993,14 +1038,14 @@ const cargarVentasDelDia = async () => {
 
 function VueltoSelector({ 
   vuelto, 
-  denominacionesDisponibles, 
   billetesVuelto, 
-  onBilletesChange 
+  onBilletesChange,
+  denominacionesReales
 }: { 
   vuelto: number
-  denominacionesDisponibles: Record<number, number>
   billetesVuelto: Record<string, number>
   onBilletesChange: React.Dispatch<React.SetStateAction<Record<string, number>>>
+  denominacionesReales: Record<number, number>
 }) {
   const formatNumber = (num: number) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
@@ -1029,70 +1074,36 @@ function VueltoSelector({
         </div>
       </div>
 
-      <div className="space-y-2 sm:space-y-3">
+      <div className="space-y-3">
         {Object.keys(billetesVuelto).reverse().map((denom) => {
           const cantidad = billetesVuelto[denom as keyof typeof billetesVuelto]
-          const disponible = denominacionesDisponibles[parseInt(denom)] || 0
           const subtotal = parseInt(denom) * cantidad
+          const disponible = denominacionesReales[parseInt(denom)] || 0
 
           return (
-            <div key={denom} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs sm:text-sm">
-              <span className="font-bold text-gray-700 flex-shrink-0">${formatNumber(parseInt(denom))}</span>
-              <div className="flex items-center gap-1 sm:gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nuevaCantidad = Math.max(0, cantidad - 1)
-                    onBilletesChange({ 
-                      ...billetesVuelto, 
-                      [denom]: nuevaCantidad 
-                    })
-                  }}
-                  className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-red-100 hover:bg-red-200 text-red-700 font-bold text-sm sm:text-lg transition"
-                  disabled={cantidad <= 0}
-                >
-                  −
-                </button>
-                <input
-                  type="number"
-                  min="0"
-                  max={disponible}
-                  value={cantidad}
-                  onChange={(e) => {
-                    const valor = Math.max(0, Math.min(parseInt(e.target.value) || 0, disponible))
-                    onBilletesChange({ 
-                      ...billetesVuelto, 
-                      [denom]: valor 
-                    })
-                  }}
-                  className="w-12 sm:w-16 px-1 sm:px-2 py-1 text-center text-xs sm:text-sm font-bold border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nuevaCantidad = Math.min(cantidad + 1, disponible)
-                    onBilletesChange({ 
-                      ...billetesVuelto, 
-                      [denom]: nuevaCantidad 
-                    })
-                  }}
-                  className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-green-100 hover:bg-green-200 text-green-700 font-bold text-sm sm:text-lg transition"
-                  disabled={cantidad >= disponible}
-                >
-                  +
-                </button>
-              </div>
-              <span className="text-gray-600 text-xs sm:text-sm flex-shrink-0">
-                Disp: {disponible}
-              </span>
-              <span className="text-gray-600 text-xs sm:text-sm">= ${formatNumber(subtotal)}</span>
+            <div key={denom} className="flex items-center gap-4">
+              <span className="font-bold text-lg text-gray-900 w-28 text-right">${formatNumber(parseInt(denom))}</span>
+              <input
+                type="number"
+                min="0"
+                value={cantidad}
+                onChange={(e) => {
+                  const valor = Math.max(0, parseInt(e.target.value) || 0)
+                  onBilletesChange({ 
+                    ...billetesVuelto, 
+                    [denom]: valor 
+                  })
+                }}
+                className="w-24 px-3 py-2 text-center text-lg font-bold border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 outline-none text-gray-900"
+              />
+              <span className="text-gray-900 font-semibold">= ${formatNumber(subtotal)} {disponible > 0 && `(${disponible})`}</span>
             </div>
           )
         })}
       </div>
 
       <div className={`p-2 sm:p-3 rounded-xl mt-3 sm:mt-4 ${totalSeleccionado === vuelto ? 'bg-green-50 border-2 border-green-200' : 'bg-gray-50 border-2 border-gray-200'}`}>
-        <div className="text-sm sm:text-lg font-bold truncate">Total: ${formatNumber(totalSeleccionado)}</div>
+        <div className="text-sm sm:text-lg font-bold truncate text-black">Total: ${formatNumber(totalSeleccionado)}</div>
       </div>
     </div>
   )
