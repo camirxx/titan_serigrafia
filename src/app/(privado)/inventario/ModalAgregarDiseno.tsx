@@ -110,16 +110,16 @@ export default function ModalAgregarDiseno({
       const productosACrear = [];
 
       for (const tipoId of tiposSeleccionados) {
-        for (const colorId of coloresSeleccionados) {
-          productosACrear.push({
-            diseno_id: disenoId,
-            tipo_prenda_id: tipoId,
-            color_id: colorId,
-            tienda_id: TIENDA_CENTRAL, // 🔥 FIJO
-            activo: true,
-          });
-        }
-      }
+      for (const colorId of coloresSeleccionados) {
+    productosACrear.push({
+      diseno_id: disenoId,
+      tipo_prenda_id: tipoId,
+      color_polera_id: colorId,  // ✅ CAMBIADO AQUÍ
+      tienda_id: TIENDA_CENTRAL,
+      activo: true,
+    });
+  }
+}
 
       const { data: productosNew, error: eInsProd } = await supabase
         .from("productos")
