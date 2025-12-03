@@ -1791,9 +1791,15 @@ export default function DevolucionesClient() {
                                 type="number"
                                 min={0}
                                 className="w-full rounded-lg border border-gray-300 bg-white p-3 pl-8 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none transition"
-                                value={montoReintegro}
-                                onChange={(e) => setMontoReintegro(Math.max(0, Number(e.target.value || 0)))}
-                                placeholder="0"
+                                value={montoReintegro || ''}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  // Permitir borrar completamente (valor vacío) o números sin 0 al inicio
+                                  if (value === '' || (!value.startsWith('0') && /^\d+$/.test(value))) {
+                                    setMontoReintegro(Math.max(0, Number(value || 0)));
+                                  }
+                                }}
+                                placeholder=""
                               />
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
                                 Máx: ${totalSeleccionado.toFixed(0)}
