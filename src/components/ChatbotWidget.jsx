@@ -337,6 +337,10 @@ const ChatbotWidget = () => {
       handleInventarioCompleto();
     } else if (optionId === 'volver-inventario') {
       showInventoryMenu();
+    } else if (optionId === 'hoy') {
+      handleResumenHoy();
+    } else if (optionId === 'otra-fecha') {
+      handlePedirFechaPersonalizada();
     }
   };
 
@@ -360,6 +364,74 @@ const ChatbotWidget = () => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  // =============================================
+  // NUEVAS FUNCIONES PARA RESUMEN DEL DÍA
+  // =============================================
+
+  const handleResumenHoy = async () => {
+    setIsLoading(true);
+    addMessage('Generando resumen del día de hoy...', true);
+
+    try {
+      const response = await fetch('/api/resumen-dia?fecha=hoy&tienda_id=1');
+      const data = await response.json();
+
+      if (data.error) {
+        addMessage(`Error: ${data.error}`);
+      } else {
+        const msg = `Resumen del Día - Hoy (${data.fecha || 'hoy'})\n\n` +
+          `Ventas totales: $${data.total_ventas || 0}\n` +
+          `Pedidos: ${data.total_pedidos || 0}\n` +
+          `Productos vendidos: ${data.total_unidades || 0}\n\n` +
+          `¡Que tengas un gran día!`;
+        addMessage(msg);
+      }
+    } catch (err) {
+      addMessage('Error al cargar el resumen de hoy.');
+    } finally {
+      setIsLoading(false);
+      setConversationState({});
+      setTimeout(() => {
+        addMessage('¿Otro resumen?', true, [
+          { id: 'hoy', label: 'Hoy' },
+          { id: 'otra-fecha', label: 'Otro día' },
+          { id: 'volver-main', label: 'Volver al menú principal' }
+        ]);
+      }, 2000);
+    }
+  };
+
+  const handlePedirFechaPersonalizada = () => {
+    setConversationState({ waitingFor: 'fecha-resumen' });
+    addMessage('Escribe la fecha (ejemplo: 03/12/2025 o 2025-12-03):');
+  };
+
+  const handleResumenFechaPersonalizada = async (fechaTexto) => {
+    setIsLoading(true);
+    addMessage(`Buscando resumen del ${fechaTexto}...`, true);
+
+    try {
+      const response = await fetch(`/api/resumen-dia?fecha=${encodeURIComponent(fechaTexto)}&tienda_id=1`);
+      const data = await response.json();
+
+      if (data.error || !data.fecha) {
+        addMessage(`No encontré datos para "${fechaTexto}"\n\nVerifica el formato (ej: 25/12/2025)`);
+      } else {
+        const msg = `Resumen del Día - ${data.fecha}\n\n` +
+          `Ventas totales: $${data.total_ventas || 0}\n` +
+          `Pedidos: ${data.total_pedidos || 0}\n` +
+          `Productos vendidos: ${data.total_unidades || 0}`;
+        addMessage(msg);
+      }
+    } catch (err) {
+      addMessage('Formato incorrecto o error de conexión.');
+    } finally {
+      setIsLoading(false);
+      setConversationState({});
+      setTimeout(() => showResumenMenu(), 2500);
     }
   };
 
